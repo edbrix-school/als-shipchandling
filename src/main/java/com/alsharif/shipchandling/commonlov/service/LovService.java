@@ -1,0 +1,9 @@
+package com.alsharif.shipchandling.commonlov.service;
+
+import com.alsharif.shipchandling.commonlov.dto.LovResponse;
+import org.springframework.stereotype.Service;
+
+@Service
+public interface LovService {
+    LovResponse getLovList(String lovName, Long docKeyPoid, String filterValue);
+}
