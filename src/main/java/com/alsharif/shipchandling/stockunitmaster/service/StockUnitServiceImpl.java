@@ -7,10 +7,12 @@ import com.alsharif.shipchandling.group.repository.GroupRepository;
 import com.alsharif.shipchandling.stockunitmaster.dto.FilterDto;
 import com.alsharif.shipchandling.stockunitmaster.dto.FilterRequestDto;
 import com.alsharif.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
+import com.alsharif.shipchandling.stockunitmaster.dto.UnitDependenciesDto;
 import com.alsharif.shipchandling.stockunitmaster.entity.StockUnitMaster;
 import com.alsharif.shipchandling.stockunitmaster.repository.StockUnitRepository;
 
-import jakarta.transaction.Transactional;
+// import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class StockUnitServiceImpl implements StockUnitService {
@@ -40,7 +43,7 @@ public class StockUnitServiceImpl implements StockUnitService {
     @Autowired
     GroupRepository groupRepository;
 
-        private static final Logger log = LoggerFactory.getLogger(StockUnitServiceImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(StockUnitServiceImpl.class);
 
     @Override
     public StockUnitMasterDto getStockUnitByPoid(Long stockUnitPoid) {
@@ -101,12 +104,14 @@ public class StockUnitServiceImpl implements StockUnitService {
             throw new ResourceNotFoundException("StockUnit", "stockUnitPoid", stockUnitPoid);
         }
 
-         if (stockUnitRepository.existsByStockUnitCodeIgnoreCaseAndStockUnitPoidNot(stockUnitMasterDto.getStockUnitCode(),
+        if (stockUnitRepository.existsByStockUnitCodeIgnoreCaseAndStockUnitPoidNot(
+                stockUnitMasterDto.getStockUnitCode(),
                 stockUnitMasterDto.getStockUnitPoid())) {
             throw new ResourceAlreadyExistsException("Stock Unit Code already exists, please enter unique code.",
                     stockUnitMasterDto.getStockUnitCode());
         }
-        if (stockUnitRepository.existsByStockUnitNameIgnoreCaseAndStockUnitPoidNot(stockUnitMasterDto.getStockUnitName(),
+        if (stockUnitRepository.existsByStockUnitNameIgnoreCaseAndStockUnitPoidNot(
+                stockUnitMasterDto.getStockUnitName(),
                 stockUnitMasterDto.getStockUnitPoid())) {
             throw new ResourceAlreadyExistsException("Stock Unit Name already exists, please enter unique name.",
                     stockUnitMasterDto.getStockUnitName());
@@ -162,7 +167,7 @@ public class StockUnitServiceImpl implements StockUnitService {
         existingStockunit.setLastModifiedDate(LocalDateTime.now());
         existingStockunit.setLastModifiedBy(existingStockunit.getLastModifiedBy());
         stockUnitRepository.save(existingStockunit);
-    } 
+    }
 
     @Override
     public Page<StockUnitMasterDto> listStockUnits(String docId, FilterRequestDto request, Pageable pageable) {
@@ -195,5 +200,98 @@ public class StockUnitServiceImpl implements StockUnitService {
 
     // return PaginationUtil.wrapPage(page, raw.displayFields());
     // }
+
+    @Override
+    public boolean validateStockUnitCode(String stockUnitCode, Long groupPoid, Long excludeStockUnitPoid) {
+        boolean exists;
+
+        if (excludeStockUnitPoid != null) {
+            // For update case – exclude the current record
+            exists = stockUnitRepository.existsByStockUnitCodeIgnoreCaseAndGroupPoidAndStockUnitPoidNot(
+                    stockUnitCode, groupPoid, excludeStockUnitPoid);
+        } else {
+            // For create case
+            exists = stockUnitRepository.existsByStockUnitCodeIgnoreCaseAndGroupPoid(
+                    stockUnitCode, groupPoid);
+        }
+
+        // Return true if unique (doesn't exist)
+        return !exists;
+    }
+
+    @Override
+    public boolean validateStockUnitName(String stockUnitName, Long groupPoid, Long excludeStockUnitPoid) {
+        boolean exists;
+
+        if (excludeStockUnitPoid != null) {
+            // For update case – exclude the current record
+            exists = stockUnitRepository.existsBystockUnitNameIgnoreCaseAndGroupPoidAndStockUnitPoidNot(
+                    stockUnitName, groupPoid, excludeStockUnitPoid);
+        } else {
+            // For create case
+            exists = stockUnitRepository.existsBystockUnitNameIgnoreCaseAndGroupPoid(
+                    stockUnitName, groupPoid);
+        }
+
+        // Return true if unique (doesn't exist)
+        return !exists;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UnitDependenciesDto checkUnitDependencies(Long stockUnitPoid, Long groupPoid) {
+        StockUnitMaster unit = stockUnitRepository
+                .findByStockUnitPoidAndGroupPoid(stockUnitPoid, groupPoid)
+                .orElseThrow(() -> new ResourceNotFoundException("Stock Unit", "stockUnitPoid", stockUnitPoid));
+
+        Long stockItemCount = stockUnitRepository.countStockItemsByStockUnitPoid(stockUnitPoid);
+
+        UnitDependenciesDto dto = new UnitDependenciesDto();
+        dto.setStockUnitPoid(stockUnitPoid);
+        dto.setStockItemCount(stockItemCount);
+        dto.setCanDelete(stockItemCount == 0);
+
+        if (dto.getCanDelete()) {
+            dto.setReason("No dependencies");
+            dto.setMessage("Unit can be deleted. No dependencies found.");
+        } else {
+            dto.setReason("Unit has dependencies");
+            dto.setMessage(String.format("Cannot delete unit. It is used by %d stock items.", stockItemCount));
+        }
+
+        return dto;
+    }
+
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StockUnitMasterDto> getActiveStockUnits(Long groupPoid, String classified, String search) {
+        List<StockUnitMaster> units = stockUnitRepository.findActiveUnitsByGroupPoid(groupPoid);
+
+        return units.stream()
+                .filter(u -> classified == null || (u.getClassified() != null && classified.equals(u.getClassified())))
+                .filter(u -> {
+                    if (search == null || search.trim().isEmpty()) {
+                        return true;
+                    }
+                    String searchLower = search.toLowerCase();
+                    return (u.getStockUnitCode() != null && u.getStockUnitCode().toLowerCase().contains(searchLower)) ||
+                           (u.getStockUnitName() != null && u.getStockUnitName().toLowerCase().contains(searchLower));
+                })
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
+    }
+
+     private StockUnitMasterDto convertToDto(StockUnitMaster entity) {
+        StockUnitMasterDto dto = new StockUnitMasterDto();
+        dto.setStockUnitPoid(entity.getStockUnitPoid());
+        dto.setStockUnitCode(entity.getStockUnitCode());
+        dto.setStockUnitName(entity.getStockUnitName());
+        dto.setClassified(entity.getClassified());
+        dto.setGroupPoid(entity.getGroupPoid());
+        dto.setSeqNo(entity.getSeqNo());
+        dto.setActive(entity.getActive());
+        return dto;
+    }
 
 }

@@ -47,7 +47,7 @@ public class StockUnitMaster {
     private String active;
 
     @Column(name = "SEQNO")
-    private String seqNo;
+    private Integer seqNo;
 
     @Column(name = "DELETED")
     private String deleted;

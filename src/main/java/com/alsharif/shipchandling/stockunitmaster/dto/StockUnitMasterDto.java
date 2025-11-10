@@ -44,7 +44,7 @@ public class StockUnitMasterDto {
 
     private String active;
 
-    private String seqNo;
+    private Integer seqNo;
 
     private String deleted;
 

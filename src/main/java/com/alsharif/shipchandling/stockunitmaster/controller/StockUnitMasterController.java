@@ -2,6 +2,8 @@ package com.alsharif.shipchandling.stockunitmaster.controller;
 
 import com.alsharif.shipchandling.stockunitmaster.dto.FilterRequestDto;
 import com.alsharif.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
+import com.alsharif.shipchandling.stockunitmaster.dto.UnitDependenciesDto;
+import com.alsharif.shipchandling.stockunitmaster.dto.ValidationResponse;
 import com.alsharif.shipchandling.stockunitmaster.service.StockUnitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import static com.alsharif.shipchandling.common.ApiResponse.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -146,5 +149,103 @@ public class StockUnitMasterController {
                 // Only return a simple message now:
                 return success("Stock unit has been soft deleted successfully");
         }
+
+
+
+
+
+        @Operation(summary = "Validate stock unit code uniqueness", description = "Validates if a stock unit code is unique. Used for real-time validation in UI.", responses = {
+                        @ApiResponse(responseCode = "200", description = "Validation result", content = @Content(mediaType = "application/json")),
+                        @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json"))
+        }, security = @SecurityRequirement(name = "bearerAuth"))
+        @GetMapping("/validate-code")
+        public ResponseEntity<?> validateStockUnitCode(
+                        @RequestParam String stockUnitCode,
+                        @RequestHeader("groupPoid") Long groupPoid,
+                        @RequestParam(required = false) Long excludeStockUnitPoid) {
+
+                boolean isUnique = stockUnitService.validateStockUnitCode(stockUnitCode, groupPoid,
+                                excludeStockUnitPoid);
+                if (isUnique) {
+                        return success("Stock unit code is available",
+                                        new ValidationResponse(isUnique, "Stock unit code is available"));
+                } else {
+                        return success("Stock unit code already exists",
+                                        new ValidationResponse(isUnique, "Stock unit code already exists"));
+                }
+        }
+
+
+        
+        @Operation(summary = "Validate stock unit name uniqueness", description = "Validates if a stock unit name is unique. Used for real-time validation in UI.", responses = {
+                        @ApiResponse(responseCode = "200", description = "Validation result", content = @Content(mediaType = "application/json")),
+                        @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json"))
+        }, security = @SecurityRequirement(name = "bearerAuth"))
+        @GetMapping("/validate-name")
+        public ResponseEntity<?> validateStockUnitName(
+                        @Parameter(description = "Stock unit name to validate", required = true) @RequestParam String stockUnitName,
+                        @Parameter(description = "Group POID from request context", required = true) @RequestHeader("groupPoid") Long groupPoid,
+                        @Parameter(description = "Stock unit POID to exclude (for update scenarios)", required = false) @RequestParam(required = false) Long excludeStockUnitPoid) {
+
+                boolean isUnique = stockUnitService.validateStockUnitName(stockUnitName, groupPoid,
+                                excludeStockUnitPoid);
+
+                if (isUnique) {
+                        return success("Stock unit name is available",
+                                        new ValidationResponse(isUnique, "Stock unit name is available"));
+                } else {
+                        return success("Stock unit name already exists",
+                                        new ValidationResponse(isUnique, "Stock unit name already exists"));
+                }
+        }
+
+
+        @Operation(summary = "Check stock unit dependencies", description = "Checks if a stock unit can be deleted by checking for dependencies (stock items, etc.).", responses = {
+                        @ApiResponse(responseCode = "200", description = "Dependency check result", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UnitDependenciesDto.class))),
+                        @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json")),
+                        @ApiResponse(responseCode = "404", description = "Stock unit not found", content = @Content(mediaType = "application/json"))
+        }, security = @SecurityRequirement(name = "bearerAuth"))
+        @GetMapping("/{stockUnitPoid}/dependencies")
+        public ResponseEntity<?> checkUnitDependencies(
+                        @Parameter(description = "Stock unit POID", required = true) @PathVariable Long stockUnitPoid,
+                        @Parameter(description = "Group POID from request context", required = true) @RequestHeader("groupPoid") Long groupPoid) {
+
+                UnitDependenciesDto dependencies = stockUnitService.checkUnitDependencies(stockUnitPoid, groupPoid);
+                return success("Dependency check completed", dependencies);
+        }
+
+
+
+
+        @Operation(
+            summary = "Get active stock units only",
+            description = "Returns only active stock units. Commonly used for dropdowns and LOVs where only active units should be shown.",
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "Successfully retrieved active stock units",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    schema = @Schema(implementation = StockUnitMasterDto.class)
+                            )
+                    ),
+                    @ApiResponse(
+                            responseCode = "401",
+                            description = "Unauthorized - Authentication required",
+                            content = @Content(mediaType = "application/json")
+                    )
+            },
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+
+        @GetMapping("/active")
+    public ResponseEntity<?> getActiveStockUnits(
+                    @RequestHeader("groupPoid") Long groupPoid,
+                    @RequestParam(required = false) String classified,
+                    @RequestParam(required = false) String search) {
+
+            List<StockUnitMasterDto> units = stockUnitService.getActiveStockUnits(groupPoid, classified, search);
+            return success("Active stock units fetched successfully", units);
+    }
 
 }
