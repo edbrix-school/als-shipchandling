@@ -1,6 +1,5 @@
 package com.alsharif.shipchandling.exceptions;
 
-import lombok.extern.slf4j.Slf4j;
 import com.alsharif.shipchandling.common.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.xml.bind.ValidationException;

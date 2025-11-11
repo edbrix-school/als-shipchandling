@@ -11,6 +11,7 @@ public class SalesDeliveryNoteDependenciesDto {
     private Long transactionPoid;
     private Boolean canDelete;
     private String reason;
-    private Long salesInvoiceCount;
+    private Integer salesInvoiceCount;
     private String message;
+    private boolean linkedToQuotation;
 }

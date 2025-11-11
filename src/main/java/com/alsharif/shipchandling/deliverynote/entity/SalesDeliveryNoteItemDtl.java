@@ -30,9 +30,6 @@ public class SalesDeliveryNoteItemDtl {
     @Column(name = "STOCK_POID")
     private Long stockPoid;
 
-    @Column(name = "STOCK_UNIT_POID")
-    private Long stockUnitPoid;
-
     @Column(name = "QUANTITY")
     private Long quantity;
 
@@ -48,17 +45,8 @@ public class SalesDeliveryNoteItemDtl {
     @Column(name = "REMARKS", length = 100)
     private String remarks;
 
-    @Column(name = "CHECK_ALL", length = 1)
-    private String checkAll = "Y"; // Y = included, N = excluded (removed before save)
-
-    @Column(name = "QTN_DET_ROW_ID")
-    private Long qtnDetRowId; // Links to quotation detail if loaded from quotation
-
-    @Column(name = "TOT_COST")
-    private Long totCost;
-
-    @Column(name = "ITEM_TYPE", length = 20)
-    private String itemType;
+    @Column(name = "STOCK_UNIT_POID")
+    private Long stockUnitPoid;
 
     @Column(name = "CREATED_BY", length = 20)
     private String createdBy;
@@ -73,4 +61,17 @@ public class SalesDeliveryNoteItemDtl {
     @UpdateTimestamp
     @Column(name = "LASTMODIFIED_DATE")
     private Timestamp lastmodifiedDate;
+    
+    @Column(name = "QTN_DET_ROW_ID")
+    private Long qtnDetRowId; // Links to quotation detail if loaded from quotation
+
+    @Column(name = "TOT_COST")
+    private Long totCost;
+
+    @Column(name = "ITEM_TYPE", length = 20)
+    private String itemType;
+
+    @Column(name = "CHECK_ALL", length = 1)
+    private String checkAll = "Y"; // Y = included, N = excluded (removed before save)
+
 }

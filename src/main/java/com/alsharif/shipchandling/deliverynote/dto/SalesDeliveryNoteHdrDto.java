@@ -15,7 +15,6 @@ public class SalesDeliveryNoteHdrDto {
     private Long transactionPoid;
     private String docRef;
     private Timestamp transactionDate;
-    private Long groupPoid;
     private Long companyPoid;
     private Long customerPoid;
     private String currencyCode;

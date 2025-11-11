@@ -7,46 +7,47 @@ import java.util.List;
 
 public interface SalesDeliveryNoteService {
 
-    // Basic CRUD Operations
-    SalesDeliveryNoteHdrDto createDeliveryNote(CreateSalesDeliveryNoteRequest request, Long groupPoid,
-            Long companyPoid, String userId);
+        // Basic CRUD Operations
+        SalesDeliveryNoteHdrDto createDeliveryNote(CreateSalesDeliveryNoteRequest request, Long groupPoid,
+                        Long companyPoid, String userId);
 
-    SalesDeliveryNoteHdrDto getDeliveryNoteByPoid(Long transactionPoid, Long groupPoid,
-            Long companyPoid, Boolean includeDetails);
+        SalesDeliveryNoteHdrDto getDeliveryNoteByPoid(Long transactionPoid, Long groupPoid,
+                        Long companyPoid, Boolean includeDetails);
 
-    SalesDeliveryNoteHdrDto updateDeliveryNote(Long transactionPoid, CreateSalesDeliveryNoteRequest request,
-            Long groupPoid, Long companyPoid, String userId);
+        SalesDeliveryNoteHdrDto updateDeliveryNote(Long groupPoid, Long transactionPoid,
+                        CreateSalesDeliveryNoteRequest request,
+                        Long companyPoid, String userId);
 
-    void deleteDeliveryNote(Long transactionPoid, Long groupPoid, Long companyPoid);
+        void deleteDeliveryNote(Long groupPoid, Long transactionPoid, Long companyPoid);
 
-    List<SalesDeliveryNoteHdrDto> getAllDeliveryNotes(Long groupPoid, Long companyPoid,
-            String deliveryStatus, Long customerPoid,
-            Long salesmanPoid, String qtnRefNo,
-            Timestamp fromDate, Timestamp toDate,
-            String search);
+        List<SalesDeliveryNoteHdrDto> getAllDeliveryNotes(Long groupPoid, Long companyPoid,
+                        String deliveryStatus, Long customerPoid,
+                        Long salesmanPoid, String qtnRefNo,
+                        Timestamp fromDate, Timestamp toDate,
+                        String search);
 
-    // Validation APIs
-    ValidationResponse validateDocRef(String docRef, Long groupPoid, Long transactionPoid);
+        // Validation APIs
+        ValidationResponse validateDocRef(String docRef, Long transactionPoid);
 
-    // Item Details APIs
-    SalesDeliveryNoteItemDtlDto addItemDetail(Long transactionPoid, CreateSalesDeliveryNoteItemDtlRequest request,
-            Long groupPoid, Long companyPoid, String userId);
+        // Item Details APIs
+        SalesDeliveryNoteItemDtlDto addItemDetail(Long transactionPoid, CreateSalesDeliveryNoteItemDtlRequest request,
+                        Long companyPoid, String userId);
 
-    SalesDeliveryNoteItemDtlDto updateItemDetail(Long transactionPoid, Long detRowId,
-            CreateSalesDeliveryNoteItemDtlRequest request,
-            Long groupPoid, Long companyPoid, String userId);
+        SalesDeliveryNoteItemDtlDto updateItemDetail(Long transactionPoid, Long detRowId,
+                        CreateSalesDeliveryNoteItemDtlRequest request,
+                        Long companyPoid, String userId);
 
-    void deleteItemDetail(Long transactionPoid, Long detRowId, Long groupPoid, Long companyPoid);
+        void deleteItemDetail(Long transactionPoid, Long detRowId, Long companyPoid);
 
-    List<SalesDeliveryNoteItemDtlDto> getItemDetails(Long transactionPoid, Long groupPoid, Long companyPoid);
+        List<SalesDeliveryNoteItemDtlDto> getItemDetails(Long transactionPoid, Long companyPoid);
 
-    // Business Logic APIs
-    ValidateCustomerChangeResponse validateCustomerChange(Long transactionPoid, Long newCustomerPoid,
-            Long groupPoid, Long companyPoid);
+        // Business Logic APIs
+        ValidateCustomerChangeResponse validateCustomerChange(Long transactionPoid,
+                        Long companyPoid);
 
-    LoadQuotationItemsResponse loadQuotationItems(Long transactionPoid, Long groupPoid,
-            Long companyPoid, String userId);
+        LoadQuotationItemsResponse loadQuotationItems(Long groupPoid, Long transactionPoid,
+                        Long companyPoid, String userId);
 
-    SalesDeliveryNoteDependenciesDto checkDeliveryNoteDependencies(Long transactionPoid,
-            Long groupPoid, Long companyPoid);
+        SalesDeliveryNoteDependenciesDto checkDeliveryNoteDependencies(Long transactionPoid,
+                        Long companyPoid);
 }
