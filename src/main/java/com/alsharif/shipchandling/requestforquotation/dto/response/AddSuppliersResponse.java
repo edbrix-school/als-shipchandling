@@ -11,4 +11,5 @@ public class AddSuppliersResponse {
     private Boolean success;
     private String message;
     private Integer suppliersAdded;
+    private java.util.List<Long> addedSupplierPoidList;
 }

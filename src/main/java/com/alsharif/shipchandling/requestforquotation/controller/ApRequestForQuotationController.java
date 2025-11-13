@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -54,9 +55,7 @@ public class ApRequestForQuotationController {
             @PathVariable Long transactionPoid,
             @RequestHeader("X-Group-Poid") Long groupPoid,
             @RequestHeader("X-Company-Poid") Long companyPoid,
-            @RequestParam(required = false, defaultValue = "false") Boolean includeDetails,
-            @RequestParam String documentId,
-            @RequestParam String actionRequested) {
+            @RequestParam(required = false, defaultValue = "false") Boolean includeDetails) {
         
         ApRequestForQtnHdrDto dto = rfqService.getRequestForQuotationByPoid(
                 transactionPoid, groupPoid, companyPoid, includeDetails);
@@ -96,10 +95,12 @@ public class ApRequestForQuotationController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long divisionPoid,
             @RequestParam(required = false) Long salesQtnPoid,
-            @RequestParam(required = false) String search) {
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) java.time.LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) java.time.LocalDate toDate) {
         
         List<ApRequestForQtnHdrDto> rfqs = rfqService.getAllRequestForQuotations(
-                groupPoid, companyPoid, status, divisionPoid, salesQtnPoid, search);
+                groupPoid, companyPoid, status, divisionPoid, salesQtnPoid, search, fromDate, toDate);
         return success("RFQs fetched successfully", rfqs);
     }
 

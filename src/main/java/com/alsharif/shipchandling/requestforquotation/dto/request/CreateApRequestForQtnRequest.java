@@ -1,6 +1,5 @@
 package com.alsharif.shipchandling.requestforquotation.dto.request;
 
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -15,7 +14,6 @@ import java.util.List;
 @AllArgsConstructor
 public class CreateApRequestForQtnRequest {
     
-    @NotNull(message = "Transaction date is required")
     private Timestamp transactionDate;
 
     @Size(max = 500, message = "Description must not exceed 500 characters")

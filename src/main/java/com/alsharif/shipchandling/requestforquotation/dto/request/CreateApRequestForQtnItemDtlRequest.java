@@ -12,7 +12,6 @@ public class CreateApRequestForQtnItemDtlRequest {
     @NotNull(message = "Stock is required")
     private Long stockPoid;
 
-    @NotNull(message = "Stock unit is required")
     private Long stockUnitPoid;
 
     @NotNull(message = "Quantity is required")
