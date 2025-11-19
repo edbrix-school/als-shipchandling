@@ -119,19 +119,19 @@ public class StockUnitMasterController {
                                         }
                                         """)
         }))
-        @PostMapping("/list")
-        public ResponseEntity<?> getStockUnitList(@ParameterObject Pageable pageable,
-                        @RequestBody(required = false) FilterRequestDto filters,
-                        @Parameter(description = "Document identifier", required = true) @RequestParam String documentId,
+        @GetMapping("/list")
+        public ResponseEntity<?> getStockUnitList(
+                        @RequestParam(required = false) String stockUnitCode,
+                        @RequestParam(required = false) String stockUnitName,
+                        @RequestParam(required = false) String classified,
+                        @RequestParam(required = false) String active,
+                        @RequestParam(required = false) String deleted,
+                        Pageable pageable) {
 
-                        @Parameter(description = "Action requested", required = true) @RequestParam String actionRequested) {
-                try {
-                        Page<StockUnitMasterDto> stockUnits = stockUnitService.listStockUnits(documentId, filters,
-                                        pageable);
-                        return success("Stock units fetched successfully", stockUnits);
-                } catch (Exception e) {
-                        return internalServerError("Error fetching Stock Unit List: " + e.getMessage());
-                }
+                Page<StockUnitMasterDto> stockUnits = stockUnitService.listStockUnitsUsingParams(
+                                stockUnitCode, stockUnitName, classified, active, deleted, pageable);
+
+                return success("Stock units fetched successfully", stockUnits);
         }
 
         @Operation(summary = "Soft delete a stock unit", description = "Marks a stock unit as deleted without permanently removing its data", responses = {
@@ -149,10 +149,6 @@ public class StockUnitMasterController {
                 // Only return a simple message now:
                 return success("Stock unit has been soft deleted successfully");
         }
-
-
-
-
 
         @Operation(summary = "Validate stock unit code uniqueness", description = "Validates if a stock unit code is unique. Used for real-time validation in UI.", responses = {
                         @ApiResponse(responseCode = "200", description = "Validation result", content = @Content(mediaType = "application/json")),
@@ -175,8 +171,6 @@ public class StockUnitMasterController {
                 }
         }
 
-
-        
         @Operation(summary = "Validate stock unit name uniqueness", description = "Validates if a stock unit name is unique. Used for real-time validation in UI.", responses = {
                         @ApiResponse(responseCode = "200", description = "Validation result", content = @Content(mediaType = "application/json")),
                         @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json"))
@@ -199,7 +193,6 @@ public class StockUnitMasterController {
                 }
         }
 
-
         @Operation(summary = "Check stock unit dependencies", description = "Checks if a stock unit can be deleted by checking for dependencies (stock items, etc.).", responses = {
                         @ApiResponse(responseCode = "200", description = "Dependency check result", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UnitDependenciesDto.class))),
                         @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json")),
@@ -214,38 +207,19 @@ public class StockUnitMasterController {
                 return success("Dependency check completed", dependencies);
         }
 
-
-
-
-        @Operation(
-            summary = "Get active stock units only",
-            description = "Returns only active stock units. Commonly used for dropdowns and LOVs where only active units should be shown.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Successfully retrieved active stock units",
-                            content = @Content(
-                                    mediaType = "application/json",
-                                    schema = @Schema(implementation = StockUnitMasterDto.class)
-                            )
-                    ),
-                    @ApiResponse(
-                            responseCode = "401",
-                            description = "Unauthorized - Authentication required",
-                            content = @Content(mediaType = "application/json")
-                    )
-            },
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
+        @Operation(summary = "Get active stock units only", description = "Returns only active stock units. Commonly used for dropdowns and LOVs where only active units should be shown.", responses = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved active stock units", content = @Content(mediaType = "application/json", schema = @Schema(implementation = StockUnitMasterDto.class))),
+                        @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json"))
+        }, security = @SecurityRequirement(name = "bearerAuth"))
 
         @GetMapping("/active")
-    public ResponseEntity<?> getActiveStockUnits(
-                    @RequestHeader("groupPoid") Long groupPoid,
-                    @RequestParam(required = false) String classified,
-                    @RequestParam(required = false) String search) {
+        public ResponseEntity<?> getActiveStockUnits(
+                        @RequestHeader("groupPoid") Long groupPoid,
+                        @RequestParam(required = false) String classified,
+                        @RequestParam(required = false) String search) {
 
-            List<StockUnitMasterDto> units = stockUnitService.getActiveStockUnits(groupPoid, classified, search);
-            return success("Active stock units fetched successfully", units);
-    }
+                List<StockUnitMasterDto> units = stockUnitService.getActiveStockUnits(groupPoid, classified, search);
+                return success("Active stock units fetched successfully", units);
+        }
 
 }
