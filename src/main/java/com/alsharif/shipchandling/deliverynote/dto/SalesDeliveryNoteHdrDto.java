@@ -1,6 +1,5 @@
 package com.alsharif.shipchandling.deliverynote.dto;
 
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -17,6 +16,7 @@ public class SalesDeliveryNoteHdrDto {
     private Timestamp transactionDate;
     private Long companyPoid;
     private Long customerPoid;
+    private String customerName; // From joined SALES_CUSTOMER_MASTER table
     private String currencyCode;
     private Long currencyRate;
     private String deliveryStatus;
@@ -33,6 +33,10 @@ public class SalesDeliveryNoteHdrDto {
     private String vesselAgent;
     private String deliveryToAddress;
     private String descriptionPrintYn;
+    private String partyAddressDetails;
+    private Long printDivisionPoid;
+    private String partyType;
+    private Long principalPoid;
     private Long totalDiscount;
     private Long totalAmount;
     private String remarks;
@@ -41,7 +45,7 @@ public class SalesDeliveryNoteHdrDto {
     private Timestamp createdDate;
     private String lastmodifiedBy;
     private Timestamp lastmodifiedDate;
-    
+
     // Detail tables (optional, included when includeDetails = true)
     private List<SalesDeliveryNoteItemDtlDto> itemDetails;
 }

@@ -25,6 +25,8 @@ import java.sql.Timestamp;
 import java.time.OffsetDateTime;
 import java.util.List;
 
+import com.alsharif.shipchandling.deliverynote.dto.PaginatedResponse;
+
 import static com.alsharif.shipchandling.utility.ResponseUtil.success;
 
 @RestController
@@ -115,7 +117,7 @@ public class SalesDeliveryNoteController {
                 return success("Delivery note deleted successfully", null);
         }
 
-        @Operation(summary = "Get All Delivery Notes", description = "Retrieves all delivery notes with optional filtering by status, customer, salesman, quotation reference, date range, etc.", responses = {
+        @Operation(summary = "Get All Delivery Notes", description = "Retrieves all delivery notes with optional filtering by status, customer, salesman, quotation reference, date range, etc. Supports pagination with page and size parameters.", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully retrieved delivery notes"),
                         @ApiResponse(responseCode = "401", description = "Unauthorized")
         }, security = @SecurityRequirement(name = "bearerAuth"))
@@ -127,6 +129,8 @@ public class SalesDeliveryNoteController {
                         @RequestParam(required = false) Long customerPoid,
                         @RequestParam(required = false) Long salesmanPoid,
                         @RequestParam(required = false) String qtnRefNo,
+                        @RequestParam(required = false, defaultValue = "0") Integer page,
+                        @RequestParam(required = false, defaultValue = "10") Integer size,
                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime fromDate,
                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime toDate,
                         @RequestParam(required = false) String search) {
@@ -134,11 +138,14 @@ public class SalesDeliveryNoteController {
                 Timestamp fromTs = (fromDate == null) ? null : Timestamp.from(fromDate.toInstant());
                 Timestamp toTs = (toDate == null) ? null : Timestamp.from(toDate.toInstant());
 
-                log.info("getAllDeliveryNotes started for companyPoid={} groupPoid={}", companyPoid, groupPoid);
-                List<SalesDeliveryNoteHdrDto> deliveryNotes = deliveryNoteService.getAllDeliveryNotes(groupPoid,
-                                companyPoid, deliveryStatus, customerPoid, salesmanPoid, qtnRefNo, fromTs, toTs,
-                                search);
-                log.info("getAllDeliveryNotes completed for companyPoid={} groupPoid={}", companyPoid, groupPoid);
+                log.info("getAllDeliveryNotes started for groupPoid={} companyPoid={} page={} size={} deliveryStatus={} customerPoid={} salesmanPoid={} qtnRefNo={} fromTs={} toTs={} search={}", 
+                        groupPoid, companyPoid, page, size, deliveryStatus, customerPoid, salesmanPoid, qtnRefNo, 
+                        fromTs, toTs, search);
+                PaginatedResponse<SalesDeliveryNoteHdrDto> deliveryNotes = deliveryNoteService.getAllDeliveryNotes(
+                                groupPoid, companyPoid, deliveryStatus, customerPoid, salesmanPoid, qtnRefNo, 
+                                fromTs, toTs, search, page, size);
+                log.info("getAllDeliveryNotes completed for companyPoid={} groupPoid={} totalElements={}", 
+                        companyPoid, groupPoid, deliveryNotes.getTotalElements());
                 return success("Delivery notes fetched successfully", deliveryNotes);
         }
 

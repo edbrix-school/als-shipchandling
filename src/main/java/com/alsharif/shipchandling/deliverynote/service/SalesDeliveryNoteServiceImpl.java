@@ -5,17 +5,20 @@ import com.alsharif.shipchandling.deliverynote.entity.*;
 import com.alsharif.shipchandling.exceptions.ResourceNotFoundException;
 import com.alsharif.shipchandling.exceptions.CustomException;
 import com.alsharif.shipchandling.deliverynote.repository.*;
-import com.alsharif.shipchandling.deliverynote.service.SalesDeliveryNoteService;
+import com.alsharif.shipchandling.deliverynote.repository.SalesDeliveryNoteHdrRepositoryImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -36,6 +39,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     private final SalesDeliveryNoteHdrRepository deliveryNoteHdrRepository;
     private final SalesDeliveryNoteItemDtlRepository itemDtlRepository;
     private final SalesDeliveryNoteRepository salesDeliveryNoteRepository;
+    private final SalesDeliveryNoteHdrRepositoryImpl deliveryNoteHdrRepositoryImpl;
 
     // Add OracleDataSource or DataSource injection for stored procedure calls
     private final DataSource dataSource;
@@ -206,43 +210,47 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<SalesDeliveryNoteHdrDto> getAllDeliveryNotes(Long groupPoid, Long companyPoid,
-            String deliveryStatus, Long customerPoid,
-            Long salesmanPoid, String qtnRefNo,
-            Timestamp fromDate, Timestamp toDate,
-            String search) {
-        log.info("getAllDeliveryNotes service started for groupPoid={} companyPoid={}", groupPoid, companyPoid);
-        List<SalesDeliveryNoteHdr> deliveryNotes = deliveryNoteHdrRepository
-                .findByCompanyPoidAndDeletedNotOrDeletedIsNull(companyPoid, "N");
-        return deliveryNotes.stream()
-                .filter(dn -> deliveryStatus == null || deliveryStatus.equals(dn.getDeliveryStatus()))
-                .filter(dn -> customerPoid == null || customerPoid.equals(dn.getCustomerPoid()))
-                .filter(dn -> salesmanPoid == null || salesmanPoid.equals(dn.getSalesmanPoid()))
-                .filter(dn -> qtnRefNo == null || qtnRefNo.equals(dn.getQtnRefNo()))
-                .filter(dn -> {
-                    if (fromDate == null && toDate == null) {
-                        return true;
-                    }
-                    if (fromDate != null && dn.getTransactionDate().before(fromDate)) {
-                        return false;
-                    }
-                    if (toDate != null && dn.getTransactionDate().after(toDate)) {
-                        return false;
-                    }
-                    return true;
+    public PaginatedResponse<SalesDeliveryNoteHdrDto> getAllDeliveryNotes(Long groupPoid, Long companyPoid,
+            String deliveryStatus, Long customerPoid, Long salesmanPoid, String qtnRefNo, Timestamp fromDate,
+            Timestamp toDate, String search, Integer page, Integer size) {
+        log.info("getAllDeliveryNotes service started for groupPoid={} companyPoid={} page={} size={}", 
+                groupPoid, companyPoid, page, size);
+        
+        // Set default values for pagination
+        int pageNumber = (page != null && page >= 0) ? page : 0;
+        int pageSize = (size != null && size > 0) ? size : 10; // Default page size is 10
+        
+        // Create Pageable with sorting by transaction date descending
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("transactionDate").descending());
+        
+        // Use the repository implementation method with filters and customer name
+        Page<Object[]> deliveryNotesPage = deliveryNoteHdrRepositoryImpl.findAllWithFiltersAndCustomerName(
+                companyPoid, deliveryStatus, customerPoid, salesmanPoid, qtnRefNo, fromDate, toDate, search, pageable);
+        
+        // Convert to DTOs - Object[] contains [SalesDeliveryNoteHdr, customerName]
+        List<SalesDeliveryNoteHdrDto> data = deliveryNotesPage.getContent().stream()
+                .map(result -> {
+                    SalesDeliveryNoteHdr entity = (SalesDeliveryNoteHdr) result[0];
+                    String customerName = (String) result[1];
+                    SalesDeliveryNoteHdrDto dto = convertToDto(entity, false);
+                    dto.setCustomerName(customerName);
+                    return dto;
                 })
-                .filter(dn -> {
-                    if (search == null || search.trim().isEmpty()) {
-                        return true;
-                    }
-                    String searchLower = search.toLowerCase();
-                    return (dn.getDocRef() != null && dn.getDocRef().toLowerCase().contains(searchLower)) ||
-                            (dn.getVesselName() != null && dn.getVesselName().toLowerCase().contains(searchLower)) ||
-                            (dn.getQtnRefNo() != null && dn.getQtnRefNo().toLowerCase().contains(searchLower));
-                })
-                .sorted((dn1, dn2) -> dn2.getTransactionDate().compareTo(dn1.getTransactionDate()))
-                .map(dn -> convertToDto(dn, false))
                 .collect(Collectors.toList());
+        
+        // Create paginated response
+        PaginatedResponse<SalesDeliveryNoteHdrDto> response = new PaginatedResponse<>();
+        response.setData(data);
+        response.setPage(deliveryNotesPage.getNumber());
+        response.setSize(deliveryNotesPage.getSize());
+        response.setTotalElements(deliveryNotesPage.getTotalElements());
+        response.setTotalPages(deliveryNotesPage.getTotalPages());
+        response.setFirst(deliveryNotesPage.isFirst());
+        response.setLast(deliveryNotesPage.isLast());
+        
+        log.info("getAllDeliveryNotes completed for groupPoid={} companyPoid={} totalElements={}", 
+                groupPoid, companyPoid, response.getTotalElements());
+        return response;
     }
 
     // Validation Methods

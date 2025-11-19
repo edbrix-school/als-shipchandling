@@ -20,11 +20,11 @@ public interface SalesDeliveryNoteService {
 
         void deleteDeliveryNote(Long groupPoid, Long transactionPoid, Long companyPoid);
 
-        List<SalesDeliveryNoteHdrDto> getAllDeliveryNotes(Long groupPoid, Long companyPoid,
+        PaginatedResponse<SalesDeliveryNoteHdrDto> getAllDeliveryNotes(Long groupPoid, Long companyPoid,
                         String deliveryStatus, Long customerPoid,
                         Long salesmanPoid, String qtnRefNo,
                         Timestamp fromDate, Timestamp toDate,
-                        String search);
+                        String search, Integer page, Integer size);
 
         // Validation APIs
         ValidationResponse validateDocRef(String docRef, Long transactionPoid);
