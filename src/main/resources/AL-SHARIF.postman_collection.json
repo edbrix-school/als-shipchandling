@@ -1,0 +1,523 @@
+{
+	"info": {
+		"_postman_id": "9f065f3b-1d34-459a-9e53-39532debe0bd",
+		"name": "AL-SHARIF",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080/api/shipchandling",
+			"type": "string"
+		},
+		{
+			"key": "categoryPoid",
+			"value": "101",
+			"type": "string"
+		},
+		{
+			"key": "parentCategoryPoid",
+			"value": "55",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Welcome",
+			"item": [
+				{
+					"name": "Get Welcome Message",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/welcome",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"welcome"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/welcome",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"welcome"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"body": "Welcome to ship chandling module"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Stock Category",
+			"item": [
+				{
+					"name": "Create Stock Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Group-Poid",
+								"value": "1001"
+							},
+							{
+								"key": "X-User-Id",
+								"value": "USR123"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"categoryCode\": \"STK-GRP-001\",\n  \"categoryName\": \"Deck Supplies\",\n  \"categoryName2\": \"Deck Supplies - EN\",\n  \"categoryType\": \"GROUP\",\n  \"parentCategoryPoid\": null,\n  \"outputTaxPoid\": 20010,\n  \"inputTaxPoid\": 20020,\n  \"costCenterPoid\": 30110,\n  \"seqno\": 1,\n  \"active\": \"Y\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/stock-categories",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"stock-categories"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "201 Stock Category Created",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"categoryCode\": \"STK-GRP-001\",\n  \"categoryName\": \"Deck Supplies\",\n  \"categoryName2\": \"Deck Supplies - EN\",\n  \"categoryType\": \"GROUP\",\n  \"parentCategoryPoid\": null,\n  \"outputTaxPoid\": 20010,\n  \"inputTaxPoid\": 20020,\n  \"costCenterPoid\": 30110,\n  \"seqno\": 1,\n  \"active\": \"Y\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/stock-categories",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"stock-categories"
+									]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"body": "{\n  \"statusCode\": 200,\n  \"success\": true,\n  \"message\": \"Stock category created successfully\",\n  \"result\": {\n    \"data\": {\n      \"categoryPoid\": 101,\n      \"categoryCode\": \"STK-GRP-001\",\n      \"categoryName\": \"Deck Supplies\",\n      \"categoryName2\": \"Deck Supplies - EN\",\n      \"categoryType\": \"GROUP\",\n      \"parentCategoryPoid\": null,\n      \"stockGlPoid\": 4500101,\n      \"salesGlPoid\": 4500201,\n      \"costOfSalesGlPoid\": 4500301,\n      \"outputTaxPoid\": 20010,\n      \"inputTaxPoid\": 20020,\n      \"costCenterPoid\": 30110,\n      \"seqno\": 1,\n      \"active\": \"Y\",\n      \"deleted\": \"N\",\n      \"groupPoid\": 1001,\n      \"createdBy\": \"USR123\",\n      \"createdDate\": \"2025-01-15T07:32:10.000+00:00\",\n      \"lastmodifiedBy\": \"USR123\",\n      \"lastmodifiedDate\": \"2025-01-15T07:32:10.000+00:00\"\n    }\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Stock Category By POID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Group-Poid",
+								"value": "1001"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/stock-categories/{{categoryPoid}}?documentId=800-300&actionRequested=VIEW",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"stock-categories",
+								"{{categoryPoid}}"
+							],
+							"query": [
+								{
+									"key": "documentId",
+									"value": "800-300"
+								},
+								{
+									"key": "actionRequested",
+									"value": "VIEW"
+								}
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "200 Stock Category Retrieved",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"statusCode\": 200,\n  \"success\": true,\n  \"message\": \"Stock category fetched successfully\",\n  \"result\": {\n    \"data\": {\n      \"categoryPoid\": 101,\n      \"categoryCode\": \"STK-GRP-001\",\n      \"categoryName\": \"Deck Supplies\",\n      \"categoryName2\": \"Deck Supplies - EN\",\n      \"categoryType\": \"GROUP\",\n      \"parentCategoryPoid\": null,\n      \"stockGlPoid\": 4500101,\n      \"salesGlPoid\": 4500201,\n      \"costOfSalesGlPoid\": 4500301,\n      \"outputTaxPoid\": 20010,\n      \"inputTaxPoid\": 20020,\n      \"costCenterPoid\": 30110,\n      \"seqno\": 1,\n      \"active\": \"Y\",\n      \"deleted\": \"N\",\n      \"groupPoid\": 1001,\n      \"createdBy\": \"USR123\",\n      \"createdDate\": \"2025-01-15T07:32:10.000+00:00\",\n      \"lastmodifiedBy\": \"USR123\",\n      \"lastmodifiedDate\": \"2025-01-15T07:32:10.000+00:00\"\n    }\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Update Stock Category",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Group-Poid",
+								"value": "1001"
+							},
+							{
+								"key": "X-User-Id",
+								"value": "USR789"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"categoryCode\": \"STK-GRP-001\",\n  \"categoryName\": \"Deck & Safety Supplies\",\n  \"categoryName2\": \"Deck Supplies v2\",\n  \"categoryType\": \"GROUP\",\n  \"parentCategoryPoid\": null,\n  \"outputTaxPoid\": 20011,\n  \"inputTaxPoid\": 20021,\n  \"costCenterPoid\": 30115,\n  \"seqno\": 2,\n  \"active\": \"Y\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/stock-categories/{{categoryPoid}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"stock-categories",
+								"{{categoryPoid}}"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "200 Stock Category Updated",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"statusCode\": 200,\n  \"success\": true,\n  \"message\": \"Stock category updated successfully\",\n  \"result\": {\n    \"data\": {\n      \"categoryPoid\": 101,\n      \"categoryCode\": \"STK-GRP-001\",\n      \"categoryName\": \"Deck & Safety Supplies\",\n      \"categoryName2\": \"Deck Supplies v2\",\n      \"categoryType\": \"GROUP\",\n      \"parentCategoryPoid\": null,\n      \"stockGlPoid\": 4500101,\n      \"salesGlPoid\": 4500201,\n      \"costOfSalesGlPoid\": 4500301,\n      \"outputTaxPoid\": 20011,\n      \"inputTaxPoid\": 20021,\n      \"costCenterPoid\": 30115,\n      \"seqno\": 2,\n      \"active\": \"Y\",\n      \"deleted\": \"N\",\n      \"groupPoid\": 1001,\n      \"createdBy\": \"USR123\",\n      \"createdDate\": \"2025-01-15T07:32:10.000+00:00\",\n      \"lastmodifiedBy\": \"USR789\",\n      \"lastmodifiedDate\": \"2025-01-20T09:15:45.000+00:00\"\n    }\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Delete Stock Category",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "X-Group-Poid",
+								"value": "1001"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/stock-categories/{{categoryPoid}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"stock-categories",
+								"{{categoryPoid}}"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "200 Stock Category Deleted",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"statusCode\": 200,\n  \"success\": true,\n  \"message\": \"Stock category deleted successfully\",\n  \"result\": {\n    \"data\": null\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Stock Category Tree",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Group-Poid",
+								"value": "1001"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/stock-categories/tree?categoryType=GROUP&active=Y",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"stock-categories",
+								"tree"
+							],
+							"query": [
+								{
+									"key": "categoryType",
+									"value": "GROUP"
+								},
+								{
+									"key": "active",
+									"value": "Y"
+								}
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "200 Stock Category Tree",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"statusCode\": 200,\n  \"success\": true,\n  \"message\": \"Stock category tree fetched successfully\",\n  \"result\": {\n    \"data\": [\n      {\n        \"categoryPoid\": 101,\n        \"code\": \"STK-GRP-001\",\n        \"description\": \"Deck & Safety Supplies\",\n        \"itemType\": \"GROUP\",\n        \"parentCategoryPoid\": null,\n        \"seqno\": 2,\n        \"deleted\": \"N\",\n        \"hasChildren\": true\n      }\n    ]\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Get All Stock Categories",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Group-Poid",
+								"value": "1001"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/stock-categories?categoryType=GROUP&active=Y",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"stock-categories"
+							],
+							"query": [
+								{
+									"key": "categoryType",
+									"value": "GROUP"
+								},
+								{
+									"key": "active",
+									"value": "Y"
+								}
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "200 All Stock Categories",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"statusCode\": 200,\n  \"success\": true,\n  \"message\": \"Stock categories fetched successfully\",\n  \"result\": {\n    \"data\": [\n      {\n        \"categoryPoid\": 101,\n        \"categoryCode\": \"STK-GRP-001\",\n        \"categoryName\": \"Deck & Safety Supplies\",\n        \"categoryType\": \"GROUP\",\n        \"active\": \"Y\"\n      },\n      {\n        \"categoryPoid\": 155,\n        \"categoryCode\": \"STK-SUB-010\",\n        \"categoryName\": \"Rope & Cables\",\n        \"categoryType\": \"SUB_GROUP\",\n        \"active\": \"Y\"\n      }\n    ]\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Child Categories",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Group-Poid",
+								"value": "1001"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/stock-categories/{{parentCategoryPoid}}/children",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"stock-categories",
+								"{{parentCategoryPoid}}",
+								"children"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "200 Child Categories",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"statusCode\": 200,\n  \"success\": true,\n  \"message\": \"Child categories fetched successfully\",\n  \"result\": {\n    \"data\": [\n      {\n        \"categoryPoid\": 155,\n        \"categoryCode\": \"STK-SUB-010\",\n        \"categoryName\": \"Rope & Cables\",\n        \"categoryType\": \"SUB_GROUP\",\n        \"parentCategoryPoid\": 55\n      }\n    ]\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Validate Category Code",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Group-Poid",
+								"value": "1001"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/stock-categories/validate-code?categoryCode=STK-GRP-001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"stock-categories",
+								"validate-code"
+							],
+							"query": [
+								{
+									"key": "categoryCode",
+									"value": "STK-GRP-001"
+								}
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "200 Category Code Check",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"statusCode\": 200,\n  \"success\": true,\n  \"message\": \"Category code is available\",\n  \"result\": {\n    \"data\": {\n      \"isUnique\": true,\n      \"message\": \"Category code is available\"\n    }\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Validate Category Name",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Group-Poid",
+								"value": "1001"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/stock-categories/validate-name?categoryName=Deck%20Supplies",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"stock-categories",
+								"validate-name"
+							],
+							"query": [
+								{
+									"key": "categoryName",
+									"value": "Deck Supplies"
+								}
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "200 Category Name Check",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"statusCode\": 200,\n  \"success\": true,\n  \"message\": \"Category name already exists\",\n  \"result\": {\n    \"data\": {\n      \"isUnique\": false,\n      \"message\": \"Category name already exists\"\n    }\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Parent GL Values",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Group-Poid",
+								"value": "1001"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/stock-categories/{{parentCategoryPoid}}/gl-values",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"stock-categories",
+								"{{parentCategoryPoid}}",
+								"gl-values"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "200 Parent GL Values",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"statusCode\": 200,\n  \"success\": true,\n  \"message\": \"Parent category GL values fetched successfully\",\n  \"result\": {\n    \"data\": {\n      \"parentCategoryPoid\": 55,\n      \"parentCategoryCode\": \"STK-GRP-CORE\",\n      \"parentCategoryName\": \"Core Supplies\",\n      \"stockGlPoid\": 4500001,\n      \"salesGlPoid\": 4500002,\n      \"costOfSalesGlPoid\": 4500003\n    }\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Check Category Dependencies",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Group-Poid",
+								"value": "1001"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/stock-categories/{{categoryPoid}}/dependencies",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"stock-categories",
+								"{{categoryPoid}}",
+								"dependencies"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "200 Category Dependencies",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"statusCode\": 200,\n  \"success\": true,\n  \"message\": \"Dependency check completed\",\n  \"result\": {\n    \"data\": {\n      \"categoryPoid\": 101,\n      \"canDelete\": false,\n      \"reason\": \"Category has dependencies\",\n      \"childCategoryCount\": 1,\n      \"stockItemCount\": 3,\n      \"message\": \"Cannot delete category. It has 1 child categories and 3 stock items.\"\n    }\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Category Hierarchy",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Group-Poid",
+								"value": "1001"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/stock-categories/{{categoryPoid}}/hierarchy",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"stock-categories",
+								"{{categoryPoid}}",
+								"hierarchy"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "200 Category Hierarchy",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"statusCode\": 200,\n  \"success\": true,\n  \"message\": \"Category hierarchy fetched successfully\",\n  \"result\": {\n    \"data\": [\n      {\n        \"categoryPoid\": 55,\n        \"categoryCode\": \"STK-GRP-CORE\",\n        \"categoryName\": \"Core Supplies\",\n        \"categoryType\": \"GROUP\",\n        \"level\": 0\n      },\n      {\n        \"categoryPoid\": 101,\n        \"categoryCode\": \"STK-GRP-001\",\n        \"categoryName\": \"Deck & Safety Supplies\",\n        \"categoryType\": \"GROUP\",\n        \"level\": 1\n      }\n    ]\n  }\n}"
+						}
+					]
+				}
+			]
+		}
+	]
+}
