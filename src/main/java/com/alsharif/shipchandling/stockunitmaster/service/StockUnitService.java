@@ -19,7 +19,13 @@ public interface StockUnitService {
 
      StockUnitMasterDto updateStockUnit(Long stockUnitPoid, StockUnitMasterDto stockUnitMasterDto);
 
-     Page<StockUnitMasterDto> listStockUnits(String docId, FilterRequestDto request, Pageable pageable);
+     Page<StockUnitMasterDto> listStockUnitsUsingParams(
+        String stockUnitCode,
+        String stockUnitName,
+        String classified,
+        String active,
+        String deleted,
+        Pageable pageable);
 
      void softDeleteStockUnit(Long stockUnitPoid);
 

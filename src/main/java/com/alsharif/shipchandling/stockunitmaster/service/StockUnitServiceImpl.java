@@ -23,6 +23,7 @@ import org.springframework.cglib.core.Local;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -169,19 +170,68 @@ public class StockUnitServiceImpl implements StockUnitService {
         stockUnitRepository.save(existingStockunit);
     }
 
-    @Override
-    public Page<StockUnitMasterDto> listStockUnits(String docId, FilterRequestDto request, Pageable pageable) {
-        Page<StockUnitMaster> countries = stockUnitRepository.findAll(pageable);
-        List<StockUnitMasterDto> stockUnitMasterDtos = new ArrayList<>();
-        countries.forEach(Country -> {
-            StockUnitMasterDto countryDto = new StockUnitMasterDto();
-            BeanUtils.copyProperties(Country, countryDto);
-            stockUnitMasterDtos.add(countryDto);
-        });
-        Page<StockUnitMasterDto> result = new PageImpl<>(stockUnitMasterDtos, pageable,
-                countries.getTotalElements());
-        return result;
+    // @Override
+    // public Page<StockUnitMasterDto> listStockUnits(String docId, FilterRequestDto request, Pageable pageable) {
+    //     Page<StockUnitMaster> countries = stockUnitRepository.findAll(pageable);
+    //     List<StockUnitMasterDto> stockUnitMasterDtos = new ArrayList<>();
+    //     countries.forEach(Country -> {
+    //         StockUnitMasterDto countryDto = new StockUnitMasterDto();
+    //         BeanUtils.copyProperties(Country, countryDto);
+    //         stockUnitMasterDtos.add(countryDto);
+    //     });
+    //     Page<StockUnitMasterDto> result = new PageImpl<>(stockUnitMasterDtos, pageable,
+    //             countries.getTotalElements());
+    //  return result;
+    // }
+
+  @Override
+public Page<StockUnitMasterDto> listStockUnitsUsingParams(
+        String stockUnitCode,
+        String stockUnitName,
+        String classified,
+        String active,
+        String deleted,
+        Pageable pageable) {
+
+    Specification<StockUnitMaster> spec = Specification.where(null);
+
+    if (stockUnitCode != null && !stockUnitCode.isEmpty()) {
+        spec = spec.and((root, query, cb) ->
+                cb.like(cb.lower(root.get("stockUnitCode")),
+                        "%" + stockUnitCode.toLowerCase() + "%"));
     }
+
+    if (stockUnitName != null && !stockUnitName.isEmpty()) {
+        spec = spec.and((root, query, cb) ->
+                cb.like(cb.lower(root.get("stockUnitName")),
+                        "%" + stockUnitName.toLowerCase() + "%"));
+    }
+
+    if (classified != null && !classified.isEmpty()) {
+        spec = spec.and((root, query, cb) ->
+                cb.equal(root.get("classified"), classified));
+    }
+
+    if (active != null && !active.isEmpty()) {
+        spec = spec.and((root, query, cb) ->
+                cb.equal(root.get("active"), active));
+    }
+
+    if (deleted != null && !deleted.isEmpty()) {
+        spec = spec.and((root, query, cb) ->
+                cb.equal(root.get("deleted"), deleted));
+    }
+
+    Page<StockUnitMaster> page = stockUnitRepository.findAll(spec, pageable);
+
+    List<StockUnitMasterDto> dtoList = page.getContent().stream().map(entity -> {
+        StockUnitMasterDto dto = new StockUnitMasterDto();
+        BeanUtils.copyProperties(entity, dto);
+        return dto;
+    }).toList();
+
+    return new PageImpl<>(dtoList, pageable, page.getTotalElements());
+}
 
     // @Override
     // public Map<String, Object> listCountries(String docId, FilterRequestDto
