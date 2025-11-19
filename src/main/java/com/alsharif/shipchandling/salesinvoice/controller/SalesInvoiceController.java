@@ -37,7 +37,7 @@
         import static com.alsharif.shipchandling.common.ApiResponse.success;
 
         @RestController
-        @RequestMapping("/api/ar/sales-invoices-sch")
+        @RequestMapping("/sales-invoice-sch")
         @RequiredArgsConstructor
         @Slf4j
         public class SalesInvoiceController {
