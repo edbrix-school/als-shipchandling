@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Spring Boot-ShipchandlingApplication<shipchandling>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.alsharif.shipchandling.ShipchandlingApplication",
+            "projectName": "shipchandling",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        }
+    ]
+}
