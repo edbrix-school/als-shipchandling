@@ -82,6 +82,10 @@ public class CreateStockMasterRequest {
     private String stockCareInstructions;
     private String stockDtldNarration;
     private String productTags;
+
+    private BigDecimal stockGlPoid;
+    private BigDecimal salesGlPoid;
+    private BigDecimal costOfSalesGlPoid;
     
     // Detail tables
     private List<CreateStockMasterDtlRequest> supplierDetails;

@@ -77,6 +77,10 @@ public class UpdateStockMasterRequest {
     private String stockDtldNarration;
     private String productTags;
 
+    private BigDecimal stockGlPoid;
+    private BigDecimal salesGlPoid;
+    private BigDecimal costOfSalesGlPoid;
+
     private List<CreateStockMasterDtlRequest> supplierDetails;
     private List<CreateStockMasterWarehouseDtlRequest> warehouseDetails;
 }
