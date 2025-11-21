@@ -20,6 +20,7 @@ public class SalesInvoiceHdrDto {
     private Long companyPoid;
     private String partyType;
     private Long customerPoid;
+    private String customerName; // From joined SALES_CUSTOMER_MASTER table
     private Long principalPoid;
     private Long customerAddrPoid;
     private String currencyCode;
@@ -27,7 +28,7 @@ public class SalesInvoiceHdrDto {
     private Long invAmount;
     private Long creditDays;
     private Timestamp dueDate;
-    private Long qtnPoid;
+    private String qtnPoid;
     private String status;
     private String invStatus;
     private Long discountPercent;

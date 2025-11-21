@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -11,7 +13,7 @@ public class QuotationItemDto {
     private Long stockPoid;
     private Long stockUnitPoid;
     private Long quantity;
-    private Long price;
+    private BigDecimal price;
     private Long discount;
     private Long baseAmt;
     private Long taxPoid;

@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LoadQuotationItemsRequest {
-    private Long qtnPoid;
+    private String qtnPoid;
     private Long incentiveAmt;
     private Long incentiveAmt2;
     private Long incentiveAmt3;

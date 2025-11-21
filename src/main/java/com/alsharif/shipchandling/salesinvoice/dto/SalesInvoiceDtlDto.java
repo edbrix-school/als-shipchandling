@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 
 // Invoice Details DTO
@@ -17,7 +17,7 @@ public class SalesInvoiceDtlDto {
     private Long stockPoid;
     private Long stockUnitPoid;
     private Long quantity;
-    private Long price;
+    private BigDecimal price;
     private Long discount;
     private Long amount;
     private Long baseAmt;

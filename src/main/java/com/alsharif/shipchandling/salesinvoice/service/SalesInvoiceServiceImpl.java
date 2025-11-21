@@ -26,20 +26,29 @@ import com.alsharif.shipchandling.exceptions.ResourceNotFoundException;
 import com.alsharif.shipchandling.exceptions.CustomException;
 import com.alsharif.shipchandling.salesinvoice.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     private final SalesInvoiceHdrRepository invoiceHdrRepository;
+    private final SalesInvoiceHdrRepositoryImpl invoiceHdrRepositoryImpl;
     private final SalesInvoiceDtlRepository invoiceDtlRepository;
+    private final SalesInvoiceDtlRepositoryImpl invoiceDtlRepositoryImpl;
     private final SalesDnDtlRepository dnDtlRepository;
     private final SalesInvCostbkdDtlRepository costbkdDtlRepository;
     private final SalesInvoiceStoredProcRepository salesInvoiceStoredProcRepository;
@@ -108,18 +117,19 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     dtl.setDiscount(createSalesInvoiceDtlRequest.getDiscount());
                     dtl.setBaseAmt(createSalesInvoiceDtlRequest.getBaseAmt());
                     dtl.setTaxPoid(createSalesInvoiceDtlRequest.getTaxPoid());
-                    dtl.setCostCenterPoid(createSalesInvoiceDtlRequest.getCostCenterPoid());
+                    dtl.setCostPoid(createSalesInvoiceDtlRequest.getCostCenterPoid());
                     dtl.setRemarks(createSalesInvoiceDtlRequest.getRemarks());
                     dtl.setCreatedBy(userId);
                     dtl.setLastmodifiedBy(userId);
 
                     // Calculate amount
                     if (dtl.getQuantity() != null && dtl.getPrice() != null) {
-                        Long amount = dtl.getQuantity() * dtl.getPrice();
+                        BigDecimal quantity = BigDecimal.valueOf(dtl.getQuantity());
+                        BigDecimal amount = quantity.multiply(dtl.getPrice());
                         if (dtl.getDiscount() != null) {
-                            amount = amount - dtl.getDiscount();
+                            amount = amount.subtract(BigDecimal.valueOf(dtl.getDiscount()));
                         }
-                        dtl.setAmount(amount);
+                        dtl.setAmount(amount.longValue());
                     }
 
                     // Get tax percentage if tax is selected
@@ -173,9 +183,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         BeanUtils.copyProperties(invoice, dto);
 
         if (includeDetails) {
-            List<SalesInvoiceDtl> details = invoiceDtlRepository
-                    .findByTransactionPoid(invoice.getTransactionPoid());
-            List<SalesInvoiceDtlDto> detailDtos = details.stream()
+            // Use native query to avoid Hibernate type mapping issues with PRICE column
+            List<SalesInvoiceDtl> details = invoiceDtlRepositoryImpl
+                    .findByTransactionPoidNative(invoice.getTransactionPoid());
+                    List<SalesInvoiceDtlDto> detailDtos = details.stream()
                     .map(this::convertInvoiceDtlToDto)
                     .collect(Collectors.toList());
             dto.setInvoiceDetails(detailDtos);
@@ -284,17 +295,18 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             dtl.setDiscount(invDetail.getDiscount());
             dtl.setBaseAmt(invDetail.getBaseAmt());
             dtl.setTaxPoid(invDetail.getTaxPoid());
-            dtl.setCostCenterPoid(invDetail.getCostCenterPoid());
+            dtl.setCostPoid(invDetail.getCostCenterPoid());
             dtl.setRemarks(invDetail.getRemarks());
             dtl.setLastmodifiedBy(userId);
 
             // Recalculate amount
             if (dtl.getQuantity() != null && dtl.getPrice() != null) {
-                Long amount = dtl.getQuantity() * dtl.getPrice();
+                BigDecimal quantity = BigDecimal.valueOf(dtl.getQuantity());
+                BigDecimal amount = quantity.multiply(dtl.getPrice());
                 if (dtl.getDiscount() != null) {
-                    amount = amount - dtl.getDiscount();
+                    amount = amount.subtract(BigDecimal.valueOf(dtl.getDiscount()));
                 }
-                dtl.setAmount(amount);
+                dtl.setAmount(amount.longValue());
             }
 
             // Recalculate tax if tax is selected
@@ -358,36 +370,52 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<SalesInvoiceHdrDto> getAllSalesInvoices(Long groupPoid, Long companyPoid,
+    public PaginatedResponse<SalesInvoiceHdrDto> getAllSalesInvoices(Long groupPoid, Long companyPoid,
             String invStatus, String verified,
             Long customerPoid, Long principalPoid,
-            Long qtnPoid, String search) {
-        List<SalesInvoiceHdr> invoices = invoiceHdrRepository
-                .findByGroupPoidAndCompanyPoidAndDeletedNotOrDeletedIsNull(groupPoid, companyPoid, "Y");
-
-        return invoices.stream()
-                .filter(inv -> invStatus == null || invStatus.equals(inv.getInvStatus()))
-                .filter(inv -> verified == null || verified.equals(inv.getVerified()))
-                .filter(inv -> customerPoid == null || customerPoid.equals(inv.getCustomerPoid()))
-                .filter(inv -> principalPoid == null || principalPoid.equals(inv.getPrincipalPoid()))
-                .filter(inv -> qtnPoid == null || qtnPoid.equals(inv.getQtnPoid()))
-                .filter(inv -> {
-                    if (search == null || search.trim().isEmpty()) {
-                        return true;
-                    }
-                    String searchLower = search.toLowerCase();
-                    return (inv.getDocRef() != null && inv.getDocRef().toLowerCase().contains(searchLower)) ||
-                            (inv.getVesselName() != null && inv.getVesselName().toLowerCase().contains(searchLower)) ||
-                            (inv.getPortName() != null && inv.getPortName().toLowerCase().contains(searchLower));
+            String qtnPoid, String search,
+            Timestamp fromDate, Timestamp toDate,
+            Integer page, Integer size) {
+        log.info("getAllSalesInvoices service started for groupPoid={} companyPoid={} page={} size={}", 
+                groupPoid, companyPoid, page, size);
+        
+        // Set default values for pagination
+        int pageNumber = (page != null && page >= 0) ? page : 0;
+        int pageSize = (size != null && size > 0) ? size : 10; // Default page size is 10
+        
+        // Create Pageable with sorting by transaction date descending, then docRef ascending
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, 
+                Sort.by("transactionDate").descending().and(Sort.by("docRef").ascending()));
+        
+        // Use the repository implementation method with filters and customer name
+        Page<Object[]> invoicesPage = invoiceHdrRepositoryImpl.findAllWithFiltersAndCustomerName(
+                groupPoid, companyPoid, invStatus, verified, customerPoid, principalPoid, 
+                qtnPoid, fromDate, toDate, search, pageable);
+        
+        // Convert to DTOs - Object[] contains [SalesInvoiceHdr, customerName]
+        List<SalesInvoiceHdrDto> data = invoicesPage.getContent().stream()
+                .map(result -> {
+                    SalesInvoiceHdr entity = (SalesInvoiceHdr) result[0];
+                    String customerName = result[1] != null ? result[1].toString() : null;
+                    SalesInvoiceHdrDto dto = convertToDto(entity, false);
+                    dto.setCustomerName(customerName);
+                    return dto;
                 })
-                .sorted((i1, i2) -> {
-                    if (i1.getTransactionDate() != null && i2.getTransactionDate() != null) {
-                        return i2.getTransactionDate().compareTo(i1.getTransactionDate());
-                    }
-                    return i1.getDocRef().compareToIgnoreCase(i2.getDocRef());
-                })
-                .map(inv -> convertToDto(inv, false))
                 .collect(Collectors.toList());
+        
+        // Create paginated response
+        PaginatedResponse<SalesInvoiceHdrDto> response = new PaginatedResponse<>();
+        response.setData(data);
+        response.setPage(invoicesPage.getNumber());
+        response.setSize(invoicesPage.getSize());
+        response.setTotalElements(invoicesPage.getTotalElements());
+        response.setTotalPages(invoicesPage.getTotalPages());
+        response.setFirst(invoicesPage.isFirst());
+        response.setLast(invoicesPage.isLast());
+        
+        log.info("getAllSalesInvoices completed for groupPoid={} companyPoid={} totalElements={}", 
+                groupPoid, companyPoid, response.getTotalElements());
+        return response;
     }
 
     // Validation Methods
@@ -446,18 +474,19 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dtl.setDiscount(request.getDiscount());
         dtl.setBaseAmt(request.getBaseAmt());
         dtl.setTaxPoid(request.getTaxPoid());
-        dtl.setCostCenterPoid(request.getCostCenterPoid());
+        dtl.setCostPoid(request.getCostCenterPoid());
         dtl.setRemarks(request.getRemarks());
         dtl.setCreatedBy(userId);
         dtl.setLastmodifiedBy(userId);
 
         // Calculate amount
         if (dtl.getQuantity() != null && dtl.getPrice() != null) {
-            Long amount = dtl.getQuantity() * dtl.getPrice();
+            BigDecimal quantity = BigDecimal.valueOf(dtl.getQuantity());
+            BigDecimal amount = quantity.multiply(dtl.getPrice());
             if (dtl.getDiscount() != null) {
-                amount = amount - dtl.getDiscount();
+                amount = amount.subtract(BigDecimal.valueOf(dtl.getDiscount()));
             }
-            dtl.setAmount(amount);
+            dtl.setAmount(amount.longValue());
         }
 
         // Get tax percentage if tax is selected
@@ -500,17 +529,18 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dtl.setDiscount(request.getDiscount());
         dtl.setBaseAmt(request.getBaseAmt());
         dtl.setTaxPoid(request.getTaxPoid());
-        dtl.setCostCenterPoid(request.getCostCenterPoid());
+        dtl.setCostPoid(request.getCostCenterPoid());
         dtl.setRemarks(request.getRemarks());
         dtl.setLastmodifiedBy(userId);
 
         // Recalculate amount
         if (dtl.getQuantity() != null && dtl.getPrice() != null) {
-            Long amount = dtl.getQuantity() * dtl.getPrice();
+            BigDecimal quantity = BigDecimal.valueOf(dtl.getQuantity());
+            BigDecimal amount = quantity.multiply(dtl.getPrice());
             if (dtl.getDiscount() != null) {
-                amount = amount - dtl.getDiscount();
+                amount = amount.subtract(BigDecimal.valueOf(dtl.getDiscount()));
             }
-            dtl.setAmount(amount);
+            dtl.setAmount(amount.longValue());
         }
 
         // Recalculate tax if tax is selected
@@ -996,7 +1026,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional(readOnly = true)
-    public LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, Long qtnPoid) {
+    public LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, String qtnPoid) {
         if (qtnPoid == null) {
             throw new CustomException("Quotation POID is required");
         }

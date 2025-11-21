@@ -28,7 +28,7 @@ public class UpdateSalesInvoiceRequest {
     private String currencyCode;
     private Long currencyRate;
     private Long creditDays;
-    private Long qtnPoid;
+    private String qtnPoid;
     private String dataLoadType;
     private String vesselName;
     private String portName;

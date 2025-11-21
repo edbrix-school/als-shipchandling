@@ -28,13 +28,18 @@
         import jakarta.validation.Valid;
         import lombok.RequiredArgsConstructor;
         import lombok.extern.slf4j.Slf4j;
-        import org.springframework.http.ResponseEntity;
+
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
         import org.springframework.web.bind.annotation.*;
 
-        import java.sql.Timestamp;
-        import java.util.List;
+import java.sql.Timestamp;
+import java.time.OffsetDateTime;
+import java.util.List;
 
-        import static com.alsharif.shipchandling.common.ApiResponse.success;
+import com.alsharif.shipchandling.salesinvoice.dto.PaginatedResponse;
+
+import static com.alsharif.shipchandling.common.ApiResponse.success;
 
         @RestController
         @RequestMapping("/sales-invoice-sch")
@@ -121,7 +126,7 @@ log.info("Deleting sales invoice with transactionPoid: {} groupId: {} companyId:
                         return success("Sales invoice deleted successfully", null);
                 }
 
-                @Operation(summary = "Get All Sales Invoices", description = "Retrieves all sales invoices with optional filtering by status, customer, date range, etc.", responses = {
+                @Operation(summary = "Get All Sales Invoices", description = "Retrieves all sales invoices with optional filtering by status, customer, date range, etc. Supports pagination with page and size parameters.", responses = {
                                 @ApiResponse(responseCode = "200", description = "Successfully retrieved sales invoices"),
                                 @ApiResponse(responseCode = "401", description = "Unauthorized")
                 }, security = @SecurityRequirement(name = "bearerAuth"))
@@ -134,19 +139,22 @@ log.info("Deleting sales invoice with transactionPoid: {} groupId: {} companyId:
                                 @RequestParam(required = false) Long customerPoid,
                                 @RequestParam(required = false) Long principalPoid,
                                 @RequestParam(required = false) String partyType,
-                                @RequestParam(required = false) Timestamp fromDate,
-                                @RequestParam(required = false) Timestamp toDate,
+                                @RequestParam(required = false, defaultValue = "0") Integer page,
+                                @RequestParam(required = false, defaultValue = "10") Integer size,
+                                @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime fromDate,
+                                @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime toDate,
                                 @RequestParam(required = false) String search) {
 
-                        // service expects 8 parameters: the 7th is a Long (nullable) and the last is
-                        // search;
-                        // pass null for the 7th param and keep fromDate/toDate as request params (they
-                        // are currently unused)
-                        log.info("Fetching all sales invoices with groupId: {} companyId: {} invStatus: {} verified: {} customerPoid: {} principalPoid: {} partyType: {} fromDate: {} toDate: {} search: {}", groupPoid, companyPoid, invStatus, verified, customerPoid, principalPoid, partyType, fromDate, toDate, search);
-                        List<SalesInvoiceHdrDto> invoices = invoiceService.getAllSalesInvoices(
+                        Timestamp fromTs = (fromDate == null) ? null : Timestamp.from(fromDate.toInstant());
+                        Timestamp toTs = (toDate == null) ? null : Timestamp.from(toDate.toInstant());
+
+                        log.info("Fetching all sales invoices with groupId: {} companyId: {} invStatus: {} verified: {} customerPoid: {} principalPoid: {} partyType: {} fromDate: {} toDate: {} search: {} page: {} size: {}", 
+                                groupPoid, companyPoid, invStatus, verified, customerPoid, principalPoid, partyType, fromTs, toTs, search, page, size);
+                        PaginatedResponse<SalesInvoiceHdrDto> invoices = invoiceService.getAllSalesInvoices(
                                         groupPoid, companyPoid, invStatus, verified, customerPoid, principalPoid,
-                                        null, search);
-                                        log.info("Fetched {} sales invoices with groupId: {} companyId: {}", invoices.size(), groupPoid, companyPoid);
+                                        null, search, fromTs, toTs, page, size);
+                        log.info("Fetched {} sales invoices (page {} of {}) with groupId: {} companyId: {}", 
+                                invoices.getData().size(), invoices.getPage() + 1, invoices.getTotalPages(), groupPoid, companyPoid);
                         return success("Sales invoices fetched successfully", invoices);
                 }
 
@@ -358,6 +366,9 @@ log.info("Loading quotation items into sales invoice with transactionPoid: {} gr
                                         // request.getQtnPoid(), request.getIncentiveAmt(),
                                         // request.getIncentiveAmt2(), request.getIncentiveAmt3(),
                                         groupPoid, companyPoid, userId);
+                                        SalesInvoiceHdrDto dto = invoiceService.getSalesInvoiceByPoid(
+                                        transactionPoid, groupPoid, companyPoid, true);
+                                        response.setInvoice(dto);
                                         log.info("Quotation items loaded into sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}", transactionPoid, groupPoid, companyPoid, userId);
                         return success(response.getMessage(), response);
                 }
@@ -449,7 +460,7 @@ log.info("Loading credit details for customerPoid: {} groupId: {} companyId: {}"
                 @GetMapping("/load-quotation-currency/{transactionPoid}")
                 public ResponseEntity<?> loadQuotationCurrency(
                                 @PathVariable Long transactionPoid,
-                                @RequestParam Long qtnPoid) {
+                                @RequestParam String qtnPoid) {
 log.info("Loading quotation currency for qtnPoid: {}", qtnPoid);
                         LoadQuotationCurrencyResponse response = invoiceService.loadQuotationCurrency(transactionPoid, qtnPoid);
                         log.info("Quotation currency loaded for qtnPoid: {}", qtnPoid);

@@ -82,13 +82,13 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public UnloadQuotationResponse callUnloadQuotationProc(Long transactionPoid, Long qtnPoid) {
+    public UnloadQuotationResponse callUnloadQuotationProc(Long transactionPoid, String qtnPoid) {
         String proc = "{call PROC_AR_SCH_UNLOAD_QUOTATION1(?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
                 cs.setLong(1, transactionPoid);
-                cs.setLong(2, qtnPoid);
+                cs.setString(2, qtnPoid);
                 cs.registerOutParameter(3, Types.VARCHAR);
 
                 cs.execute();
@@ -139,7 +139,7 @@ public class SalesInvoiceStoredProcRepository {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
                 cs.setLong(1, transactionPoid);
-                cs.setLong(2, request.getQtnPoid());
+                cs.setString(2, request.getQtnPoid());
                 cs.setLong(3, request.getIncentiveAmt() != null ? request.getIncentiveAmt() : null);
                 cs.setLong(4, request.getIncentiveAmt2() != null ? request.getIncentiveAmt2() : null);
                 cs.setLong(5, request.getIncentiveAmt3() != null ? request.getIncentiveAmt3() : null);
@@ -213,13 +213,13 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public ValidationResponse callCalculateGpProc(Long transactionPoid, Long qtnId) {
+    public ValidationResponse callCalculateGpProc(Long transactionPoid, String qtnId) {
         String proc = "{call PROC_AR_SCH_GP_CALC(?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
                 cs.setLong(1, transactionPoid);
-                cs.setLong(2, qtnId);
+                cs.setString(2, qtnId);
                 cs.registerOutParameter(3, Types.VARCHAR);
 
                 cs.execute();
@@ -280,7 +280,7 @@ public class SalesInvoiceStoredProcRepository {
     }
 
     public CalculateDiscountCommissionResponse callCalculateItemDiscountCommissionProc(
-            Long transactionPoid, CalculateDiscountCommissionRequest request, Long detRowId, Long qtnPoid,
+            Long transactionPoid, CalculateDiscountCommissionRequest request, Long detRowId, String qtnPoid,
             Long userId) {
         String proc = "{call PROC_AR_SCH_DIS_COM_CAL(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
@@ -288,7 +288,7 @@ public class SalesInvoiceStoredProcRepository {
 
                 cs.setLong(1, userId);
                 cs.setLong(2, transactionPoid);
-                cs.setLong(3, qtnPoid);
+                cs.setString(3, qtnPoid);
                 cs.setLong(4, request.getInvDiscount() != null ? request.getInvDiscount() : null);
                 cs.setLong(5, request.getIncentiveAmt() != null ? request.getIncentiveAmt() : null);
                 cs.setLong(6, request.getIncentiveAmt2() != null ? request.getIncentiveAmt2() : null);
@@ -306,7 +306,7 @@ public class SalesInvoiceStoredProcRepository {
 
                 try (ResultSet rs = (ResultSet) cs.getObject(13)) {
                     if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
-                        throw new CustomException("PROC_AR_SCH_QTN_LOAD_BUTTON failed: " + procResult);
+                        throw new CustomException("PROC_AR_SCH_DIS_COM_CAL failed: " + procResult);
                     }
 
                     List<QuotationItemDto> items = new ArrayList<>();
@@ -366,7 +366,7 @@ public class SalesInvoiceStoredProcRepository {
     }
 
     public CalculateDiscountCommissionResponse callCalculateHeaderDiscountCommissionProc(
-            Long transactionPoid, CalculateDiscountCommissionRequest request, Long detRowId, Long qtnPoid,
+            Long transactionPoid, CalculateDiscountCommissionRequest request, Long detRowId, String qtnPoid,
             Long userId) {
         String proc = "{call PROC_AR_SCH_DIS_COM_CAL_HDR(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
@@ -374,7 +374,7 @@ public class SalesInvoiceStoredProcRepository {
 
                 cs.setLong(1, userId);
                 cs.setLong(2, transactionPoid);
-                cs.setLong(3, qtnPoid);
+                cs.setString(3, qtnPoid);
                 cs.setLong(4, request.getInvDiscount() != null ? request.getInvDiscount() : null);
                 cs.setLong(5, request.getIncentiveAmt() != null ? request.getIncentiveAmt() : null);
                 cs.setLong(6, request.getIncentiveAmt2() != null ? request.getIncentiveAmt2() : null);
@@ -403,13 +403,13 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public ValidationResponse callLoadCostBookingsProc(Long transactionPoid, Long qtnId) {
+    public ValidationResponse callLoadCostBookingsProc(Long transactionPoid, String qtnId) {
         String proc = "{call PROC_AR_SCH_SALES_INV_PJ_LOAD1(?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
                 cs.setLong(1, transactionPoid);
-                cs.setLong(2, qtnId);
+                cs.setString(2, qtnId);
                 cs.registerOutParameter(3, Types.VARCHAR);
 
                 cs.execute();
@@ -480,13 +480,13 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public LoadQuotationCurrencyResponse callLoadQuotationCurrencyProc(Long transactionId, Long qtnPoId) {
+    public LoadQuotationCurrencyResponse callLoadQuotationCurrencyProc(Long transactionId, String qtnPoId) {
         String proc = "{call PROC_AR_SCH_QTN_LOAD_CUR1(?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
                 cs.setLong(1, transactionId);
-                cs.setLong(2, qtnPoId);
+                cs.setString(2, qtnPoId);
                 cs.registerOutParameter(3, Types.VARCHAR);
                 cs.registerOutParameter(4, Types.REF_CURSOR);
 

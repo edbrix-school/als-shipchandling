@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 import com.alsharif.shipchandling.salesinvoice.dto.QuotationItemDto;
+import com.alsharif.shipchandling.salesinvoice.dto.SalesInvoiceHdrDto;
 
 @Data
 @NoArgsConstructor
@@ -17,4 +18,5 @@ public class LoadQuotationItemsResponse {
     private Boolean success;
     private String message;
     private List<QuotationItemDto> items;
+    private SalesInvoiceHdrDto invoice;
 }

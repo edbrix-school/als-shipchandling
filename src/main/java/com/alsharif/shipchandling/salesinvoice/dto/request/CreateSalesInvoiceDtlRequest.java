@@ -1,10 +1,10 @@
 package com.alsharif.shipchandling.salesinvoice.dto.request;
 
-
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
 
 
 
@@ -15,10 +15,10 @@ public class CreateSalesInvoiceDtlRequest {
     private Long stockPoid;
     private Long stockUnitPoid;
     private Long quantity;
-    private Long price;
+    private BigDecimal price;
     private Long discount;
     private Long baseAmt;
     private Long taxPoid;
-    private Long costCenterPoid;
+    private String costCenterPoid;
     private String remarks;
 }

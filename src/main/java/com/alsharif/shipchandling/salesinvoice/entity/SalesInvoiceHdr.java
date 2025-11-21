@@ -65,7 +65,7 @@ public class SalesInvoiceHdr {
     private Timestamp dueDate;
 
     @Column(name = "QTN_POID")
-    private Long qtnPoid;
+    private String qtnPoid;
 
     @Column(name = "STATUS", length = 20)
     private String status;

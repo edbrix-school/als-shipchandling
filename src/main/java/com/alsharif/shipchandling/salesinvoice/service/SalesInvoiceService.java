@@ -38,10 +38,12 @@ public interface SalesInvoiceService {
 
         void deleteSalesInvoice(Long transactionPoid, Long groupPoid, Long companyPoid);
 
-        List<SalesInvoiceHdrDto> getAllSalesInvoices(Long groupPoid, Long companyPoid,
+        PaginatedResponse<SalesInvoiceHdrDto> getAllSalesInvoices(Long groupPoid, Long companyPoid,
                         String invStatus, String verified,
                         Long customerPoid, Long principalPoid,
-                        Long qtnPoid, String search);
+                        String qtnPoid, String search,
+                        Timestamp fromDate, Timestamp toDate,
+                        Integer page, Integer size);
 
         // Validation APIs
         ValidationResponse validateDocRef(String docRef, Long groupPoid, Long companyPoid, Long transactionPoid);
@@ -99,7 +101,7 @@ public interface SalesInvoiceService {
         SalesInvoiceDependenciesDto checkSalesInvoiceDependencies(Long transactionPoid,
                         Long groupPoid, Long companyPoid);
 
-        LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, Long qtnPoid);
+        LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, String qtnPoid);
 
         ValidationResponse validateCustomer(Long customerPoid, Long groupPoid, Long companyPoid);
 
