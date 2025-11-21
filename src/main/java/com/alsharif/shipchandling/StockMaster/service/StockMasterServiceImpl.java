@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import com.alsharif.shipchandling.StockMaster.dto.CreateStockMasterDtlRequest;
@@ -25,11 +26,21 @@ import com.alsharif.shipchandling.StockMaster.entity.StockMasterWarehouseDtlId;
 import com.alsharif.shipchandling.StockMaster.repository.StockMasterDtlRepository;
 import com.alsharif.shipchandling.StockMaster.repository.StockMasterRepository;
 import com.alsharif.shipchandling.StockMaster.repository.StockMasterWarehouseDtlRepository;
+import com.alsharif.shipchandling.StockMaster.repository.StockCategoryMasterRepository;
+import com.alsharif.shipchandling.StockMaster.entity.StockCategoryMasterEntity;
 import com.alsharif.shipchandling.exceptions.ResourceNotFoundException;
 
 import org.springframework.transaction.annotation.Transactional;
 
+import oracle.jdbc.OracleTypes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.sql.CallableStatement;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.*;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,6 +54,14 @@ public class StockMasterServiceImpl implements StockMasterService {
 
     @Autowired
     private StockMasterWarehouseDtlRepository warehouseRepository;
+
+    @Autowired
+    private StockCategoryMasterRepository categoryMasterRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    private static final Logger logger = LoggerFactory.getLogger(StockMasterServiceImpl.class);
 
     /**
      * ✅ Get Stock Master by ID (with optional supplier & warehouse details)
@@ -62,26 +81,84 @@ public class StockMasterServiceImpl implements StockMasterService {
             return null;
         }
 
-        // Map entity to response DTO
+        // Map all fields from entity to response DTO
         StockMasterViewResponse response = new StockMasterViewResponse();
         response.setStockPoid(entity.getStockPoid());
         response.setStockCode(entity.getStockCode());
         response.setStockName(entity.getStockName());
+        response.setStockName2(entity.getStockName2());
         response.setStockDescription(entity.getStockDescription());
+        response.setCategoryPoid(entity.getCategoryPoid());
+        response.setStockUnitPoid(entity.getStockUnitPoid());
+        response.setPurchaseStockUnitPoid(entity.getPurchaseStockUnitPoid());
+        response.setPurchaseSalesConversion(entity.getPurchaseSalesConversion());
+        response.setStockCost(entity.getStockCost());
+        response.setTagPrice(entity.getTagPrice());
+        response.setRetailPrice(entity.getRetailPrice());
+        response.setWholesalePrice(entity.getWholesalePrice());
+        response.setPrice1(entity.getPrice1());
+        response.setPrice2(entity.getPrice2());
+        response.setPrice3(entity.getPrice3());
+        response.setCurrencyCode(entity.getCurrencyCode());
+        response.setTaxPoid(entity.getTaxPoid());
+        response.setInputTaxPoid(entity.getInputTaxPoid());
+        response.setBarcode(entity.getBarcode());
+        response.setSupplierBarcode(entity.getSupplierBarcode());
+        response.setStockGlPoid(entity.getStockGlPoid());
+        response.setSalesGlPoid(entity.getSalesGlPoid());
+        response.setCostOfSalesGlPoid(entity.getCostOfSalesGlPoid());
         response.setActive(entity.getActive());
         response.setDeleted(entity.getDeleted());
+        response.setServiceItem(entity.getServiceItem());
+        response.setIsConsumables(entity.getIsConsumables());
+        response.setExpiryTracking(entity.getExpiryTracking());
+        response.setPrintLabel(entity.getPrintLabel());
+        response.setSerialNoTracking(entity.getSerialNoTracking());
+        response.setWastagePercentage(entity.getWastagePercentage());
+        response.setWeight(entity.getWeight());
+        response.setSeqno(entity.getSeqno());
+        response.setRemarks(entity.getRemarks());
+        response.setOnlineCategoryName(entity.getOnlineCategoryName());
+        response.setOnlineStock(entity.getOnlineStock());
+        response.setIsGiftCard(entity.getIsGiftCard());
+        response.setConsumptionQty(entity.getConsumptionQty());
+        response.setConsumptionUnitPoid(entity.getConsumptionUnitPoid());
+        response.setMinimumRequiredQty(entity.getMinimumRequiredQty());
+        response.setSeasonCode(entity.getSeasonCode());
+        response.setFabricType(entity.getFabricType());
+        response.setOrigin(entity.getOrigin());
+        response.setComposition(entity.getComposition());
+        response.setItemSize(entity.getItemSize());
+        response.setStockBrand(entity.getStockBrand());
+        response.setStockColor(entity.getStockColor());
+        response.setStockCareInstructions(entity.getStockCareInstructions());
+        response.setStockDtldNarration(entity.getStockDtldNarration());
+        response.setProductTags(entity.getProductTags());
         response.setGroupPoid(entity.getGroupPoid());
-        response.setRetailPrice(entity.getRetailPrice());
-        response.setStockCost(entity.getStockCost());
         response.setCreatedBy(entity.getCreatedBy());
         response.setCreatedDate(entity.getCreatedDate());
         response.setLastmodifiedBy(entity.getLastmodifiedBy());
         response.setLastmodifiedDate(entity.getLastmodifiedDate());
 
+        // Fetch and set category name
+        if (entity.getCategoryPoid() != null) {
+            categoryMasterRepository.findByCategoryPoid(entity.getCategoryPoid())
+                    .ifPresent(category -> response.setCategoryName(category.getCategoryName()));
+        }
+
         if (includeDetails) {
-            List<StockMasterDTLEntity> supplierDetails = dtlRepository.findByStockPoid(stockPoid);
-            List<StockMasterWarehouseDtl> warehouseDetails = warehouseRepository.findByStockPoid(stockPoid);
+            // Convert supplier details entities to DTOs
+            List<StockMasterDTLEntity> supplierEntities = dtlRepository.findByStockPoid(stockPoid);
+            List<StockMasterDtlDto> supplierDetails = supplierEntities.stream()
+                    .map(this::convertDtlToDto)
+                    .collect(Collectors.toList());
             response.setSupplierDetails(supplierDetails);
+
+            // Convert warehouse details entities to DTOs
+            List<StockMasterWarehouseDtl> warehouseEntities = warehouseRepository.findByStockPoid(stockPoid);
+            List<StockMasterWarehouseDtlDto> warehouseDetails = warehouseEntities.stream()
+                    .map(this::convertWarehouseDtlToDto)
+                    .collect(Collectors.toList());
             response.setWarehouseDetails(warehouseDetails);
         }
 
@@ -120,25 +197,86 @@ public class StockMasterServiceImpl implements StockMasterService {
     }
 
     /**
-     * ✅ Get Stock Masters grouped by category (Tree structure)
+     * ✅ Get Stock Masters grouped by category (Tree structure with hierarchical categories)
      */
     @Override
     public List<Map<String, Object>> getStockMastersTree(Long groupPoid) {
-        List<StockMasterEntity> all = stockMasterRepository.findAll();
+        // Fetch stock items for the group using Specification
+        Specification<StockMasterEntity> spec = (root, query, cb) -> cb.equal(root.get("groupPoid"), groupPoid);
+        spec = spec.and((root, query, cb) -> cb.equal(root.get("active"), "Y"));
+        spec = spec.and((root, query, cb) -> cb.or(
+                cb.isNull(root.get("deleted")),
+                cb.notEqual(root.get("deleted"), "Y")));
+        
+        List<StockMasterEntity> allStockItems = stockMasterRepository.findAll(spec);
 
-        Map<Long, List<StockMasterEntity>> byCategory = all.stream()
-                .filter(item -> "Y".equalsIgnoreCase(item.getActive()))
-                .filter(item -> Objects.equals(item.getGroupPoid(), groupPoid))
+        // Group stock items by categoryPoid
+        Map<Long, List<StockMasterEntity>> stockItemsByCategory = allStockItems.stream()
+                .filter(item -> item.getCategoryPoid() != null)
                 .collect(Collectors.groupingBy(StockMasterEntity::getCategoryPoid));
 
+        // Fetch all categories for the group
+        List<StockCategoryMasterEntity> allCategories = categoryMasterRepository.findByGroupPoid(groupPoid);
+        
+        // Create a map for quick category lookup
+        Map<Long, StockCategoryMasterEntity> categoryMap = allCategories.stream()
+                .collect(Collectors.toMap(StockCategoryMasterEntity::getCategoryPoid, cat -> cat));
+
+        // Build tree starting from root categories (parentCategoryPoid is null)
+        List<StockCategoryMasterEntity> rootCategories = allCategories.stream()
+                .filter(cat -> cat.getParentCategoryPoid() == null)
+                .collect(Collectors.toList());
+
         List<Map<String, Object>> tree = new ArrayList<>();
-        for (Map.Entry<Long, List<StockMasterEntity>> entry : byCategory.entrySet()) {
-            Map<String, Object> node = new HashMap<>();
-            node.put("categoryPoid", entry.getKey());
-            node.put("stockItems", entry.getValue());
-            tree.add(node);
+        for (StockCategoryMasterEntity rootCategory : rootCategories) {
+            Map<String, Object> categoryNode = buildCategoryNode(rootCategory, categoryMap, stockItemsByCategory);
+            tree.add(categoryNode);
         }
+
         return tree;
+    }
+
+    /**
+     * Recursively build category node with children and stock items
+     * Stock items are only attached to the most specific category (sub-child/leaf nodes)
+     */
+    private Map<String, Object> buildCategoryNode(
+            StockCategoryMasterEntity category,
+            Map<Long, StockCategoryMasterEntity> categoryMap,
+            Map<Long, List<StockMasterEntity>> stockItemsByCategory) {
+        
+        Map<String, Object> node = new HashMap<>();
+        node.put("categoryPoid", category.getCategoryPoid());
+        node.put("categoryCode", category.getCategoryCode());
+        node.put("categoryName", category.getCategoryName());
+        node.put("parentCategoryPoid", category.getParentCategoryPoid());
+        node.put("groupPoid", category.getGroupPoid());
+
+        // Find child categories (sub-children)
+        List<StockCategoryMasterEntity> childCategories = categoryMap.values().stream()
+                .filter(childCat -> Objects.equals(childCat.getParentCategoryPoid(), category.getCategoryPoid()))
+                .collect(Collectors.toList());
+
+        // If this category has children (sub-children), it's a parent - don't show stock items here
+        // Stock items should only appear under the most specific category (leaf nodes)
+        if (childCategories.isEmpty()) {
+            // This is a leaf node (sub-child) - add stock items directly to this category
+            List<StockMasterEntity> stockItems = stockItemsByCategory.getOrDefault(category.getCategoryPoid(), new ArrayList<>());
+            node.put("stockItems", stockItems);
+        } else {
+            // This is a parent category - no stock items, only children
+            node.put("stockItems", new ArrayList<>());
+        }
+
+        // Recursively build child categories (sub-children)
+        List<Map<String, Object>> children = new ArrayList<>();
+        for (StockCategoryMasterEntity childCategory : childCategories) {
+            Map<String, Object> childNode = buildCategoryNode(childCategory, categoryMap, stockItemsByCategory);
+            children.add(childNode);
+        }
+        node.put("children", children);
+
+        return node;
     }
 
     @Override
@@ -240,6 +378,19 @@ public class StockMasterServiceImpl implements StockMasterService {
         stockMasterRepository.save(stock);
     }
 
+    /**
+     * Executes the stored procedure PROC_STOCK_MASTER_BEFORE_SAVE before saving stock master data.
+     * This procedure is called to perform validation and business logic checks before the save operation.
+     * 
+     * @param groupPoid The group POID associated with the stock master
+     * @param companyPoid The company POID associated with the stock master
+     * @param userId The user ID performing the operation
+     * @param stockPoid The stock master POID (primary key)
+     * @param serviceItem Indicates if the stock item is a service item ("Y" or "N")
+     * 
+     * @throws RuntimeException If the procedure returns "ERROR" or if any SQL/database error occurs.
+     *                          This exception will prevent the save operation from proceeding.
+     */
     private void callBeforeSaveProcedure(Long groupPoid, Long companyPoid, String userId,
             Long stockPoid, String serviceItem) {
         // TODO: Implement stored procedure call using CallableStatement
@@ -322,6 +473,7 @@ public class StockMasterServiceImpl implements StockMasterService {
         // System.out.println("Stock after setting values: " +
         // "StockPoid=" + stockPoid);
 
+        // just call the function
         callBeforeSaveProcedure(groupPoid, companyPoid, userId, stockPoid, savedStock.getServiceItem());
 
         // --- Save Supplier Details ---
@@ -371,6 +523,7 @@ public class StockMasterServiceImpl implements StockMasterService {
             warehouseRepository.flush();
         }
 
+        // just call the function
         callAfterSaveProcedure(stockPoid);
 
         StockMasterEntity refreshedStock = stockMasterRepository.findByStockPoid(stockPoid)
@@ -401,7 +554,7 @@ public class StockMasterServiceImpl implements StockMasterService {
         BeanUtils.copyProperties(request, stock, "stockPoid", "stockCode", "createdBy", "createdDate");
         stock.setLastmodifiedBy(userId);
 
-        // Call stored procedure BEFORE SAVE
+        // just call the function
         callBeforeSaveProcedure(groupPoid, companyPoid, userId, stockPoid, stock.getServiceItem());
 
         // Update detail tables
@@ -411,7 +564,7 @@ public class StockMasterServiceImpl implements StockMasterService {
         // Save
         StockMasterEntity savedStock = stockMasterRepository.save(stock);
 
-        // Call stored procedure AFTER SAVE
+        // just call the function
         callAfterSaveProcedure(stockPoid);
 
         return convertToDto(savedStock, true);

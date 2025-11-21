@@ -60,7 +60,7 @@ public class StockMasterController {
             return ResponseEntity.notFound().build();
         }
 
-        return ResponseEntity.ok(response);
+        return success("Stock master fetched successfully", response);
     }
 
     @GetMapping("/List")
@@ -79,14 +79,16 @@ public class StockMasterController {
 
         if (tree) {
             Long groupPoid = Long.parseLong(filters.get("groupPoid"));
-            List<Map<String, Object>> response = stockMasterService.getStockMastersTree(groupPoid);
-            return ResponseEntity.ok(Map.of("categories", response));
+            List<Map<String, Object>> categories = stockMasterService.getStockMastersTree(groupPoid);
+            Map<String, Object> data = Map.of("categories", categories);
+            return success("Stock masters tree fetched successfully", data);
         } else {
             Page<StockMasterEntity> result = stockMasterService.getStockMasters(filters, pageable);
-            return ResponseEntity.ok(Map.of(
+            Map<String, Object> data = Map.of(
                     "content", result.getContent(),
                     "totalElements", result.getTotalElements(),
-                    "totalPages", result.getTotalPages()));
+                    "totalPages", result.getTotalPages());
+            return success("Stock masters list fetched successfully", data);
         }
     }
 
