@@ -19,10 +19,11 @@ public interface ApRequestForQtnService {
     
     void deleteRequestForQuotation(Long transactionPoid, Long groupPoid, Long companyPoid);
     
-    List<ApRequestForQtnHdrDto> getAllRequestForQuotations(Long groupPoid, Long companyPoid,
+    org.springframework.data.domain.Page<ApRequestForQtnHdrDto> getAllRequestForQuotations(Long groupPoid, Long companyPoid,
                                                             String status, Long divisionPoid,
                                                             Long salesQtnPoid, String search,
-                                                            java.time.LocalDate fromDate, java.time.LocalDate toDate);
+                                                            java.time.LocalDate fromDate, java.time.LocalDate toDate,
+                                                            int page, int size);
     
     // Detail Table APIs
     ApRequestForQtnItemDtlDto addItemDetail(Long transactionPoid, CreateApRequestForQtnItemDtlRequest request,
