@@ -266,11 +266,12 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // }
 
         // Update fields
-        BeanUtils.copyProperties(request, invoice, "transactionPoid", "docRef", "createdBy", "createdDate",
-                "invStatus", "verified", "invAmount", "totalGpAmt", "totalGpPercent",
-                "totalCost", "discountAmt", "discountPercent", "invDiscount",
-                "incentiveAmt", "incentivePercent", "incentiveAmt2", "incentivePercent2",
-                "incentiveAmt3", "incentivePercent3", "paymentMode", "dueDate");
+        BeanUtils.copyProperties(request, invoice, "transactionPoid", "docRef", "createdBy", 
+        "createdDate", "invStatus", "verified", "invAmount", "totalGpAmt", "totalGpPercent",
+        "totalCost", "discountAmt", "discountPercent", "invDiscount", "costRefNumber",
+        "contractRefNumber", "lpoDetails", "creditDays","fdaRef", "authorizedId", "vesselName", "portName",
+        "deliveryToAddress", "incentiveAmt", "incentivePercent", "incentiveAmt2", "incentivePercent2",
+        "incentiveAmt3", "incentivePercent3", "paymentMode", "dueDate");
         invoice.setLastmodifiedBy(userId);
 
         // Call stored procedure BEFORE SAVE for validation

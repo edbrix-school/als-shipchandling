@@ -214,7 +214,7 @@ public class SalesInvoiceStoredProcRepository {
     }
 
     public ValidationResponse callCalculateGpProc(Long transactionPoid, String qtnId) {
-        String proc = "{call PROC_AR_SCH_GP_CALC(?, ?)}";
+        String proc = "{call PROC_AR_SCH_GP_CALC(?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
