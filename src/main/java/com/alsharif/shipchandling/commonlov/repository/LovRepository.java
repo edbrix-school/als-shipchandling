@@ -2,6 +2,7 @@ package com.alsharif.shipchandling.commonlov.repository;
 
 import com.alsharif.shipchandling.commonlov.dto.LovItem;
 import com.alsharif.shipchandling.commonlov.dto.LovResponse;
+import lombok.extern.slf4j.Slf4j;
 import oracle.jdbc.OracleTypes;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -15,13 +16,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Repository
+@Slf4j
 public class LovRepository {
     @Autowired
     private JdbcTemplate jdbcTemplate;
     public LovResponse getLovList(String lovName, Long docKeyPoid, String filterValue) {
         try {
             final String sql = "BEGIN PROC_LOV_GETLIST(?,?,?,?,?,?,?); END;";
-
+            log.info("Executing PROC_LOV_GETLIST for lovName={} docKeyPoid={} filterValue={}", lovName, docKeyPoid, filterValue);
             return jdbcTemplate.execute((Connection con) -> {
                 try (CallableStatement cs = con.prepareCall(sql)) {
                     cs.setLong(1, 1);
@@ -48,13 +50,17 @@ public class LovRepository {
                             }
                         }
                     }
-                    return new LovResponse(items);
+                    LovResponse response = new LovResponse(items);
+                    log.info("PROC_LOV_GETLIST completed for lovName={} itemsFetched={}", lovName, items.size());
+                    return response;
                 } catch (SQLException ex) {
+                    log.error("Error executing PROC_LOV_GETLIST for lovName={}: {}", lovName, ex.getMessage(), ex);
                     throw new RuntimeException("Error fetching LOV list: " + ex.getMessage(), ex);
                 }
             });
 
         }catch (Exception e){
+            log.error("Unexpected error fetching LOV list for lovName={}", lovName, e);
             throw new RuntimeException();
 
         }
