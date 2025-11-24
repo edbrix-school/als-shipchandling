@@ -1,11 +1,13 @@
 package com.alsharif.shipchandling.commonlov.service;
 import com.alsharif.shipchandling.commonlov.dto.LovResponse;
 import com.alsharif.shipchandling.commonlov.repository.LovRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 
 @Service
+@Slf4j
 public class LovServiceImpl implements LovService{
 
     @Autowired
@@ -13,6 +15,10 @@ public class LovServiceImpl implements LovService{
 
     @Override
     public LovResponse getLovList(String lovName, Long docKeyPoid, String filterValue) {
-        return lovRepository.getLovList(lovName,docKeyPoid,filterValue);
+        log.info("Fetching LOV list for lovName={} docKeyPoid={} filterValue={}", lovName, docKeyPoid, filterValue);
+        LovResponse response = lovRepository.getLovList(lovName,docKeyPoid,filterValue);
+        log.info("Fetched LOV list for lovName={} itemCount={}", lovName,
+                response != null && response.getItems() != null ? response.getItems().size() : 0);
+        return response;
     }
 }
