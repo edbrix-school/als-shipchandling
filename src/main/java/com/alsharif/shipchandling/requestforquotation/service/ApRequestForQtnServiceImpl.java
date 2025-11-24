@@ -240,6 +240,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
          * // Update detail tables
          * updateItemDetails(transactionPoid, request.getItemDetails(), groupPoid,
          * companyPoid, userId);
+         * 
          * updateSupplierDetails(transactionPoid, request.getSupplierDetails(), userId);
          * 
          * // Save
