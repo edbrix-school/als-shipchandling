@@ -22,7 +22,6 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 
-
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
@@ -51,18 +50,20 @@ public class GlobalExceptionHandler {
 
             String message = "Invalid date format. Please use YYYY-MM-DD.";
             if (StringUtils.isNotBlank(value) && StringUtils.isNotBlank(parameterName)) {
-                message = String.format("Invalid value '%s' for parameter '%s'. Expected format: YYYY-MM-DD.", value, parameterName);
+                message = String.format("Invalid value '%s' for parameter '%s'. Expected format: YYYY-MM-DD.", value,
+                        parameterName);
             }
             return ApiResponse.badRequest(message);
         }
         return ApiResponse.badRequest(ex.getMessage());
     }
 
-
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<?> handleValidationExceptions(MethodArgumentNotValidException ex, HttpServletRequest request) {
+    public ResponseEntity<?> handleValidationExceptions(MethodArgumentNotValidException ex,
+            HttpServletRequest request) {
         Map<String, Object> errors = new HashMap<>();
-        ex.getBindingResult().getFieldErrors().forEach(error -> errors.put(error.getField(), error.getDefaultMessage()));
+        ex.getBindingResult().getFieldErrors()
+                .forEach(error -> errors.put(error.getField(), error.getDefaultMessage()));
 
         log.info("Validation errors at {}", request.getRequestURI());
         return ApiResponse.error("Validation error occurred", HttpStatus.BAD_REQUEST.value(), errors);
