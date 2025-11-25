@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import static com.alsharif.shipchandling.common.ApiResponse.success;
 
 @RestController
-@RequestMapping("/api/shipchandling/lov")
+@RequestMapping("lov")
 @Tag(name = "Common LOV", description = "Common List of Values API")
 public class LovController {
 

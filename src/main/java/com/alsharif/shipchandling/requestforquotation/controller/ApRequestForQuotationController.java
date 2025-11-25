@@ -23,7 +23,7 @@ import java.util.Map;
 import static com.alsharif.shipchandling.common.ApiResponse.success;
 
 @RestController
-@RequestMapping("/api/shipchandling/api/ap/request-for-quotations")
+@RequestMapping("api/ap/request-for-quotations")
 @RequiredArgsConstructor
 public class ApRequestForQuotationController {
 
