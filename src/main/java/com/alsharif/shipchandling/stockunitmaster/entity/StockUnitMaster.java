@@ -19,7 +19,7 @@ public class StockUnitMaster {
     @Column(name = "STOCK_UNIT_POID", nullable = false)
     private Long stockUnitPoid;
 
-    @Column(name = "STOCK_UNIT_CODE", length = 2,nullable = false, unique = true)
+    @Column(name = "STOCK_UNIT_CODE", length = 20,nullable = false, unique = true)
     private String stockUnitCode;
 
     @Column(name = "STOCK_UNIT_NAME", length = 100,nullable = false, unique = true)
