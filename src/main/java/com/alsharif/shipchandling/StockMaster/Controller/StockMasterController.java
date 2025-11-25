@@ -66,11 +66,44 @@ public class StockMasterController {
     @GetMapping("/List")
     public ResponseEntity<?> getStockMasters(
             @RequestParam Map<String, String> filters,
+            @RequestParam(required = false) String documentId,
+            @RequestParam(required = false) String actionRequested,
+            @RequestParam(required = false) Long parentPoid,
             @RequestParam(defaultValue = "false") boolean tree,
+            @RequestParam(required = false) String filterValue,
+            @RequestParam(defaultValue = "false") boolean includeDeleted,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "seqno") String sortBy,
             @RequestParam(defaultValue = "ASC") String sortOrder) {
+
+        // Check if this is a tree structure request with documentId and actionRequested
+        if (tree && documentId != null && "VIEW".equalsIgnoreCase(actionRequested)) {
+            Long groupPoid = Long.parseLong(filters.get("groupPoid"));
+            Long companyPoid = filters.containsKey("companyPoid") ? Long.parseLong(filters.get("companyPoid")) : null;
+            Long userPoid = filters.containsKey("userPoid") ? Long.parseLong(filters.get("userPoid")) : null;
+            
+            List<Map<String, Object>> treeStructure = stockMasterService.getStockMastersTreeStructure(
+                    groupPoid, filterValue, includeDeleted, companyPoid, userPoid);
+            
+            return success("Stock Master tree structure retrieved successfully", treeStructure);
+        }
+
+        // Check if this is a hierarchical view request (flat list)
+        if (documentId != null && "VIEW".equalsIgnoreCase(actionRequested)) {
+            Long groupPoid = Long.parseLong(filters.get("groupPoid"));
+            Long companyPoid = filters.containsKey("companyPoid") ? Long.parseLong(filters.get("companyPoid")) : null;
+            Long userPoid = filters.containsKey("userPoid") ? Long.parseLong(filters.get("userPoid")) : null;
+            
+            List<Map<String, Object>> hierarchicalList = stockMasterService.getStockMastersHierarchical(
+                    groupPoid, parentPoid, filterValue, includeDeleted, companyPoid, userPoid);
+            
+            Map<String, Object> data = Map.of(
+                    "content", hierarchicalList,
+                    "totalElements", hierarchicalList.size());
+            
+            return success("Stock Master list retrieved successfully", data);
+        }
 
         Sort sort = sortOrder.equalsIgnoreCase("DESC")
                 ? Sort.by(sortBy).descending()

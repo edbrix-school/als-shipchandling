@@ -839,4 +839,482 @@ public class StockMasterServiceImpl implements StockMasterService {
         return convertToDto(stock, true);
     }
 
+    /**
+     * Get hierarchical list of Stock Masters and Categories
+     * If parentPoid is null: Returns MAIN_GROUP (root categories)
+     * If parentPoid is provided: Returns SUB_GROUP (child categories) and LEDGER (stock items) for that parent
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getStockMastersHierarchical(Long groupPoid, Long parentPoid, String filterValue, boolean includeDeleted, Long companyPoid, Long userPoid) {
+        // Log the request for audit purposes
+        if (logger.isDebugEnabled()) {
+            logger.debug("getStockMastersHierarchical called - groupPoid: {}, parentPoid: {}, companyPoid: {}, userPoid: {}, filterValue: {}, includeDeleted: {}", 
+                    groupPoid, parentPoid, companyPoid, userPoid, filterValue, includeDeleted);
+        }
+        
+        // Validate companyPoid and userPoid if provided
+        if (companyPoid != null && companyPoid <= 0) {
+            throw new IllegalArgumentException("Invalid companyPoid: " + companyPoid);
+        }
+        if (userPoid != null && userPoid <= 0) {
+            throw new IllegalArgumentException("Invalid userPoid: " + userPoid);
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        if (parentPoid == null) {
+            // Return MAIN_GROUP items (root categories with no parent)
+            List<StockCategoryMasterEntity> rootCategories = categoryMasterRepository
+                    .findByGroupPoidAndParentCategoryPoidIsNull(groupPoid);
+            
+            for (StockCategoryMasterEntity category : rootCategories) {
+                Map<String, Object> item = convertCategoryToHierarchicalItem(category, "MAIN_GROUP", 0);
+                result.add(item);
+            }
+        } else {
+            // Check if parentPoid is a category
+            Optional<StockCategoryMasterEntity> parentCategory = categoryMasterRepository
+                    .findByCategoryPoid(parentPoid);
+            
+            if (parentCategory.isPresent()) {
+                // Parent is a category - return child categories (SUB_GROUP) and stock items (LEDGER)
+                StockCategoryMasterEntity parent = parentCategory.get();
+                int level = calculateCategoryLevel(parent, groupPoid) + 1;
+
+                // Get child categories
+                List<StockCategoryMasterEntity> childCategories = categoryMasterRepository
+                        .findByParentCategoryPoid(parentPoid);
+                
+                for (StockCategoryMasterEntity category : childCategories) {
+                    Map<String, Object> item = convertCategoryToHierarchicalItem(category, "SUB_GROUP", level);
+                    item.put("parentPoid", parentPoid);
+                    result.add(item);
+                }
+
+                // Get stock items for this category
+                Specification<StockMasterEntity> spec = (root, query, cb) -> 
+                    cb.equal(root.get("groupPoid"), groupPoid);
+                spec = spec.and((root, query, cb) -> 
+                    cb.equal(root.get("categoryPoid"), parentPoid));
+                
+                if (!includeDeleted) {
+                    spec = spec.and((root, query, cb) -> cb.or(
+                        cb.isNull(root.get("deleted")),
+                        cb.notEqual(root.get("deleted"), "Y")));
+                }
+                
+                // Apply filterValue if provided
+                if (filterValue != null && !filterValue.trim().isEmpty()) {
+                    String searchPattern = "%" + filterValue.toLowerCase() + "%";
+                    spec = spec.and((root, query, cb) -> cb.or(
+                        cb.like(cb.lower(root.get("stockCode")), searchPattern),
+                        cb.like(cb.lower(root.get("stockName")), searchPattern)
+                    ));
+                }
+
+                List<StockMasterEntity> stockItems = stockMasterRepository.findAll(spec);
+                
+                for (StockMasterEntity stock : stockItems) {
+                    Map<String, Object> item = convertStockToHierarchicalItem(stock, level);
+                    item.put("parentPoid", parentPoid);
+                    result.add(item);
+                }
+            } else {
+                // Parent is not a category - should not happen in normal flow
+                // Return empty list
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Calculate the level of a category in the hierarchy
+     */
+    private int calculateCategoryLevel(StockCategoryMasterEntity category, Long groupPoid) {
+        if (category.getParentCategoryPoid() == null) {
+            return 0;
+        }
+        
+        Optional<StockCategoryMasterEntity> parent = categoryMasterRepository
+                .findByCategoryPoid(category.getParentCategoryPoid());
+        
+        if (parent.isPresent()) {
+            return calculateCategoryLevel(parent.get(), groupPoid) + 1;
+        }
+        
+        return 0;
+    }
+
+    /**
+     * Convert category entity to hierarchical item format
+     */
+    private Map<String, Object> convertCategoryToHierarchicalItem(
+            StockCategoryMasterEntity category, String type, int level) {
+        Map<String, Object> item = new HashMap<>();
+        item.put("categoryPoid", category.getCategoryPoid());
+        item.put("categoryCode", category.getCategoryCode());
+        item.put("categoryName", category.getCategoryName());
+        item.put("type", type);
+        item.put("level", level);
+        item.put("active", true); // Categories are always active in this context
+        item.put("deleted", false);
+        item.put("groupPoid", category.getGroupPoid());
+        if (category.getParentCategoryPoid() != null) {
+            item.put("parentPoid", category.getParentCategoryPoid());
+        }
+        return item;
+    }
+
+    /**
+     * Convert stock entity to hierarchical item format
+     */
+    private Map<String, Object> convertStockToHierarchicalItem(StockMasterEntity stock, int level) {
+        Map<String, Object> item = new HashMap<>();
+        
+        // Copy all fields from entity
+        item.put("stockPoid", stock.getStockPoid());
+        item.put("stockCode", stock.getStockCode());
+        item.put("stockName", stock.getStockName());
+        item.put("stockName2", stock.getStockName2());
+        item.put("stockDescription", stock.getStockDescription());
+        item.put("categoryPoid", stock.getCategoryPoid());
+        item.put("stockUnitPoid", stock.getStockUnitPoid());
+        item.put("purchaseStockUnitPoid", stock.getPurchaseStockUnitPoid());
+        item.put("purchaseSalesConversion", stock.getPurchaseSalesConversion());
+        item.put("stockCost", stock.getStockCost());
+        item.put("tagPrice", stock.getTagPrice());
+        item.put("retailPrice", stock.getRetailPrice());
+        item.put("wholesalePrice", stock.getWholesalePrice());
+        item.put("price1", stock.getPrice1());
+        item.put("price2", stock.getPrice2());
+        item.put("price3", stock.getPrice3());
+        item.put("currencyCode", stock.getCurrencyCode());
+        item.put("taxPoid", stock.getTaxPoid());
+        item.put("inputTaxPoid", stock.getInputTaxPoid());
+        item.put("barcode", stock.getBarcode());
+        item.put("supplierBarcode", stock.getSupplierBarcode());
+        item.put("stockGlPoid", stock.getStockGlPoid());
+        item.put("salesGlPoid", stock.getSalesGlPoid());
+        item.put("costOfSalesGlPoid", stock.getCostOfSalesGlPoid());
+        item.put("serviceItem", stock.getServiceItem());
+        item.put("isConsumables", stock.getIsConsumables());
+        item.put("expiryTracking", stock.getExpiryTracking());
+        item.put("printLabel", stock.getPrintLabel());
+        item.put("serialNoTracking", stock.getSerialNoTracking());
+        item.put("wastagePercentage", stock.getWastagePercentage());
+        item.put("weight", stock.getWeight());
+        item.put("seqno", stock.getSeqno());
+        item.put("remarks", stock.getRemarks());
+        item.put("onlineCategoryName", stock.getOnlineCategoryName());
+        item.put("onlineStock", stock.getOnlineStock());
+        item.put("isGiftCard", stock.getIsGiftCard());
+        item.put("consumptionQty", stock.getConsumptionQty());
+        item.put("consumptionUnitPoid", stock.getConsumptionUnitPoid());
+        item.put("minimumRequiredQty", stock.getMinimumRequiredQty());
+        item.put("seasonCode", stock.getSeasonCode());
+        item.put("fabricType", stock.getFabricType());
+        item.put("origin", stock.getOrigin());
+        item.put("composition", stock.getComposition());
+        item.put("itemSize", stock.getItemSize());
+        item.put("stockBrand", stock.getStockBrand());
+        item.put("stockColor", stock.getStockColor());
+        item.put("stockCareInstructions", stock.getStockCareInstructions());
+        item.put("stockDtldNarration", stock.getStockDtldNarration());
+        item.put("productTags", stock.getProductTags());
+        item.put("groupPoid", stock.getGroupPoid());
+        item.put("createdBy", stock.getCreatedBy());
+        item.put("createdDate", stock.getCreatedDate());
+        item.put("lastmodifiedBy", stock.getLastmodifiedBy());
+        item.put("lastmodifiedDate", stock.getLastmodifiedDate());
+        
+        // Convert Y/N/null to boolean (Y=true, N/null=false)
+        item.put("active", stock.getActive() != null && "Y".equalsIgnoreCase(stock.getActive()));
+        item.put("deleted", stock.getDeleted() != null && "Y".equalsIgnoreCase(stock.getDeleted()));
+        
+        // Add hierarchical fields
+        item.put("type", "LEDGER");
+        item.put("level", level);
+        
+        return item;
+    }
+
+    /**
+     * Get complete nested tree structure of Stock Masters and Categories
+     * Similar to GL Master tree structure with children arrays
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getStockMastersTreeStructure(Long groupPoid, String filterValue, boolean includeDeleted, Long companyPoid, Long userPoid) {
+        // Log the request for audit purposes
+        if (logger.isDebugEnabled()) {
+            logger.debug("getStockMastersTreeStructure called - groupPoid: {}, companyPoid: {}, userPoid: {}, filterValue: {}, includeDeleted: {}", 
+                    groupPoid, companyPoid, userPoid, filterValue, includeDeleted);
+        }
+        
+        // Validate companyPoid and userPoid if provided
+        if (companyPoid != null && companyPoid <= 0) {
+            throw new IllegalArgumentException("Invalid companyPoid: " + companyPoid);
+        }
+        if (userPoid != null && userPoid <= 0) {
+            throw new IllegalArgumentException("Invalid userPoid: " + userPoid);
+        }
+        // Fetch all categories for the group
+        List<StockCategoryMasterEntity> allCategories = categoryMasterRepository.findByGroupPoid(groupPoid);
+        
+        // Build category map for quick lookup
+        Map<Long, StockCategoryMasterEntity> categoryMap = allCategories.stream()
+                .collect(Collectors.toMap(StockCategoryMasterEntity::getCategoryPoid, cat -> cat));
+        
+        // Build category children map
+        Map<Long, List<StockCategoryMasterEntity>> categoryChildrenMap = allCategories.stream()
+                .filter(cat -> cat.getParentCategoryPoid() != null)
+                .collect(Collectors.groupingBy(StockCategoryMasterEntity::getParentCategoryPoid));
+        
+        // Fetch all stock items
+        Specification<StockMasterEntity> stockSpec = (root, query, cb) -> 
+            cb.equal(root.get("groupPoid"), groupPoid);
+        
+        if (!includeDeleted) {
+            stockSpec = stockSpec.and((root, query, cb) -> cb.or(
+                cb.isNull(root.get("deleted")),
+                cb.notEqual(root.get("deleted"), "Y")));
+        }
+        
+        // Apply filterValue if provided (search by stockCode or stockName)
+        if (filterValue != null && !filterValue.trim().isEmpty()) {
+            String searchPattern = "%" + filterValue.toLowerCase() + "%";
+            Specification<StockMasterEntity> searchSpec = (root, query, cb) -> {
+                // Handle null values properly
+                return cb.or(
+                    cb.and(
+                        cb.isNotNull(root.get("stockCode")),
+                        cb.like(cb.lower(root.get("stockCode")), searchPattern)
+                    ),
+                    cb.and(
+                        cb.isNotNull(root.get("stockName")),
+                        cb.like(cb.lower(root.get("stockName")), searchPattern)
+                    )
+                );
+            };
+            stockSpec = stockSpec.and(searchSpec);
+        }
+        
+        List<StockMasterEntity> allStockItems = stockMasterRepository.findAll(stockSpec);
+        
+        // Group stock items by categoryPoid
+        Map<Long, List<StockMasterEntity>> stockItemsByCategory = allStockItems.stream()
+                .filter(item -> item.getCategoryPoid() != null)
+                .collect(Collectors.groupingBy(StockMasterEntity::getCategoryPoid));
+        
+        // Get root categories (MAIN_GROUP)
+        List<StockCategoryMasterEntity> rootCategories = allCategories.stream()
+                .filter(cat -> cat.getParentCategoryPoid() == null)
+                .collect(Collectors.toList());
+        
+        // Build tree starting from root
+        List<Map<String, Object>> tree = new ArrayList<>();
+        for (StockCategoryMasterEntity rootCategory : rootCategories) {
+            Map<String, Object> node = buildTreeNode(rootCategory, categoryMap, categoryChildrenMap, 
+                    stockItemsByCategory, groupPoid, filterValue, 0, companyPoid, userPoid);
+            
+            // Only add if node or its children match the filter
+            if (shouldIncludeNode(node, filterValue)) {
+                tree.add(node);
+            }
+        }
+        
+        return tree;
+    }
+
+    /**
+     * Recursively build tree node with children
+     */
+    private Map<String, Object> buildTreeNode(
+            StockCategoryMasterEntity category,
+            Map<Long, StockCategoryMasterEntity> categoryMap,
+            Map<Long, List<StockCategoryMasterEntity>> categoryChildrenMap,
+            Map<Long, List<StockMasterEntity>> stockItemsByCategory,
+            Long groupPoid,
+            String filterValue,
+            int level,
+            Long companyPoid,
+            Long userPoid) {
+        
+        Map<String, Object> node = new HashMap<>();
+        
+        // Determine type based on level
+        String type = (level == 0) ? "MAIN_GROUP" : "SUB_GROUP";
+        
+        // Add category fields
+        node.put("categoryPoid", category.getCategoryPoid());
+        node.put("categoryCode", category.getCategoryCode());
+        node.put("categoryName", category.getCategoryName());
+        node.put("type", type);
+        node.put("level", level);
+        node.put("active", true);
+        node.put("deleted", false);
+        node.put("groupPoid", category.getGroupPoid());
+        if (category.getParentCategoryPoid() != null) {
+            node.put("parentPoid", category.getParentCategoryPoid());
+        }
+        
+        // Add metadata fields
+        node.put("id", "row-" + category.getCategoryPoid());
+        node.put("isExpanded", false);
+        node.put("isRowGroup", true);
+        
+        // Add companyPoid and userPoid for tracking (if provided)
+        if (companyPoid != null) {
+            node.put("companyPoid", companyPoid);
+        }
+        if (userPoid != null) {
+            node.put("userPoid", userPoid);
+        }
+        
+        // Build children array
+        List<Map<String, Object>> children = new ArrayList<>();
+        
+        // Add child categories (SUB_GROUP)
+        List<StockCategoryMasterEntity> childCategories = categoryChildrenMap.getOrDefault(
+                category.getCategoryPoid(), new ArrayList<>());
+        
+        for (StockCategoryMasterEntity childCategory : childCategories) {
+            Map<String, Object> childNode = buildTreeNode(childCategory, categoryMap, categoryChildrenMap,
+                    stockItemsByCategory, groupPoid, filterValue, level + 1, companyPoid, userPoid);
+            
+            if (shouldIncludeNode(childNode, filterValue)) {
+                children.add(childNode);
+            }
+        }
+        
+        // Add stock items (LEDGER) for this category
+        // If no filter: only add to leaf nodes (categories with no children)
+        // If filter exists: add to all matching categories
+        boolean shouldAddStockItems = childCategories.isEmpty() || 
+                (filterValue != null && !filterValue.trim().isEmpty());
+        
+        if (shouldAddStockItems) {
+            List<StockMasterEntity> stockItems = stockItemsByCategory.getOrDefault(
+                    category.getCategoryPoid(), new ArrayList<>());
+            
+            for (StockMasterEntity stock : stockItems) {
+                // Apply filter if provided
+                if (filterValue == null || filterValue.trim().isEmpty() || 
+                    matchesFilter(stock, filterValue)) {
+                    Map<String, Object> stockNode = convertStockToTreeItem(stock, level + 1, companyPoid, userPoid);
+                    stockNode.put("parentPoid", category.getCategoryPoid());
+                    children.add(stockNode);
+                }
+            }
+        }
+        
+        node.put("children", children);
+        
+        return node;
+    }
+
+    /**
+     * Convert stock entity to tree item format with metadata
+     */
+    private Map<String, Object> convertStockToTreeItem(StockMasterEntity stock, int level, Long companyPoid, Long userPoid) {
+        Map<String, Object> item = convertStockToHierarchicalItem(stock, level);
+        
+        // Add metadata fields
+        item.put("id", "row-" + stock.getStockPoid());
+        item.put("isExpanded", false);
+        item.put("isRowGroup", true);
+        item.put("children", new ArrayList<>()); // LEDGER items have no children
+        
+        // Add companyPoid and userPoid for tracking (if provided)
+        if (companyPoid != null) {
+            item.put("companyPoid", companyPoid);
+        }
+        if (userPoid != null) {
+            item.put("userPoid", userPoid);
+        }
+        
+        return item;
+    }
+
+    /**
+     * Check if stock item matches filter
+     */
+    private boolean matchesFilter(StockMasterEntity stock, String filterValue) {
+        if (filterValue == null || filterValue.trim().isEmpty()) {
+            return true;
+        }
+        
+        String filter = filterValue.toLowerCase().trim();
+        
+        // Check stockCode
+        if (stock.getStockCode() != null) {
+            String stockCode = stock.getStockCode().toLowerCase().trim();
+            if (stockCode.contains(filter)) {
+                return true;
+            }
+        }
+        
+        // Check stockName
+        if (stock.getStockName() != null) {
+            String stockName = stock.getStockName().toLowerCase().trim();
+            if (stockName.contains(filter)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Check if node should be included based on filter
+     * Include if node matches filter or has matching children
+     */
+    private boolean shouldIncludeNode(Map<String, Object> node, String filterValue) {
+        if (filterValue == null || filterValue.trim().isEmpty()) {
+            return true;
+        }
+        
+        String filter = filterValue.toLowerCase().trim();
+        
+        // Check if node itself matches (for categories)
+        String categoryName = (String) node.get("categoryName");
+        String categoryCode = (String) node.get("categoryCode");
+        
+        if (categoryName != null && categoryName.toLowerCase().trim().contains(filter)) {
+            return true;
+        }
+        if (categoryCode != null && categoryCode.toLowerCase().trim().contains(filter)) {
+            return true;
+        }
+        
+        // Check if node is a stock item (LEDGER) and matches
+        String type = (String) node.get("type");
+        if ("LEDGER".equals(type)) {
+            String stockName = (String) node.get("stockName");
+            String stockCode = (String) node.get("stockCode");
+            
+            if (stockName != null && stockName.toLowerCase().trim().contains(filter)) {
+                return true;
+            }
+            if (stockCode != null && stockCode.toLowerCase().trim().contains(filter)) {
+                return true;
+            }
+        }
+        
+        // Check if any children match
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> children = (List<Map<String, Object>>) node.get("children");
+        if (children != null && !children.isEmpty()) {
+            // Check if any child matches
+            for (Map<String, Object> child : children) {
+                if (shouldIncludeNode(child, filterValue)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+
 }

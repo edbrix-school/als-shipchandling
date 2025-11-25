@@ -62,4 +62,8 @@ public interface StockMasterService {
 
     StockMasterDto getStockMasterByBarcode(String barcode, Long groupPoid);
 
+    List<Map<String, Object>> getStockMastersHierarchical(Long groupPoid, Long parentPoid, String filterValue, boolean includeDeleted, Long companyPoid, Long userPoid);
+
+    List<Map<String, Object>> getStockMastersTreeStructure(Long groupPoid, String filterValue, boolean includeDeleted, Long companyPoid, Long userPoid);
+
 }
