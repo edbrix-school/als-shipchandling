@@ -1,0 +1,72 @@
+package com.alsharif.shipchandling.salesquotation.dto;
+
+import org.junit.jupiter.api.Test;
+import java.math.BigDecimal;
+import static org.junit.jupiter.api.Assertions.*;
+
+class SalesQuotationShipDeliveryNoteRequestTest {
+
+    @Test
+    void testRecordCreation() {
+        BigDecimal groupId = BigDecimal.valueOf(100);
+        BigDecimal companyId = BigDecimal.valueOf(200);
+        BigDecimal transactionPoid = BigDecimal.valueOf(300);
+        String loginUser = "testuser";
+
+        SalesQuotationShipDeliveryNoteRequest request = new SalesQuotationShipDeliveryNoteRequest(
+            groupId, companyId, transactionPoid, loginUser
+        );
+
+        assertEquals(groupId, request.groupId());
+        assertEquals(companyId, request.companyId());
+        assertEquals(transactionPoid, request.transactionPoid());
+        assertEquals(loginUser, request.loginUser());
+    }
+
+    @Test
+    void testRecordWithNullValues() {
+        SalesQuotationShipDeliveryNoteRequest request = new SalesQuotationShipDeliveryNoteRequest(
+            null, null, null, null
+        );
+
+        assertNull(request.groupId());
+        assertNull(request.companyId());
+        assertNull(request.transactionPoid());
+        assertNull(request.loginUser());
+    }
+
+    @Test
+    void testRecordEquality() {
+        BigDecimal groupId = BigDecimal.valueOf(100);
+        BigDecimal companyId = BigDecimal.valueOf(200);
+        BigDecimal transactionPoid = BigDecimal.valueOf(300);
+        String loginUser = "testuser";
+
+        SalesQuotationShipDeliveryNoteRequest request1 = new SalesQuotationShipDeliveryNoteRequest(
+            groupId, companyId, transactionPoid, loginUser
+        );
+        SalesQuotationShipDeliveryNoteRequest request2 = new SalesQuotationShipDeliveryNoteRequest(
+            groupId, companyId, transactionPoid, loginUser
+        );
+
+        assertEquals(request1, request2);
+        assertEquals(request1.hashCode(), request2.hashCode());
+    }
+
+    @Test
+    void testToString() {
+        BigDecimal groupId = BigDecimal.valueOf(100);
+        BigDecimal companyId = BigDecimal.valueOf(200);
+        BigDecimal transactionPoid = BigDecimal.valueOf(300);
+        String loginUser = "testuser";
+
+        SalesQuotationShipDeliveryNoteRequest request = new SalesQuotationShipDeliveryNoteRequest(
+            groupId, companyId, transactionPoid, loginUser
+        );
+
+        String toString = request.toString();
+        assertNotNull(toString);
+        assertTrue(toString.contains("SalesQuotationShipDeliveryNoteRequest"));
+    }
+}
+

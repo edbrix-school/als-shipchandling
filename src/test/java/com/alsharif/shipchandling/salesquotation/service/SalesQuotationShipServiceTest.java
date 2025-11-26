@@ -552,6 +552,117 @@ class SalesQuotationShipServiceTest {
         assertEquals(1, result.size());
     }
 
+    @Test
+    void testUpdateChargeDetail_ChargeDetailNotFound() {
+        // Arrange
+        SalesQuotationShipHeader header = createTestHeader();
+        header.setQuotationStatus("PROCESSING");
+
+        SalesQuotationShipChargeRequest request = new SalesQuotationShipChargeRequest();
+        request.setChargePoid(BigDecimal.valueOf(10L));
+        request.setSellingCharge(BigDecimal.valueOf(150));
+
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(header));
+        when(chargeDetailRepository.findById(new SalesQuotationShipChargeDetailId(TEST_TRANSACTION_POID, TEST_DET_ROW_ID)))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThrows(EntityNotFoundException.class, () -> {
+            service.updateChargeDetail(TEST_TRANSACTION_POID, TEST_DET_ROW_ID, TEST_COMPANY_POID, TEST_USER_ID, request);
+        });
+    }
+
+    @Test
+    void testUpdateChargeDetail_ChargeDetailBelongsToDifferentQuotation() {
+        // Arrange
+        SalesQuotationShipHeader header = createTestHeader();
+        header.setQuotationStatus("PROCESSING");
+
+        SalesQuotationShipChargeDetail chargeDetail = createTestChargeDetail();
+        // Create a different header with different transactionPoid
+        SalesQuotationShipHeader differentHeader = createTestHeader();
+        differentHeader.setTransactionPoid(BigDecimal.valueOf(999L));
+        chargeDetail.setHeader(differentHeader);
+
+        SalesQuotationShipChargeRequest request = new SalesQuotationShipChargeRequest();
+        request.setChargePoid(BigDecimal.valueOf(10L));
+        request.setSellingCharge(BigDecimal.valueOf(150));
+
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(header));
+        when(chargeDetailRepository.findById(new SalesQuotationShipChargeDetailId(TEST_TRANSACTION_POID, TEST_DET_ROW_ID)))
+                .thenReturn(Optional.of(chargeDetail));
+
+        // Act & Assert
+        assertThrows(IllegalStateException.class, () -> {
+            service.updateChargeDetail(TEST_TRANSACTION_POID, TEST_DET_ROW_ID, TEST_COMPANY_POID, TEST_USER_ID, request);
+        });
+    }
+
+    @Test
+    void testDeleteChargeDetail_ChargeDetailNotFound() {
+        // Arrange
+        SalesQuotationShipHeader header = createTestHeader();
+        header.setQuotationStatus("PROCESSING");
+
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(header));
+        when(chargeDetailRepository.findById(new SalesQuotationShipChargeDetailId(TEST_TRANSACTION_POID, TEST_DET_ROW_ID)))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThrows(EntityNotFoundException.class, () -> {
+            service.deleteChargeDetail(TEST_TRANSACTION_POID, TEST_DET_ROW_ID, TEST_COMPANY_POID);
+        });
+    }
+
+    @Test
+    void testDeleteChargeDetail_ChargeDetailBelongsToDifferentQuotation() {
+        // Arrange
+        SalesQuotationShipHeader header = createTestHeader();
+        header.setQuotationStatus("PROCESSING");
+
+        SalesQuotationShipChargeDetail chargeDetail = createTestChargeDetail();
+        // Create a different header with different transactionPoid
+        SalesQuotationShipHeader differentHeader = createTestHeader();
+        differentHeader.setTransactionPoid(BigDecimal.valueOf(999L));
+        chargeDetail.setHeader(differentHeader);
+
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(header));
+        when(chargeDetailRepository.findById(new SalesQuotationShipChargeDetailId(TEST_TRANSACTION_POID, TEST_DET_ROW_ID)))
+                .thenReturn(Optional.of(chargeDetail));
+
+        // Act & Assert
+        assertThrows(IllegalStateException.class, () -> {
+            service.deleteChargeDetail(TEST_TRANSACTION_POID, TEST_DET_ROW_ID, TEST_COMPANY_POID);
+        });
+    }
+
+    @Test
+    void testDeleteChargeDetail_ChargeDetailBelongsToDifferentCompany() {
+        // Arrange
+        SalesQuotationShipHeader header = createTestHeader();
+        header.setQuotationStatus("PROCESSING");
+
+        SalesQuotationShipChargeDetail chargeDetail = createTestChargeDetail();
+        // Create a header with different companyPoid
+        SalesQuotationShipHeader differentCompanyHeader = createTestHeader();
+        differentCompanyHeader.setCompanyPoid(BigDecimal.valueOf(999L));
+        chargeDetail.setHeader(differentCompanyHeader);
+
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(header));
+        when(chargeDetailRepository.findById(new SalesQuotationShipChargeDetailId(TEST_TRANSACTION_POID, TEST_DET_ROW_ID)))
+                .thenReturn(Optional.of(chargeDetail));
+
+        // Act & Assert
+        assertThrows(IllegalStateException.class, () -> {
+            service.deleteChargeDetail(TEST_TRANSACTION_POID, TEST_DET_ROW_ID, TEST_COMPANY_POID);
+        });
+    }
+
     // ========== Equipment Detail Tests ==========
 
     @Test
@@ -636,6 +747,55 @@ class SalesQuotationShipServiceTest {
         assertNotNull(result);
         assertEquals(1, result.size());
     }
+
+    @Test
+    void testUpdateEquipmentDetail_EquipmentDetailNotFound() {
+        // Arrange
+        SalesQuotationShipHeader header = createTestHeader();
+        header.setQuotationStatus("PROCESSING");
+
+        SalesQuotationShipEquipmentRequest request = new SalesQuotationShipEquipmentRequest();
+        request.setEquipmentPoid(BigDecimal.valueOf(20L));
+        request.setQuantity(BigDecimal.valueOf(10));
+
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(header));
+        when(equipmentDetailRepository.findById(new SalesQuotationShipEquipmentDetailId(TEST_TRANSACTION_POID, TEST_DET_ROW_ID)))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThrows(EntityNotFoundException.class, () -> {
+            service.updateEquipmentDetail(TEST_TRANSACTION_POID, TEST_DET_ROW_ID, TEST_COMPANY_POID, TEST_USER_ID, request);
+        });
+    }
+
+    @Test
+    void testUpdateEquipmentDetail_EquipmentDetailBelongsToDifferentQuotation() {
+        // Arrange
+        SalesQuotationShipHeader header = createTestHeader();
+        header.setQuotationStatus("PROCESSING");
+
+        SalesQuotationShipEquipmentDetail equipmentDetail = createTestEquipmentDetail();
+        // Create a different header with different transactionPoid
+        SalesQuotationShipHeader differentHeader = createTestHeader();
+        differentHeader.setTransactionPoid(BigDecimal.valueOf(999L));
+        equipmentDetail.setHeader(differentHeader);
+
+        SalesQuotationShipEquipmentRequest request = new SalesQuotationShipEquipmentRequest();
+        request.setEquipmentPoid(BigDecimal.valueOf(20L));
+        request.setQuantity(BigDecimal.valueOf(10));
+
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(header));
+        when(equipmentDetailRepository.findById(new SalesQuotationShipEquipmentDetailId(TEST_TRANSACTION_POID, TEST_DET_ROW_ID)))
+                .thenReturn(Optional.of(equipmentDetail));
+
+        // Act & Assert
+        assertThrows(IllegalStateException.class, () -> {
+            service.updateEquipmentDetail(TEST_TRANSACTION_POID, TEST_DET_ROW_ID, TEST_COMPANY_POID, TEST_USER_ID, request);
+        });
+    }
+
 
     // ========== Business Logic Tests ==========
 
@@ -819,6 +979,322 @@ class SalesQuotationShipServiceTest {
         // Assert
         assertNotNull(result);
         // The result depends on successful mocking
+    }
+
+    // ========== Add Local Charges Exception Tests ==========
+
+    @Test
+    void testAddLocalCharges_ConfirmationRequired() {
+        // Arrange
+        SalesQuotationShipHeader header = createTestHeader();
+        header.setQuotationStatus("PROCESSING");
+
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(header));
+
+        // Act & Assert
+        assertThrows(IllegalStateException.class, () -> {
+            service.addLocalCharges(TEST_TRANSACTION_POID, TEST_COMPANY_POID, TEST_USER_ID, false);
+        });
+    }
+
+    @Test
+    void testAddLocalCharges_QuotationNotFound() {
+        // Arrange
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThrows(EntityNotFoundException.class, () -> {
+            service.addLocalCharges(TEST_TRANSACTION_POID, TEST_COMPANY_POID, TEST_USER_ID, true);
+        });
+    }
+
+    @Test
+    void testAddLocalCharges_InvalidStatus() {
+        // Arrange
+        SalesQuotationShipHeader header = createTestHeader();
+        header.setQuotationStatus("CONFIRMED"); // Not PROCESSING
+
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(header));
+
+        // Act & Assert
+        assertThrows(IllegalStateException.class, () -> {
+            service.addLocalCharges(TEST_TRANSACTION_POID, TEST_COMPANY_POID, TEST_USER_ID, true);
+        });
+    }
+
+    @Test
+    void testAddLocalCharges_StoredProcedureError() {
+        // Arrange
+        SalesQuotationShipHeader header = createTestHeader();
+        header.setQuotationStatus("PROCESSING");
+
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(header));
+        when(chargeDetailRepository.findByTransactionPoid(TEST_TRANSACTION_POID))
+                .thenReturn(Collections.emptyList());
+
+        // Mock stored procedure to return error
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            try {
+                java.sql.Connection conn = mock(java.sql.Connection.class);
+                java.sql.CallableStatement cs = mock(java.sql.CallableStatement.class);
+                when(conn.prepareCall(anyString())).thenReturn(cs);
+                doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+                doNothing().when(cs).setString(anyInt(), anyString());
+                doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+                when(cs.getString(anyInt())).thenReturn("ERROR: Failed to add local charges");
+                when(cs.execute()).thenReturn(false);
+                return callback.doInConnection(conn);
+            } catch (Exception e) {
+                return "ERROR: Failed to add local charges";
+            }
+        });
+
+        // Act & Assert
+        assertThrows(IllegalStateException.class, () -> {
+            service.addLocalCharges(TEST_TRANSACTION_POID, TEST_COMPANY_POID, TEST_USER_ID, true);
+        });
+    }
+
+    // ========== Create Quotation Exception Tests ==========
+
+    @Test
+    void testCreateQuotation_MissingLinePoid() {
+        // Arrange
+        SalesQuotationShipCommand command = new SalesQuotationShipCommand();
+        command.setCompanyPoid(TEST_COMPANY_POID);
+        command.setUserId(TEST_USER_ID);
+        command.setTransactionDate(LocalDate.now());
+        command.setDescription("Test Quotation");
+        // Missing linePoid - required for shipping quotations
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.createQuotation(command);
+        });
+    }
+
+    @Test
+    void testCreateQuotation_MissingCommodityType() {
+        // Arrange
+        SalesQuotationShipCommand command = new SalesQuotationShipCommand();
+        command.setCompanyPoid(TEST_COMPANY_POID);
+        command.setUserId(TEST_USER_ID);
+        command.setTransactionDate(LocalDate.now());
+        command.setDescription("Test Quotation");
+        command.setLinePoid(BigDecimal.valueOf(10L));
+        // Missing commodityType - required for shipping quotations
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.createQuotation(command);
+        });
+    }
+
+    @Test
+    void testCreateQuotation_MissingTermsOfFreight() {
+        // Arrange
+        SalesQuotationShipCommand command = new SalesQuotationShipCommand();
+        command.setCompanyPoid(TEST_COMPANY_POID);
+        command.setUserId(TEST_USER_ID);
+        command.setTransactionDate(LocalDate.now());
+        command.setDescription("Test Quotation");
+        command.setLinePoid(BigDecimal.valueOf(10L));
+        command.setCommodityType("CONTAINER");
+        // Missing termsOfFreight - required for shipping quotations
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.createQuotation(command);
+        });
+    }
+
+    @Test
+    void testCreateQuotation_MissingCargoType() {
+        // Arrange
+        SalesQuotationShipCommand command = new SalesQuotationShipCommand();
+        command.setCompanyPoid(TEST_COMPANY_POID);
+        command.setUserId(TEST_USER_ID);
+        command.setTransactionDate(LocalDate.now());
+        command.setDescription("Test Quotation");
+        command.setLinePoid(BigDecimal.valueOf(10L));
+        command.setCommodityType("CONTAINER");
+        command.setTermsOfFreight("PREPAID");
+        // Missing cargoType - required for shipping quotations
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.createQuotation(command);
+        });
+    }
+
+    @Test
+    void testCreateQuotation_MissingLoadingPortWhenMultiPortN() {
+        // Arrange
+        SalesQuotationShipCommand command = new SalesQuotationShipCommand();
+        command.setCompanyPoid(TEST_COMPANY_POID);
+        command.setUserId(TEST_USER_ID);
+        command.setTransactionDate(LocalDate.now());
+        command.setDescription("Test Quotation");
+        command.setLinePoid(BigDecimal.valueOf(10L));
+        command.setCommodityType("CONTAINER");
+        command.setTermsOfFreight("PREPAID");
+        command.setCargoType("FCL");
+        command.setMultiPort("N");
+        // Missing loadingPortPoid - required when multiPort = 'N'
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.createQuotation(command);
+        });
+    }
+
+    @Test
+    void testCreateQuotation_MissingDischargePortWhenMultiPortN() {
+        // Arrange
+        SalesQuotationShipCommand command = new SalesQuotationShipCommand();
+        command.setCompanyPoid(TEST_COMPANY_POID);
+        command.setUserId(TEST_USER_ID);
+        command.setTransactionDate(LocalDate.now());
+        command.setDescription("Test Quotation");
+        command.setLinePoid(BigDecimal.valueOf(10L));
+        command.setCommodityType("CONTAINER");
+        command.setTermsOfFreight("PREPAID");
+        command.setCargoType("FCL");
+        command.setMultiPort("N");
+        command.setLoadingPortPoid(BigDecimal.valueOf(100L));
+        // Missing dischargePortPoid - required when multiPort = 'N'
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.createQuotation(command);
+        });
+    }
+
+    @Test
+    void testCreateQuotation_MissingSalesmanPoid() {
+        // Arrange
+        SalesQuotationShipCommand command = new SalesQuotationShipCommand();
+        command.setCompanyPoid(TEST_COMPANY_POID);
+        command.setUserId(TEST_USER_ID);
+        command.setTransactionDate(LocalDate.now());
+        command.setDescription("Test Quotation");
+        command.setLinePoid(BigDecimal.valueOf(10L));
+        command.setCommodityType("CONTAINER");
+        command.setTermsOfFreight("PREPAID");
+        command.setCargoType("FCL");
+        command.setMultiPort("N");
+        command.setLoadingPortPoid(BigDecimal.valueOf(100L));
+        command.setDischargePortPoid(BigDecimal.valueOf(200L));
+        // Missing salesmanPoid - required
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.createQuotation(command);
+        });
+    }
+
+    @Test
+    void testCreateQuotation_NewCustomerYMissingCustomerName() {
+        // Arrange
+        SalesQuotationShipCommand command = new SalesQuotationShipCommand();
+        command.setCompanyPoid(TEST_COMPANY_POID);
+        command.setUserId(TEST_USER_ID);
+        command.setTransactionDate(LocalDate.now());
+        command.setDescription("Test Quotation");
+        command.setLinePoid(BigDecimal.valueOf(10L));
+        command.setCommodityType("CONTAINER");
+        command.setTermsOfFreight("PREPAID");
+        command.setCargoType("FCL");
+        command.setMultiPort("N");
+        command.setLoadingPortPoid(BigDecimal.valueOf(100L));
+        command.setDischargePortPoid(BigDecimal.valueOf(200L));
+        command.setSalesmanPoid(BigDecimal.valueOf(10L));
+        command.setNewCustomer("Y");
+        // Missing customerName - required when newCustomer = 'Y'
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.createQuotation(command);
+        });
+    }
+
+    @Test
+    void testCreateQuotation_NewCustomerNMissingCustomerPoid() {
+        // Arrange
+        SalesQuotationShipCommand command = new SalesQuotationShipCommand();
+        command.setCompanyPoid(TEST_COMPANY_POID);
+        command.setUserId(TEST_USER_ID);
+        command.setTransactionDate(LocalDate.now());
+        command.setDescription("Test Quotation");
+        command.setLinePoid(BigDecimal.valueOf(10L));
+        command.setCommodityType("CONTAINER");
+        command.setTermsOfFreight("PREPAID");
+        command.setCargoType("FCL");
+        command.setMultiPort("N");
+        command.setLoadingPortPoid(BigDecimal.valueOf(100L));
+        command.setDischargePortPoid(BigDecimal.valueOf(200L));
+        command.setSalesmanPoid(BigDecimal.valueOf(10L));
+        command.setNewCustomer("N");
+        // Missing customerPoid and addressPoid - required when newCustomer = 'N'
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.createQuotation(command);
+        });
+    }
+
+    // ========== Update Quotation Exception Tests ==========
+
+    @Test
+    void testUpdateQuotation_MissingLinePoid() {
+        // Arrange
+        SalesQuotationShipHeader existingHeader = createTestHeader();
+        existingHeader.setQuotationStatus("PROCESSING");
+
+        SalesQuotationShipCommand command = new SalesQuotationShipCommand();
+        command.setCompanyPoid(TEST_COMPANY_POID);
+        command.setUserId(TEST_USER_ID);
+        command.setDescription("Updated Description");
+        // Missing linePoid - required for shipping quotations
+
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(existingHeader));
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.updateQuotation(TEST_TRANSACTION_POID, command);
+        });
+    }
+
+    // ========== Get Default Salesman Exception Tests ==========
+
+    @Test
+    void testGetDefaultSalesman_InvalidUserIdFormat() {
+        // Arrange
+        String invalidUserId = "invalid-user-id";
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.getDefaultSalesman(invalidUserId);
+        });
+    }
+
+    // ========== Get Accessible Lines Exception Tests ==========
+
+    @Test
+    void testGetAccessibleLines_InvalidUserIdFormat() {
+        // Arrange
+        String invalidUserId = "invalid-user-id";
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.getAccessibleLines(invalidUserId);
+        });
     }
 
     // ========== Helper Methods ==========
