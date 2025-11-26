@@ -946,5 +946,256 @@ class SalesInvoiceServiceImplTest {
         assertNotNull(result);
         assertFalse(result.getSuccess());
     }
+
+    // ========== Additional Branch Coverage Tests ==========
+
+    @Test
+    void testCreateSalesInvoice_WithPrincipalPartyType() {
+        // Arrange
+        CreateSalesInvoiceRequest request = new CreateSalesInvoiceRequest();
+        request.setTransactionDate(Timestamp.from(Instant.now()));
+        request.setPartyType("PRINCIPAL");
+        request.setPrincipalPoid(200L);
+        request.setCustomerPoid(null);
+
+        SalesInvoiceHdr savedInvoice = new SalesInvoiceHdr();
+        savedInvoice.setTransactionPoid(TEST_TRANSACTION_POID);
+        savedInvoice.setDocRef("INV-002");
+
+        when(invoiceHdrRepository.save(any(SalesInvoiceHdr.class))).thenReturn(savedInvoice);
+        doNothing().when(invoiceHdrRepository).flush();
+        lenient().when(salesInvoiceStoredProcRepository.callCustomerEditValidateProc(anyLong(), any())).thenReturn(true);
+        when(invoiceHdrRepository.findByTransactionPoid(TEST_TRANSACTION_POID)).thenReturn(Optional.of(savedInvoice));
+        lenient().when(invoiceDtlRepositoryImpl.findByTransactionPoidNative(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(dnDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(costbkdDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+        lenient().doNothing().when(salesInvoiceStoredProcRepository).callAuthorizationProc(anyLong(), anyString(), anyString());
+
+        // Act
+        SalesInvoiceHdrDto result = invoiceService.createSalesInvoice(request, TEST_GROUP_POID, TEST_COMPANY_POID, TEST_USER_ID);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(TEST_TRANSACTION_POID, result.getTransactionPoid());
+    }
+
+    @Test
+    void testCreateSalesInvoice_ValidCustomerFalse() {
+        // Arrange
+        CreateSalesInvoiceRequest request = new CreateSalesInvoiceRequest();
+        request.setTransactionDate(Timestamp.from(Instant.now()));
+        request.setPartyType("CUSTOMER");
+        request.setCustomerPoid(TEST_CUSTOMER_POID);
+
+        SalesInvoiceHdr savedInvoice = new SalesInvoiceHdr();
+        savedInvoice.setTransactionPoid(TEST_TRANSACTION_POID);
+        savedInvoice.setDocRef("INV-003");
+
+        when(invoiceHdrRepository.save(any(SalesInvoiceHdr.class))).thenReturn(savedInvoice);
+        doNothing().when(invoiceHdrRepository).flush();
+        when(salesInvoiceStoredProcRepository.callCustomerEditValidateProc(anyLong(), anyLong())).thenReturn(false);
+        when(invoiceHdrRepository.findByTransactionPoid(TEST_TRANSACTION_POID)).thenReturn(Optional.of(savedInvoice));
+        lenient().when(invoiceDtlRepositoryImpl.findByTransactionPoidNative(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(dnDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(costbkdDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+
+        // Act
+        SalesInvoiceHdrDto result = invoiceService.createSalesInvoice(request, TEST_GROUP_POID, TEST_COMPANY_POID, TEST_USER_ID);
+
+        // Assert - should still return invoice but without details processing
+        assertNotNull(result);
+        verify(invoiceDtlRepository, never()).save(any(SalesInvoiceDtl.class));
+    }
+
+    @Test
+    void testCreateSalesInvoice_WithDeliveryNoteDetails() {
+        // Arrange
+        CreateSalesInvoiceRequest request = new CreateSalesInvoiceRequest();
+        request.setTransactionDate(Timestamp.from(Instant.now()));
+        request.setPartyType("CUSTOMER");
+        request.setCustomerPoid(TEST_CUSTOMER_POID);
+
+        CreateSalesDnDtlRequest dnDtlRequest = new CreateSalesDnDtlRequest();
+        dnDtlRequest.setDnPoidFk(200L);
+        dnDtlRequest.setQuotationPoidFk(300L);
+        request.setDeliveryNoteDetails(Collections.singletonList(dnDtlRequest));
+
+        SalesInvoiceHdr savedInvoice = new SalesInvoiceHdr();
+        savedInvoice.setTransactionPoid(TEST_TRANSACTION_POID);
+        savedInvoice.setAuthorizedId("AUTH001");
+
+        when(invoiceHdrRepository.save(any(SalesInvoiceHdr.class))).thenReturn(savedInvoice);
+        doNothing().when(invoiceHdrRepository).flush();
+        when(salesInvoiceStoredProcRepository.callCustomerEditValidateProc(anyLong(), anyLong())).thenReturn(true);
+        doNothing().when(salesInvoiceStoredProcRepository).callAuthorizationProc(anyLong(), anyString(), anyString());
+        when(invoiceHdrRepository.findByTransactionPoid(TEST_TRANSACTION_POID)).thenReturn(Optional.of(savedInvoice));
+        when(dnDtlRepository.findMaxDetRowIdByTransactionPoid(anyLong())).thenReturn(null);
+        when(dnDtlRepository.save(any(SalesDnDtl.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(invoiceDtlRepositoryImpl.findByTransactionPoidNative(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(dnDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(costbkdDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+
+        // Act
+        SalesInvoiceHdrDto result = invoiceService.createSalesInvoice(request, TEST_GROUP_POID, TEST_COMPANY_POID, TEST_USER_ID);
+
+        // Assert
+        assertNotNull(result);
+        verify(dnDtlRepository, times(1)).save(any(SalesDnDtl.class));
+    }
+
+    @Test
+    void testCreateSalesInvoice_WithDiscountInDetail() {
+        // Arrange
+        CreateSalesInvoiceRequest request = new CreateSalesInvoiceRequest();
+        request.setTransactionDate(Timestamp.from(Instant.now()));
+        request.setPartyType("CUSTOMER");
+        request.setCustomerPoid(TEST_CUSTOMER_POID);
+
+        CreateSalesInvoiceDtlRequest dtlRequest = new CreateSalesInvoiceDtlRequest();
+        dtlRequest.setStockPoid(100L);
+        dtlRequest.setStockUnitPoid(1L);
+        dtlRequest.setQuantity(10L);
+        dtlRequest.setPrice(BigDecimal.valueOf(100));
+        dtlRequest.setDiscount(50L); // With discount
+        request.setInvoiceDetails(Collections.singletonList(dtlRequest));
+
+        SalesInvoiceHdr savedInvoice = new SalesInvoiceHdr();
+        savedInvoice.setTransactionPoid(TEST_TRANSACTION_POID);
+
+        when(invoiceHdrRepository.save(any(SalesInvoiceHdr.class))).thenReturn(savedInvoice);
+        doNothing().when(invoiceHdrRepository).flush();
+        when(salesInvoiceStoredProcRepository.callCustomerEditValidateProc(anyLong(), anyLong())).thenReturn(true);
+        when(invoiceHdrRepository.findByTransactionPoid(TEST_TRANSACTION_POID)).thenReturn(Optional.of(savedInvoice));
+        when(invoiceDtlRepository.findMaxDetRowIdByTransactionPoid(anyLong())).thenReturn(null);
+        when(invoiceDtlRepository.save(any(SalesInvoiceDtl.class))).thenAnswer(invocation -> {
+            SalesInvoiceDtl dtl = invocation.getArgument(0);
+            // Verify discount was applied
+            assertEquals(950L, dtl.getAmount()); // 100*10 - 50 = 950
+            return dtl;
+        });
+        lenient().when(invoiceDtlRepositoryImpl.findByTransactionPoidNative(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(dnDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(costbkdDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+
+        // Act
+        SalesInvoiceHdrDto result = invoiceService.createSalesInvoice(request, TEST_GROUP_POID, TEST_COMPANY_POID, TEST_USER_ID);
+
+        // Assert
+        assertNotNull(result);
+        verify(invoiceDtlRepository, times(1)).save(any(SalesInvoiceDtl.class));
+    }
+
+    @Test
+    void testCreateSalesInvoice_WithTaxPoid() {
+        // Arrange
+        CreateSalesInvoiceRequest request = new CreateSalesInvoiceRequest();
+        request.setTransactionDate(Timestamp.from(Instant.now()));
+        request.setPartyType("CUSTOMER");
+        request.setCustomerPoid(TEST_CUSTOMER_POID);
+
+        CreateSalesInvoiceDtlRequest dtlRequest = new CreateSalesInvoiceDtlRequest();
+        dtlRequest.setStockPoid(100L);
+        dtlRequest.setStockUnitPoid(1L);
+        dtlRequest.setQuantity(10L);
+        dtlRequest.setPrice(BigDecimal.valueOf(100));
+        dtlRequest.setTaxPoid(500L); // With tax
+        request.setInvoiceDetails(Collections.singletonList(dtlRequest));
+
+        SalesInvoiceHdr savedInvoice = new SalesInvoiceHdr();
+        savedInvoice.setTransactionPoid(TEST_TRANSACTION_POID);
+
+        when(invoiceHdrRepository.save(any(SalesInvoiceHdr.class))).thenReturn(savedInvoice);
+        doNothing().when(invoiceHdrRepository).flush();
+        when(salesInvoiceStoredProcRepository.callCustomerEditValidateProc(anyLong(), anyLong())).thenReturn(true);
+        when(invoiceHdrRepository.findByTransactionPoid(TEST_TRANSACTION_POID)).thenReturn(Optional.of(savedInvoice));
+        when(invoiceDtlRepository.findMaxDetRowIdByTransactionPoid(anyLong())).thenReturn(null);
+        when(invoiceDtlRepository.save(any(SalesInvoiceDtl.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(invoiceDtlRepositoryImpl.findByTransactionPoidNative(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(dnDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(costbkdDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+
+        // Act
+        SalesInvoiceHdrDto result = invoiceService.createSalesInvoice(request, TEST_GROUP_POID, TEST_COMPANY_POID, TEST_USER_ID);
+
+        // Assert
+        assertNotNull(result);
+        verify(invoiceDtlRepository, times(1)).save(any(SalesInvoiceDtl.class));
+    }
+
+    @Test
+    void testCreateSalesInvoice_WithExistingMaxDetRowId() {
+        // Arrange
+        CreateSalesInvoiceRequest request = new CreateSalesInvoiceRequest();
+        request.setTransactionDate(Timestamp.from(Instant.now()));
+        request.setPartyType("CUSTOMER");
+        request.setCustomerPoid(TEST_CUSTOMER_POID);
+
+        CreateSalesInvoiceDtlRequest dtlRequest = new CreateSalesInvoiceDtlRequest();
+        dtlRequest.setStockPoid(100L);
+        dtlRequest.setStockUnitPoid(1L);
+        dtlRequest.setQuantity(10L);
+        dtlRequest.setPrice(BigDecimal.valueOf(100));
+        request.setInvoiceDetails(Collections.singletonList(dtlRequest));
+
+        SalesInvoiceHdr savedInvoice = new SalesInvoiceHdr();
+        savedInvoice.setTransactionPoid(TEST_TRANSACTION_POID);
+
+        when(invoiceHdrRepository.save(any(SalesInvoiceHdr.class))).thenReturn(savedInvoice);
+        doNothing().when(invoiceHdrRepository).flush();
+        when(salesInvoiceStoredProcRepository.callCustomerEditValidateProc(anyLong(), anyLong())).thenReturn(true);
+        when(invoiceHdrRepository.findByTransactionPoid(TEST_TRANSACTION_POID)).thenReturn(Optional.of(savedInvoice));
+        when(invoiceDtlRepository.findMaxDetRowIdByTransactionPoid(anyLong())).thenReturn(5L); // Existing max
+        when(invoiceDtlRepository.save(any(SalesInvoiceDtl.class))).thenAnswer(invocation -> {
+            SalesInvoiceDtl dtl = invocation.getArgument(0);
+            assertEquals(6L, dtl.getDetRowId()); // Should be max + 1
+            return dtl;
+        });
+        lenient().when(invoiceDtlRepositoryImpl.findByTransactionPoidNative(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(dnDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(costbkdDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+
+        // Act
+        SalesInvoiceHdrDto result = invoiceService.createSalesInvoice(request, TEST_GROUP_POID, TEST_COMPANY_POID, TEST_USER_ID);
+
+        // Assert
+        assertNotNull(result);
+        verify(invoiceDtlRepository, times(1)).save(any(SalesInvoiceDtl.class));
+    }
+
+    @Test
+    void testCreateSalesInvoice_NullQuantityOrPrice() {
+        // Arrange
+        CreateSalesInvoiceRequest request = new CreateSalesInvoiceRequest();
+        request.setTransactionDate(Timestamp.from(Instant.now()));
+        request.setPartyType("CUSTOMER");
+        request.setCustomerPoid(TEST_CUSTOMER_POID);
+
+        CreateSalesInvoiceDtlRequest dtlRequest = new CreateSalesInvoiceDtlRequest();
+        dtlRequest.setStockPoid(100L);
+        dtlRequest.setStockUnitPoid(1L);
+        dtlRequest.setQuantity(null); // Null quantity
+        dtlRequest.setPrice(null); // Null price
+        request.setInvoiceDetails(Collections.singletonList(dtlRequest));
+
+        SalesInvoiceHdr savedInvoice = new SalesInvoiceHdr();
+        savedInvoice.setTransactionPoid(TEST_TRANSACTION_POID);
+
+        when(invoiceHdrRepository.save(any(SalesInvoiceHdr.class))).thenReturn(savedInvoice);
+        doNothing().when(invoiceHdrRepository).flush();
+        when(salesInvoiceStoredProcRepository.callCustomerEditValidateProc(anyLong(), anyLong())).thenReturn(true);
+        when(invoiceHdrRepository.findByTransactionPoid(TEST_TRANSACTION_POID)).thenReturn(Optional.of(savedInvoice));
+        when(invoiceDtlRepository.findMaxDetRowIdByTransactionPoid(anyLong())).thenReturn(null);
+        when(invoiceDtlRepository.save(any(SalesInvoiceDtl.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(invoiceDtlRepositoryImpl.findByTransactionPoidNative(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(dnDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(costbkdDtlRepository.findByTransactionPoid(anyLong())).thenReturn(Collections.emptyList());
+
+        // Act
+        SalesInvoiceHdrDto result = invoiceService.createSalesInvoice(request, TEST_GROUP_POID, TEST_COMPANY_POID, TEST_USER_ID);
+
+        // Assert
+        assertNotNull(result);
+        verify(invoiceDtlRepository, times(1)).save(any(SalesInvoiceDtl.class));
+    }
 }
 
