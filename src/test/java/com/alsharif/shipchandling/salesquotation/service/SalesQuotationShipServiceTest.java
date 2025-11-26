@@ -2125,5 +2125,458 @@ class SalesQuotationShipServiceTest {
         assertThrows(NullPointerException.class, () -> service.repostToGl(null));
     }
 
+    // ========== Additional Branch Coverage Tests ==========
+
+    @Test
+    void testSearch_WithNullUserId() {
+        // Arrange - Test branch where userId is null
+        SalesQuotationShipFilter filter = new SalesQuotationShipFilter();
+        filter.setCompanyPoid(TEST_COMPANY_POID);
+        filter.setPage(0);
+        filter.setSize(20);
+
+        SalesQuotationShipHeader header = createTestHeader();
+        List<SalesQuotationShipHeader> headerList = Collections.singletonList(header);
+        Page<SalesQuotationShipHeader> page = new PageImpl<>(headerList, PageRequest.of(0, 20), 1);
+
+        when(repository.findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+
+        // Act - userId is null, so getAccessibleLinePoids should not be called
+        SalesQuotationShipListResponse result = service.search(filter, null);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+        verify(repository, times(1)).findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class));
+    }
+
+    @Test
+    void testSearch_WithAccessibleLinePoids_AllLineUser() {
+        // Arrange - Test branch where lineList is "ALL_LINE_USER"
+        SalesQuotationShipFilter filter = new SalesQuotationShipFilter();
+        filter.setCompanyPoid(TEST_COMPANY_POID);
+        filter.setPage(0);
+        filter.setSize(20);
+
+        SalesQuotationShipHeader header = createTestHeader();
+        List<SalesQuotationShipHeader> headerList = Collections.singletonList(header);
+        Page<SalesQuotationShipHeader> page = new PageImpl<>(headerList, PageRequest.of(0, 20), 1);
+
+        when(repository.findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+
+        // Mock JdbcTemplate to return "ALL_LINE_USER"
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            try {
+                Connection conn = mock(Connection.class);
+                CallableStatement cs = mock(CallableStatement.class);
+                when(conn.prepareCall(anyString())).thenReturn(cs);
+                doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+                doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+                when(cs.getString(anyInt())).thenReturn("ALL_LINE_USER");
+                when(cs.execute()).thenReturn(false);
+                return callback.doInConnection(conn);
+            } catch (Exception e) {
+                return null;
+            }
+        });
+
+        // Act
+        SalesQuotationShipListResponse result = service.search(filter, TEST_USER_POID);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void testSearch_WithAccessibleLinePoids_CommaSeparatedList() {
+        // Arrange - Test branch where lineList is comma-separated line POIDs
+        SalesQuotationShipFilter filter = new SalesQuotationShipFilter();
+        filter.setCompanyPoid(TEST_COMPANY_POID);
+        filter.setPage(0);
+        filter.setSize(20);
+
+        SalesQuotationShipHeader header = createTestHeader();
+        List<SalesQuotationShipHeader> headerList = Collections.singletonList(header);
+        Page<SalesQuotationShipHeader> page = new PageImpl<>(headerList, PageRequest.of(0, 20), 1);
+
+        when(repository.findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+
+        // Mock JdbcTemplate to return comma-separated line POIDs
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            try {
+                Connection conn = mock(Connection.class);
+                CallableStatement cs = mock(CallableStatement.class);
+                when(conn.prepareCall(anyString())).thenReturn(cs);
+                doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+                doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+                when(cs.getString(anyInt())).thenReturn("10,20,30");
+                when(cs.execute()).thenReturn(false);
+                return callback.doInConnection(conn);
+            } catch (Exception e) {
+                return null;
+            }
+        });
+
+        // Act
+        SalesQuotationShipListResponse result = service.search(filter, TEST_USER_POID);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void testSearch_WithAccessibleLinePoids_EmptyString() {
+        // Arrange - Test branch where lineList is empty string
+        SalesQuotationShipFilter filter = new SalesQuotationShipFilter();
+        filter.setCompanyPoid(TEST_COMPANY_POID);
+        filter.setPage(0);
+        filter.setSize(20);
+
+        SalesQuotationShipHeader header = createTestHeader();
+        List<SalesQuotationShipHeader> headerList = Collections.singletonList(header);
+        Page<SalesQuotationShipHeader> page = new PageImpl<>(headerList, PageRequest.of(0, 20), 1);
+
+        when(repository.findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+
+        // Mock JdbcTemplate to return empty string
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            try {
+                Connection conn = mock(Connection.class);
+                CallableStatement cs = mock(CallableStatement.class);
+                when(conn.prepareCall(anyString())).thenReturn(cs);
+                doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+                doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+                when(cs.getString(anyInt())).thenReturn("");
+                when(cs.execute()).thenReturn(false);
+                return callback.doInConnection(conn);
+            } catch (Exception e) {
+                return null;
+            }
+        });
+
+        // Act
+        SalesQuotationShipListResponse result = service.search(filter, TEST_USER_POID);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void testSearch_WithAccessibleLinePoids_Exception() {
+        // Arrange - Test branch where getAccessibleLinePoids throws exception
+        SalesQuotationShipFilter filter = new SalesQuotationShipFilter();
+        filter.setCompanyPoid(TEST_COMPANY_POID);
+        filter.setPage(0);
+        filter.setSize(20);
+
+        SalesQuotationShipHeader header = createTestHeader();
+        List<SalesQuotationShipHeader> headerList = Collections.singletonList(header);
+        Page<SalesQuotationShipHeader> page = new PageImpl<>(headerList, PageRequest.of(0, 20), 1);
+
+        when(repository.findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+
+        // Mock JdbcTemplate to throw exception
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenThrow(new RuntimeException("Database error"));
+
+        // Act - Should handle exception gracefully and continue (returns null = allow all lines)
+        SalesQuotationShipListResponse result = service.search(filter, TEST_USER_POID);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void testSearch_WithInvalidLinePoidInList() {
+        // Arrange - Test branch where lineList contains invalid line POID
+        SalesQuotationShipFilter filter = new SalesQuotationShipFilter();
+        filter.setCompanyPoid(TEST_COMPANY_POID);
+        filter.setPage(0);
+        filter.setSize(20);
+
+        SalesQuotationShipHeader header = createTestHeader();
+        List<SalesQuotationShipHeader> headerList = Collections.singletonList(header);
+        Page<SalesQuotationShipHeader> page = new PageImpl<>(headerList, PageRequest.of(0, 20), 1);
+
+        when(repository.findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+
+        // Mock JdbcTemplate to return line list with invalid POID
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            try {
+                Connection conn = mock(Connection.class);
+                CallableStatement cs = mock(CallableStatement.class);
+                when(conn.prepareCall(anyString())).thenReturn(cs);
+                doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+                doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+                when(cs.getString(anyInt())).thenReturn("10,INVALID,30");
+                when(cs.execute()).thenReturn(false);
+                return callback.doInConnection(conn);
+            } catch (Exception e) {
+                return null;
+            }
+        });
+
+        // Act - Should handle invalid POID gracefully
+        SalesQuotationShipListResponse result = service.search(filter, TEST_USER_POID);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void testSearch_WithSortBy_InvalidField() {
+        // Arrange - Test buildSort with invalid field
+        SalesQuotationShipFilter filter = new SalesQuotationShipFilter();
+        filter.setCompanyPoid(TEST_COMPANY_POID);
+        filter.setPage(0);
+        filter.setSize(20);
+        filter.setSortBy("INVALID_FIELD");
+        filter.setSortOrder("ASC");
+
+        SalesQuotationShipHeader header = createTestHeader();
+        List<SalesQuotationShipHeader> headerList = Collections.singletonList(header);
+        Page<SalesQuotationShipHeader> page = new PageImpl<>(headerList, PageRequest.of(0, 20), 1);
+
+        when(repository.findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            try {
+                Connection conn = mock(Connection.class);
+                CallableStatement cs = mock(CallableStatement.class);
+                when(conn.prepareCall(anyString())).thenReturn(cs);
+                doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+                doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+                when(cs.getString(anyInt())).thenReturn(null);
+                when(cs.execute()).thenReturn(false);
+                return callback.doInConnection(conn);
+            } catch (Exception e) {
+                return null;
+            }
+        });
+
+        // Act - Should use default sort field "transactionDate"
+        SalesQuotationShipListResponse result = service.search(filter, TEST_USER_POID);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void testSearch_WithSortBy_Null() {
+        // Arrange - Test buildSort with null sortBy
+        SalesQuotationShipFilter filter = new SalesQuotationShipFilter();
+        filter.setCompanyPoid(TEST_COMPANY_POID);
+        filter.setPage(0);
+        filter.setSize(20);
+        filter.setSortBy(null);
+        filter.setSortOrder("DESC");
+
+        SalesQuotationShipHeader header = createTestHeader();
+        List<SalesQuotationShipHeader> headerList = Collections.singletonList(header);
+        Page<SalesQuotationShipHeader> page = new PageImpl<>(headerList, PageRequest.of(0, 20), 1);
+
+        when(repository.findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            try {
+                Connection conn = mock(Connection.class);
+                CallableStatement cs = mock(CallableStatement.class);
+                when(conn.prepareCall(anyString())).thenReturn(cs);
+                doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+                doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+                when(cs.getString(anyInt())).thenReturn(null);
+                when(cs.execute()).thenReturn(false);
+                return callback.doInConnection(conn);
+            } catch (Exception e) {
+                return null;
+            }
+        });
+
+        // Act - Should use default sort field "transactionDate"
+        SalesQuotationShipListResponse result = service.search(filter, TEST_USER_POID);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void testSearch_WithSortOrder_ASC() {
+        // Arrange - Test buildSort with ASC order
+        SalesQuotationShipFilter filter = new SalesQuotationShipFilter();
+        filter.setCompanyPoid(TEST_COMPANY_POID);
+        filter.setPage(0);
+        filter.setSize(20);
+        filter.setSortBy("docRef");
+        filter.setSortOrder("ASC");
+
+        SalesQuotationShipHeader header = createTestHeader();
+        List<SalesQuotationShipHeader> headerList = Collections.singletonList(header);
+        Page<SalesQuotationShipHeader> page = new PageImpl<>(headerList, PageRequest.of(0, 20), 1);
+
+        when(repository.findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            try {
+                Connection conn = mock(Connection.class);
+                CallableStatement cs = mock(CallableStatement.class);
+                when(conn.prepareCall(anyString())).thenReturn(cs);
+                doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+                doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+                when(cs.getString(anyInt())).thenReturn(null);
+                when(cs.execute()).thenReturn(false);
+                return callback.doInConnection(conn);
+            } catch (Exception e) {
+                return null;
+            }
+        });
+
+        // Act
+        SalesQuotationShipListResponse result = service.search(filter, TEST_USER_POID);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void testSearch_WithSortOrder_Invalid() {
+        // Arrange - Test buildSort with invalid sortOrder
+        SalesQuotationShipFilter filter = new SalesQuotationShipFilter();
+        filter.setCompanyPoid(TEST_COMPANY_POID);
+        filter.setPage(0);
+        filter.setSize(20);
+        filter.setSortBy("transactionDate");
+        filter.setSortOrder("INVALID");
+
+        SalesQuotationShipHeader header = createTestHeader();
+        List<SalesQuotationShipHeader> headerList = Collections.singletonList(header);
+        Page<SalesQuotationShipHeader> page = new PageImpl<>(headerList, PageRequest.of(0, 20), 1);
+
+        when(repository.findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            try {
+                Connection conn = mock(Connection.class);
+                CallableStatement cs = mock(CallableStatement.class);
+                when(conn.prepareCall(anyString())).thenReturn(cs);
+                doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+                doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+                when(cs.getString(anyInt())).thenReturn(null);
+                when(cs.execute()).thenReturn(false);
+                return callback.doInConnection(conn);
+            } catch (Exception e) {
+                return null;
+            }
+        });
+
+        // Act - Should use default DESC order
+        SalesQuotationShipListResponse result = service.search(filter, TEST_USER_POID);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void testSearch_WithPage_Null() {
+        // Arrange - Test pagination with null page (should default to 0)
+        SalesQuotationShipFilter filter = new SalesQuotationShipFilter();
+        filter.setCompanyPoid(TEST_COMPANY_POID);
+        filter.setPage(null);
+        filter.setSize(20);
+
+        SalesQuotationShipHeader header = createTestHeader();
+        List<SalesQuotationShipHeader> headerList = Collections.singletonList(header);
+        Page<SalesQuotationShipHeader> page = new PageImpl<>(headerList, PageRequest.of(0, 20), 1);
+
+        when(repository.findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            try {
+                Connection conn = mock(Connection.class);
+                CallableStatement cs = mock(CallableStatement.class);
+                when(conn.prepareCall(anyString())).thenReturn(cs);
+                doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+                doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+                when(cs.getString(anyInt())).thenReturn(null);
+                when(cs.execute()).thenReturn(false);
+                return callback.doInConnection(conn);
+            } catch (Exception e) {
+                return null;
+            }
+        });
+
+        // Act
+        SalesQuotationShipListResponse result = service.search(filter, TEST_USER_POID);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void testSearch_WithSize_Null() {
+        // Arrange - Test pagination with null size (should default to 20)
+        SalesQuotationShipFilter filter = new SalesQuotationShipFilter();
+        filter.setCompanyPoid(TEST_COMPANY_POID);
+        filter.setPage(0);
+        filter.setSize(null);
+
+        SalesQuotationShipHeader header = createTestHeader();
+        List<SalesQuotationShipHeader> headerList = Collections.singletonList(header);
+        Page<SalesQuotationShipHeader> page = new PageImpl<>(headerList, PageRequest.of(0, 20), 1);
+
+        when(repository.findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            try {
+                Connection conn = mock(Connection.class);
+                CallableStatement cs = mock(CallableStatement.class);
+                when(conn.prepareCall(anyString())).thenReturn(cs);
+                doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+                doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+                when(cs.getString(anyInt())).thenReturn(null);
+                when(cs.execute()).thenReturn(false);
+                return callback.doInConnection(conn);
+            } catch (Exception e) {
+                return null;
+            }
+        });
+
+        // Act
+        SalesQuotationShipListResponse result = service.search(filter, TEST_USER_POID);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+    }
 }
 
