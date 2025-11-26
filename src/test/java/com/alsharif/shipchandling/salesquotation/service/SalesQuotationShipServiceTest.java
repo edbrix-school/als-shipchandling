@@ -1341,5 +1341,789 @@ class SalesQuotationShipServiceTest {
         return equipment;
     }
 
+    // ========== Additional Coverage Tests ==========
+
+    @Test
+    void testGetCustomerAddressDetails_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipHeader header = createTestHeader();
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(header));
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            
+            java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
+            when(cs.getObject(3)).thenReturn(rs);
+            when(rs.next()).thenReturn(true, false);
+            when(rs.getString("CONTACT_PERSON")).thenReturn("John Doe");
+            when(rs.getString("EMAIL1")).thenReturn("john@example.com");
+            
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        CustomerContactResponse response = service.getCustomerAddressDetails(
+            TEST_TRANSACTION_POID, TEST_COMPANY_POID, "123", BigDecimal.valueOf(100L)
+        );
+
+        // Assert
+        assertNotNull(response);
+        assertEquals("John Doe", response.contactPerson());
+        assertEquals("john@example.com", response.email());
+    }
+
+    @Test
+    void testGetCustomerAddressDetails_QuotationNotFound() {
+        // Arrange
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThrows(EntityNotFoundException.class, () -> {
+            service.getCustomerAddressDetails(
+                TEST_TRANSACTION_POID, TEST_COMPANY_POID, "123", BigDecimal.valueOf(100L)
+            );
+        });
+    }
+
+    @Test
+    void testGetCustomerAddressDetails_InvalidUserIdFormat() {
+        // Arrange
+        SalesQuotationShipHeader header = createTestHeader();
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(header));
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.getCustomerAddressDetails(
+                TEST_TRANSACTION_POID, TEST_COMPANY_POID, "invalid", BigDecimal.valueOf(100L)
+            );
+        });
+    }
+
+    @Test
+    void testGetChargeTaxForQuotation_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipHeader header = createTestHeader();
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.of(header));
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            
+            java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
+            when(cs.getObject(anyInt())).thenReturn(rs);
+            when(rs.next()).thenReturn(true, false);
+            when(rs.getBigDecimal("PERCENTAGE")).thenReturn(BigDecimal.valueOf(5.0));
+            when(rs.getBigDecimal("TAX_POID")).thenReturn(BigDecimal.valueOf(10L));
+            
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        ChargeTaxResponse response = service.getChargeTaxForQuotation(
+            TEST_TRANSACTION_POID, TEST_COMPANY_POID, 
+            BigDecimal.valueOf(100L), BigDecimal.valueOf(50L)
+        );
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(BigDecimal.valueOf(5.0), response.taxPercentage());
+        assertEquals(BigDecimal.valueOf(10L), response.taxPoid());
+    }
+
+    @Test
+    void testGetChargeTaxForQuotation_QuotationNotFound() {
+        // Arrange
+        when(repository.findActiveWithDetailsByCompany(TEST_TRANSACTION_POID, TEST_COMPANY_POID))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThrows(EntityNotFoundException.class, () -> {
+            service.getChargeTaxForQuotation(
+                TEST_TRANSACTION_POID, TEST_COMPANY_POID,
+                BigDecimal.valueOf(100L), BigDecimal.valueOf(50L)
+            );
+        });
+    }
+
+    @Test
+    void testLoadCustomerData_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipCustomerDataRequest request = new SalesQuotationShipCustomerDataRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, BigDecimal.valueOf(100L), TEST_TRANSACTION_POID
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            
+            java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
+            when(cs.getObject(5)).thenReturn(rs);
+            when(rs.next()).thenReturn(true, false);
+            java.sql.ResultSetMetaData metaData = mock(java.sql.ResultSetMetaData.class);
+            when(rs.getMetaData()).thenReturn(metaData);
+            when(metaData.getColumnCount()).thenReturn(2);
+            when(metaData.getColumnName(1)).thenReturn("COL1");
+            when(metaData.getColumnName(2)).thenReturn("COL2");
+            when(rs.getObject(1)).thenReturn("Value1");
+            when(rs.getObject(2)).thenReturn("Value2");
+            
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        SalesQuotationShipCustomerDataResponse response = service.loadCustomerData(request);
+
+        // Assert
+        assertNotNull(response);
+        assertNotNull(response.rows());
+    }
+
+    @Test
+    void testLoadCustomerData_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.loadCustomerData(null));
+    }
+
+    @Test
+    void testRefreshDetailCharges_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipRefreshDetailRequest request = new SalesQuotationShipRefreshDetailRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, TEST_TRANSACTION_POID, "Y"
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(5)).thenReturn("Success");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.refreshDetailCharges(request);
+
+        // Assert
+        assertEquals("Success", result);
+    }
+
+    @Test
+    void testRefreshDetailCharges_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.refreshDetailCharges(null));
+    }
+
+    @Test
+    void testCreateRfq_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipRfQRequest request = new SalesQuotationShipRfQRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, TEST_TRANSACTION_POID, TEST_USER_ID
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(5)).thenReturn("RFQ-001");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.createRfq(request);
+
+        // Assert
+        assertEquals("RFQ-001", result);
+    }
+
+    @Test
+    void testCreateRfq_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.createRfq(null));
+    }
+
+    @Test
+    void testUpdateLinkedQuantities_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipQuantityUpdateRequest request = new SalesQuotationShipQuantityUpdateRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, TEST_USER_POID, TEST_USER_ID, TEST_TRANSACTION_POID
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(6)).thenReturn("Updated");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.updateLinkedQuantities(request);
+
+        // Assert
+        assertEquals("Updated", result);
+    }
+
+    @Test
+    void testUpdateLinkedQuantities_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.updateLinkedQuantities(null));
+    }
+
+    @Test
+    void testImportItems_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipImportRequest request = new SalesQuotationShipImportRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, TEST_TRANSACTION_POID, TEST_USER_ID
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(5)).thenReturn("Imported");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.importItems(request);
+
+        // Assert
+        assertEquals("Imported", result);
+    }
+
+    @Test
+    void testImportItems_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.importItems(null));
+    }
+
+    @Test
+    void testClearItems_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipClearItemsRequest request = new SalesQuotationShipClearItemsRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, TEST_TRANSACTION_POID
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(4)).thenReturn("Cleared");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.clearItems(request);
+
+        // Assert
+        assertEquals("Cleared", result);
+    }
+
+    @Test
+    void testClearItems_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.clearItems(null));
+    }
+
+    @Test
+    void testCreateDeliveryNote_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipDeliveryNoteRequest request = new SalesQuotationShipDeliveryNoteRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, TEST_TRANSACTION_POID, TEST_USER_ID
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(5)).thenReturn("DN-001");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.createDeliveryNote(request);
+
+        // Assert
+        assertEquals("DN-001", result);
+    }
+
+    @Test
+    void testCreateDeliveryNote_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.createDeliveryNote(null));
+    }
+
+    @Test
+    void testSelectAllDetails_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipSelectAllRequest request = new SalesQuotationShipSelectAllRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, TEST_TRANSACTION_POID, "Y"
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(5)).thenReturn("Selected");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.selectAllDetails(request);
+
+        // Assert
+        assertEquals("Selected", result);
+    }
+
+    @Test
+    void testSelectAllDetails_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.selectAllDetails(null));
+    }
+
+    @Test
+    void testValidateCustomer_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipValidationRequest request = new SalesQuotationShipValidationRequest(
+            TEST_TRANSACTION_POID, BigDecimal.valueOf(100L)
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(2)).thenReturn("OK");
+            when(cs.getString(3)).thenReturn("OK");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        SalesQuotationShipCustomerValidationResponse response = service.validateCustomer(request);
+
+        // Assert
+        assertNotNull(response);
+    }
+
+    @Test
+    void testValidateCustomer_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.validateCustomer(null));
+    }
+
+    @Test
+    void testSetDefaultDetailValues_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipDefaultDetailRequest request = new SalesQuotationShipDefaultDetailRequest(
+            BigDecimal.valueOf(100L), BigDecimal.valueOf(200L), TEST_TRANSACTION_POID,
+            BigDecimal.valueOf(300L), LocalDate.now()
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setDate(anyInt(), any(java.sql.Date.class));
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getBigDecimal(6)).thenReturn(BigDecimal.valueOf(10L));
+            when(cs.getBigDecimal(7)).thenReturn(BigDecimal.valueOf(20L));
+            when(cs.getBigDecimal(8)).thenReturn(BigDecimal.valueOf(30L));
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        SalesQuotationShipDefaultDetailResponse response = service.setDefaultDetailValues(request);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(BigDecimal.valueOf(10L), response.outValue1());
+        assertEquals(BigDecimal.valueOf(20L), response.outValue2());
+        assertEquals(BigDecimal.valueOf(30L), response.outValue3());
+    }
+
+    @Test
+    void testSetDefaultDetailValues_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.setDefaultDetailValues(null));
+    }
+
+    @Test
+    void testValidateDeliveryOption_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipDeliveryOptionValidateRequest request = new SalesQuotationShipDeliveryOptionValidateRequest(
+            TEST_TRANSACTION_POID, TEST_DET_ROW_ID, BigDecimal.valueOf(100L), "Y"
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(5)).thenReturn("Valid");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.validateDeliveryOption(request);
+
+        // Assert
+        assertEquals("Valid", result);
+    }
+
+    @Test
+    void testValidateDeliveryOption_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.validateDeliveryOption(null));
+    }
+
+    @Test
+    void testCalculateAfterSave_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipCalculateRequest request = new SalesQuotationShipCalculateRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, TEST_USER_ID, TEST_TRANSACTION_POID
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(5)).thenReturn("Calculated");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.calculateAfterSave(request);
+
+        // Assert
+        assertEquals("Calculated", result);
+    }
+
+    @Test
+    void testCalculateAfterSave_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.calculateAfterSave(null));
+    }
+
+    @Test
+    void testAcquireRecordLock_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipRecordLockRequest request = new SalesQuotationShipRecordLockRequest(
+            TEST_USER_ID, "session123", "DOC_ID", "DOC_NAME", TEST_TRANSACTION_POID, "LOCK"
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(1)).thenReturn("Locked");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.acquireRecordLock(request);
+
+        // Assert
+        assertEquals("Locked", result);
+    }
+
+    @Test
+    void testAcquireRecordLock_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.acquireRecordLock(null));
+    }
+
+    @Test
+    void testReleaseRecordLock_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipReleaseLockRequest request = new SalesQuotationShipReleaseLockRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, TEST_USER_POID, "DOC_ID", TEST_TRANSACTION_POID, "metadata"
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(7)).thenReturn("Released");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.releaseRecordLock(request);
+
+        // Assert
+        assertEquals("Released", result);
+    }
+
+    @Test
+    void testReleaseRecordLock_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.releaseRecordLock(null));
+    }
+
+    @Test
+    void testResetSequence_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipResetSequenceRequest request = new SalesQuotationShipResetSequenceRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, TEST_USER_POID, "TABLE_NAME", "MASTER_VO"
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).setNull(anyInt(), anyInt());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(10)).thenReturn("Reset");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.resetSequence(request);
+
+        // Assert
+        assertEquals("Reset", result);
+    }
+
+    @Test
+    void testResetSequence_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.resetSequence(null));
+    }
+
+    @Test
+    void testUpdateSequence_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipUpdateSequenceRequest request = new SalesQuotationShipUpdateSequenceRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, TEST_USER_POID, "TABLE_NAME", 
+            BigDecimal.valueOf(5L), "MASTER_VO", TEST_TRANSACTION_POID
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(10)).thenReturn("Updated");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.updateSequence(request);
+
+        // Assert
+        assertEquals("Updated", result);
+    }
+
+    @Test
+    void testUpdateSequence_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.updateSequence(null));
+    }
+
+    @Test
+    void testUpdateUserProfile_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipUserProfileRequest request = new SalesQuotationShipUserProfileRequest(
+            TEST_USER_POID, "SETTING_NAME", "SETTING_VALUE"
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            when(cs.execute()).thenReturn(false);
+            return null;
+        });
+
+        // Act
+        service.updateUserProfile(request);
+
+        // Assert
+        verify(jdbcTemplate, times(1)).execute(any(ConnectionCallback.class));
+    }
+
+    @Test
+    void testUpdateUserProfile_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.updateUserProfile(null));
+    }
+
+    @Test
+    void testGrantEditPermission_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipGrantEditRequest request = new SalesQuotationShipGrantEditRequest(
+            BigDecimal.valueOf(1L), TEST_USER_POID, "DOC_ID", TEST_TRANSACTION_POID
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(5)).thenReturn("Granted");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.grantEditPermission(request);
+
+        // Assert
+        assertEquals("Granted", result);
+    }
+
+    @Test
+    void testGrantEditPermission_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.grantEditPermission(null));
+    }
+
+    @Test
+    void testApprovalAction_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipApprovalActionRequest request = new SalesQuotationShipApprovalActionRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, TEST_USER_POID, "DOC_ID", TEST_TRANSACTION_POID,
+            "APPROVE", "Comments", "DOC_INFO", "DOC_REF", LocalDate.now(), TEST_USER_POID
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).setDate(anyInt(), any(java.sql.Date.class));
+            doNothing().when(cs).setObject(anyInt(), any());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(12)).thenReturn("Success");
+            when(cs.getString(13)).thenReturn("Message");
+            when(cs.getBigDecimal(14)).thenReturn(BigDecimal.valueOf(1L));
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        SalesQuotationShipApprovalResponse response = service.approvalAction(request);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals("Success", response.status());
+        assertEquals("Message", response.message());
+        assertEquals(BigDecimal.valueOf(1L), response.nextApprover());
+    }
+
+    @Test
+    void testApprovalAction_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.approvalAction(null));
+    }
+
+    @Test
+    void testRepostToGl_Success() throws Exception {
+        // Arrange
+        SalesQuotationShipGlRepostRequest request = new SalesQuotationShipGlRepostRequest(
+            BigDecimal.valueOf(1L), TEST_COMPANY_POID, TEST_USER_POID, "DOC_ID", TEST_TRANSACTION_POID, "DOC_REF"
+        );
+
+        when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<?> callback = invocation.getArgument(0);
+            Connection conn = mock(Connection.class);
+            CallableStatement cs = mock(CallableStatement.class);
+            when(conn.prepareCall(anyString())).thenReturn(cs);
+            doNothing().when(cs).setBigDecimal(anyInt(), any(BigDecimal.class));
+            doNothing().when(cs).setString(anyInt(), anyString());
+            doNothing().when(cs).registerOutParameter(anyInt(), anyInt());
+            when(cs.execute()).thenReturn(false);
+            when(cs.getString(7)).thenReturn("Reposted");
+            return callback.doInConnection(conn);
+        });
+
+        // Act
+        String result = service.repostToGl(request);
+
+        // Assert
+        assertEquals("Reposted", result);
+    }
+
+    @Test
+    void testRepostToGl_NullRequest() {
+        assertThrows(NullPointerException.class, () -> service.repostToGl(null));
+    }
+
 }
 
