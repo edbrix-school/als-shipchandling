@@ -68,6 +68,16 @@ public class CreateSalesDeliveryNoteRequest {
     @Size(max = 500, message = "Remarks must not exceed 500 characters")
     private String remarks;
 
+    @Size(max = 500, message = "Party address details must not exceed 500 characters")
+    private String partyAddressDetails;
+
+    private Long printDivisionPoid;
+
+    @Size(max = 500, message = "Party type must not exceed 500 characters")
+    private String partyType;
+
+    private Long principalPoid;
+
     // Detail tables
     private List<CreateSalesDeliveryNoteItemDtlRequest> itemDetails;
 }

@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public
 class CreateSalesDeliveryNoteItemDtlRequest {
+    private Long detRowId; // Required for UPDATE and DELETE actions
     private Long stockPoid;
     private Long stockUnitPoid;
     private Long quantity;
@@ -20,4 +21,5 @@ class CreateSalesDeliveryNoteItemDtlRequest {
     private Long qtnDetRowId; // Set when loading from quotation
     private Long totCost;
     private String itemType;
+    private String actionType; // "UPDATE", "DELETE", or null/"CREATE" for new items
 }
