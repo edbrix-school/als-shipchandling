@@ -29,6 +29,7 @@ import com.alsharif.shipchandling.StockMaster.repository.StockMasterWarehouseDtl
 import com.alsharif.shipchandling.StockMaster.repository.StockCategoryMasterRepository;
 import com.alsharif.shipchandling.StockMaster.entity.StockCategoryMasterEntity;
 import com.alsharif.shipchandling.exceptions.ResourceNotFoundException;
+import com.alsharif.shipchandling.StockMaster.dto.StockMasterViewResponse.LovDetailDto;
 
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +37,7 @@ import oracle.jdbc.OracleTypes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -146,6 +148,16 @@ public class StockMasterServiceImpl implements StockMasterService {
                     .ifPresent(category -> response.setCategoryName(category.getCategoryName()));
         }
 
+        // Fetch all details in a single query using JOINs
+        List<Object[]> results = stockMasterRepository.findStockMasterWithDetails(stockPoid);
+        if (!results.isEmpty()) {
+            Object[] row = results.get(0);
+            populateDetailsFromQueryResult(response, row);
+        } else {
+            // Fallback: set empty details if query returns no results
+            setEmptyDetails(response);
+        }
+
         if (includeDetails) {
             // Convert supplier details entities to DTOs
             List<StockMasterDTLEntity> supplierEntities = dtlRepository.findByStockPoid(stockPoid);
@@ -163,6 +175,110 @@ public class StockMasterServiceImpl implements StockMasterService {
         }
 
         return response;
+    }
+
+    /**
+     * Populate detail objects from native query result
+     * Column order matches the query in repository
+     * Total columns: 56 stock master fields + 27 detail fields (9 detail objects * 3 fields each) = 83 columns
+     */
+    private void populateDetailsFromQueryResult(StockMasterViewResponse response, Object[] row) {
+        // Stock master fields: indices 0-55 (56 fields)
+        // Detail fields start at index 56
+        
+        int index = 56; // Start after stock master fields
+        
+        // Stock Unit Details (su1: index 56-58)
+        response.setStockUnitDetails(createLovDetailFromRow(row, index));
+        index += 3;
+        
+        // Purchase Stock Unit Details (su2: index 59-61)
+        response.setPurchaseStockUnitDetails(createLovDetailFromRow(row, index));
+        index += 3;
+        
+        // Consumption Unit Details (su3: index 62-64)
+        response.setConsumptionUnitDetails(createLovDetailFromRow(row, index));
+        index += 3;
+        
+        // Tax Details - Output Tax (tax1: index 65-67)
+        response.setTaxDetails(createLovDetailFromRow(row, index));
+        index += 3;
+        
+        // Input Tax Details (tax2: index 68-70)
+        response.setInputTaxDetails(createLovDetailFromRow(row, index));
+        index += 3;
+        
+        // Stock GL Details (gl1: index 71-73)
+        response.setStockGlDetails(createLovDetailFromRow(row, index));
+        index += 3;
+        
+        // Sales GL Details (gl2: index 74-76)
+        response.setSalesGlDetails(createLovDetailFromRow(row, index));
+        index += 3;
+        
+        // Cost of Sales GL Details (gl3: index 77-79)
+        response.setCostOfSalesGlDetails(createLovDetailFromRow(row, index));
+    }
+
+    /**
+     * Create LOV detail from row array starting at given index
+     * Expects: [poid, code, description] at indices [index, index+1, index+2]
+     */
+    private LovDetailDto createLovDetailFromRow(Object[] row, int index) {
+        LovDetailDto detail = new LovDetailDto();
+        
+        if (row.length > index) {
+            // Poid (may be BigDecimal or Long)
+            if (row[index] != null) {
+                if (row[index] instanceof BigDecimal) {
+                    detail.setPoid(((BigDecimal) row[index]).longValue());
+                } else if (row[index] instanceof Number) {
+                    detail.setPoid(((Number) row[index]).longValue());
+                }
+            }
+            
+            // Code
+            if (row.length > index + 1 && row[index + 1] != null) {
+                detail.setCode(row[index + 1].toString());
+            }
+            
+            // Description
+            if (row.length > index + 2 && row[index + 2] != null) {
+                detail.setDescription(row[index + 2].toString());
+            }
+        }
+        
+        // If all fields are null, return empty detail
+        if (detail.getPoid() == null && detail.getCode() == null && detail.getDescription() == null) {
+            return createEmptyLovDetail();
+        }
+        
+        return detail;
+    }
+
+    /**
+     * Set empty detail objects
+     */
+    private void setEmptyDetails(StockMasterViewResponse response) {
+        response.setStockUnitDetails(createEmptyLovDetail());
+        response.setPurchaseStockUnitDetails(createEmptyLovDetail());
+        response.setConsumptionUnitDetails(createEmptyLovDetail());
+        response.setTaxDetails(createEmptyLovDetail());
+        response.setInputTaxDetails(createEmptyLovDetail());
+        response.setStockGlDetails(createEmptyLovDetail());
+        response.setSalesGlDetails(createEmptyLovDetail());
+        response.setCostOfSalesGlDetails(createEmptyLovDetail());
+    }
+
+    /**
+     * Create empty LOV detail object
+     */
+    private LovDetailDto createEmptyLovDetail() {
+        LovDetailDto detail = new LovDetailDto();
+        detail.setPoid(null);
+        detail.setCode(null);
+        detail.setDescription(null);
+        return detail;
     }
 
     /**

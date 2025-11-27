@@ -74,4 +74,24 @@ public class StockMasterViewResponse {
     // Supplier and Warehouse details using DTOs
     private List<StockMasterDtlDto> supplierDetails;
     private List<StockMasterWarehouseDtlDto> warehouseDetails;
+    
+    // Detail objects from LOV
+    private LovDetailDto stockUnitDetails;
+    private LovDetailDto purchaseStockUnitDetails;
+    private LovDetailDto consumptionUnitDetails;
+    private LovDetailDto taxDetails;
+    private LovDetailDto inputTaxDetails;
+    private LovDetailDto stockGlDetails;
+    private LovDetailDto salesGlDetails;
+    private LovDetailDto costOfSalesGlDetails;
+    
+    // Inner class for LOV details
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LovDetailDto {
+        private Long poid;
+        private String code;
+        private String description;
+    }
 }
