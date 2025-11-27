@@ -16,6 +16,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -355,6 +356,22 @@ public class ApRequestForQuotationController {
                 ItemsWithoutSuppliersResponse response = rfqService.getItemsWithoutSuppliers(
                                 transactionPoid, groupPoid, companyPoid, userId);
                 return success("Items without suppliers fetched successfully", response);
+        }
+
+        @Operation(summary = "Get Tax Percentage", description = "Retrieves tax percentage for the provided Tax POID using active tax configuration.", tags = "RFQ's Business Logic", responses = {
+                        @ApiResponse(responseCode = "200", description = "Tax percentage fetched successfully")
+        })
+        @GetMapping("/tax-percentage")
+        public ResponseEntity<?> getTaxPercentage(
+                        @RequestParam Long taxPoid,
+                        @RequestHeader("X-Group-Poid") Long groupPoid,
+                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+
+                BigDecimal taxPercentage = rfqService.getTaxPercentage(groupPoid, companyPoid, taxPoid);
+                Map<String, Object> response = Map.of(
+                                "taxPoid", taxPoid,
+                                "taxPercentage", taxPercentage);
+                return success("Tax percentage fetched successfully", response);
         }
 
         // @Operation(summary = "Check RFQ Dependencies",

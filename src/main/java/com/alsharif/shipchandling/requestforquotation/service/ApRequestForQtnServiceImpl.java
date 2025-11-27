@@ -486,10 +486,10 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         }
 
         GlobalTaxMaster tax = globalTaxMasterRepository
-                .findActiveByTaxPoid(taxPoid)
+                .findActiveByTaxPoid(BigDecimal.valueOf(taxPoid))
                 .orElseThrow(() -> new CustomException("Invalid or inactive Tax POID: " + taxPoid));
 
-        BigDecimal taxPercentage = tax.getPercentage() != null ? tax.getPercentage() : tax.getTaxPercent();
+        BigDecimal taxPercentage = tax.getPercentage();
         if (taxPercentage == null) {
             throw new CustomException("Tax percentage is not configured for Tax POID: " + taxPoid);
         }
@@ -497,6 +497,35 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         itemDtl.setTaxPoid(taxPoid);
         itemDtl.setTaxPercentage(taxPercentage);
         itemDtl.setTaxAmount(calculateTaxAmount(qty, price, taxPercentage));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BigDecimal getTaxPercentage(Long groupPoid, Long companyPoid, Long taxPoid) {
+        if (groupPoid == null) {
+            throw new CustomException("Group POID header is required");
+        }
+        if (companyPoid == null) {
+            throw new CustomException("Company POID header is required");
+        }
+        if (taxPoid == null) {
+            throw new CustomException("Tax POID is required");
+        }
+
+        GlobalTaxMaster tax = globalTaxMasterRepository
+                .findActiveByTaxPoid(BigDecimal.valueOf(taxPoid))
+                .orElseThrow(() -> new CustomException("Invalid or inactive Tax POID: " + taxPoid));
+
+        if (tax.getGroupPoid() != null
+                && BigDecimal.valueOf(groupPoid).compareTo(tax.getGroupPoid()) != 0) {
+            throw new CustomException("Tax POID does not belong to the provided group");
+        }
+
+        BigDecimal taxPercentage = tax.getPercentage();
+        if (taxPercentage == null) {
+            throw new CustomException("Tax percentage is not configured for Tax POID: " + taxPoid);
+        }
+        return taxPercentage;
     }
 
     private BigDecimal calculateTaxAmount(BigDecimal qty, BigDecimal price, BigDecimal taxPercentage) {

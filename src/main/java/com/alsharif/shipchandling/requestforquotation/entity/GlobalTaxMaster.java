@@ -24,9 +24,6 @@ public class GlobalTaxMaster {
     @Column(name = "GROUP_POID", nullable = false)
     private BigDecimal groupPoid;
 
-    @Column(name = "COMPANY_POID", nullable = false)
-    private BigDecimal companyPoid;
-
     @Column(name = "TAX_CODE", length = 50)
     private String taxCode;
 
@@ -39,23 +36,35 @@ public class GlobalTaxMaster {
     @Column(name = "TAX_CATEGORY", length = 10)
     private String taxCategory;
 
-    @Column(name = "TAX_PERCENT")
-    private BigDecimal taxPercent;
-
     @Column(name = "PERCENTAGE")
     private BigDecimal percentage;
 
     @Column(name = "TAX_TYPE", length = 20)
     private String taxType;
 
-    @Column(name = "CALCULATION_TYPE", length = 20)
-    private String calculationType;
-
     @Column(name = "ACTIVE", length = 1)
     private String active;
 
-    @Column(name = "REMARKS", length = 500)
-    private String remarks;
+    @Column(name = "SEQNO")
+    private Integer seqno;
+
+    @Column(name = "DELETED", length = 1)
+    private String deleted;
+
+    @Column(name = "TAX_INPUT_OUTPUT", length = 20)
+    private String taxInputOutput;
+
+    @Column(name = "GL_CREDIT_DEBIT", length = 20)
+    private String glCreditDebit;
+
+    @Column(name = "GL_POID")
+    private BigDecimal glPoid;
+
+    @Column(name = "NBR_TAX_CODE", length = 50)
+    private String nbrTaxCode;
+
+    @Column(name = "NBR_TAX_NAME", length = 200)
+    private String nbrTaxName;
 
     @Column(name = "CREATED_BY", length = 20)
     private String createdBy;
