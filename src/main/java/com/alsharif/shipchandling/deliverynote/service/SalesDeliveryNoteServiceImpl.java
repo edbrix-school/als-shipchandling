@@ -6,6 +6,7 @@ import com.alsharif.shipchandling.exceptions.ResourceNotFoundException;
 import com.alsharif.shipchandling.exceptions.CustomException;
 import com.alsharif.shipchandling.deliverynote.repository.*;
 import com.alsharif.shipchandling.deliverynote.repository.SalesDeliveryNoteHdrRepositoryImpl;
+import com.alsharif.shipchandling.salesinvoice.repository.SalesDnDtlRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -14,7 +15,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +40,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     private final SalesDeliveryNoteItemDtlRepository itemDtlRepository;
     private final SalesDeliveryNoteRepository salesDeliveryNoteRepository;
     private final SalesDeliveryNoteHdrRepositoryImpl deliveryNoteHdrRepositoryImpl;
+    private final SalesDnDtlRepository salesDnDtlRepository;
 
     // Add OracleDataSource or DataSource injection for stored procedure calls
     private final DataSource dataSource;
@@ -155,14 +156,18 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         deliveryNote.setLastmodifiedBy(userId);
 
         // Remove items with CheckAll = "N" before updating
-        itemDtlRepository.deleteByTransactionPoidAndCheckAllN(transactionPoid);
+        // itemDtlRepository.deleteByTransactionPoidAndCheckAllN(transactionPoid);
 
-        // Update item details (only items with CheckAll = "Y")
-        updateItemDetails(transactionPoid,
-                request.getItemDetails() != null ? request.getItemDetails().stream()
-                        .filter(item -> "Y".equals(item.getCheckAll()))
-                        .collect(Collectors.toList()) : List.of(),
-                userId);
+        // Process item details based on actionType (UPDATE, DELETE, or CREATE)
+        if (request.getItemDetails() != null && !request.getItemDetails().isEmpty()) {
+            processItemDetailsByActionType(transactionPoid, 
+                    request.getItemDetails(),
+                    // .stream()
+                    // .filter(item -> item.getActionType() != null)
+                    //         .filter(item -> "Y".equals(item.getCheckAll()))
+                    //         .collect(Collectors.toList()),
+                    userId);
+        }
 
         // Save
         SalesDeliveryNoteHdr savedDeliveryNote = deliveryNoteHdrRepository.save(deliveryNote);
@@ -497,6 +502,104 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         }
     }
 
+    /**
+     * Process item details based on actionType:
+     * - DELETE: Delete the item by detRowId
+     * - UPDATE: Update the existing item by detRowId
+     * - CREATE/null: Add as new item
+     */
+    private void processItemDetailsByActionType(Long transactionPoid, 
+            List<CreateSalesDeliveryNoteItemDtlRequest> details, String userId) {
+        if (details == null || details.isEmpty()) {
+            return;
+        }
+
+        List<CreateSalesDeliveryNoteItemDtlRequest> itemsToCreate = new ArrayList<>();
+        
+        for (CreateSalesDeliveryNoteItemDtlRequest item : details) {
+            String actionType = item.getActionType();
+            
+            if ("DELETE".equalsIgnoreCase(actionType)) {
+                // Delete item by detRowId
+                if (item.getDetRowId() != null) {
+                    try {
+                        itemDtlRepository.deleteById(new SalesDeliveryNoteItemDtlId(transactionPoid, item.getDetRowId()));
+                        log.debug("Deleted item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
+                    } catch (Exception ex) {
+                        log.warn("Failed to delete item detail transactionPoid={} detRowId={}: {}", 
+                                transactionPoid, item.getDetRowId(), ex.getMessage());
+                    }
+                } else {
+                    log.warn("DELETE action requires detRowId, skipping item transactionPoid={}", transactionPoid);
+                }
+            } else if ("UPDATE".equalsIgnoreCase(actionType)) {
+                // Update existing item by detRowId
+                if (item.getDetRowId() != null) {
+                    try {
+                        SalesDeliveryNoteItemDtl existingItem = itemDtlRepository
+                                .findById(new SalesDeliveryNoteItemDtlId(transactionPoid, item.getDetRowId()))
+                                .orElse(null);
+                        
+                        if (existingItem != null) {
+                            // Check if item is from quotation (read-only fields)
+                           /*  if (existingItem.getQtnDetRowId() != null && existingItem.getQtnDetRowId() > 0) {
+                                // StockPoid and Quantity are read-only if loaded from quotation
+                                if (item.getStockPoid() != null && !item.getStockPoid().equals(existingItem.getStockPoid())) {
+                                    log.warn("Attempt to change stockPoid for item loaded from quotation. transactionPoid={} detRowId={}",
+                                            transactionPoid, item.getDetRowId());
+                                    throw new CustomException("Cannot change stock. Item is loaded from quotation.");
+                                }
+                                if (item.getQuantity() != null && !item.getQuantity().equals(existingItem.getQuantity())) {
+                                    log.warn("Attempt to change quantity for item loaded from quotation. transactionPoid={} detRowId={}",
+                                            transactionPoid, item.getDetRowId());
+                                    throw new CustomException("Cannot change quantity. Item is loaded from quotation.");
+                                }
+                            }
+                             */
+                            // Update fields
+                            if (existingItem.getQtnDetRowId() == null || existingItem.getQtnDetRowId() == 0) {
+                                existingItem.setStockPoid(item.getStockPoid());
+                                existingItem.setQuantity(item.getQuantity());
+                            }
+                            existingItem.setStockUnitPoid(item.getStockUnitPoid());
+                            existingItem.setPrice(item.getPrice());
+                            existingItem.setDiscount(item.getDiscount() != null ? item.getDiscount() : 0L);
+                            existingItem.setAmount(item.getAmount());
+                            existingItem.setRemarks(item.getRemarks());
+                            existingItem.setCheckAll(item.getCheckAll() != null ? item.getCheckAll() : "Y");
+                            existingItem.setTotCost(item.getTotCost());
+                            existingItem.setItemType(item.getItemType());
+                            existingItem.setLastmodifiedBy(userId);
+                            
+                            itemDtlRepository.save(existingItem);
+                            log.debug("Updated item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
+                        } else {
+                            log.warn("Item not found for UPDATE action transactionPoid={} detRowId={}, treating as CREATE",
+                                    transactionPoid, item.getDetRowId());
+                            itemsToCreate.add(item);
+                        }
+                    } catch (CustomException ex) {
+                        throw ex; // Re-throw custom exceptions
+                    } catch (Exception ex) {
+                        log.warn("Failed to update item detail transactionPoid={} detRowId={}: {}", 
+                                transactionPoid, item.getDetRowId(), ex.getMessage());
+                    }
+                } else {
+                    log.warn("UPDATE action requires detRowId, treating as CREATE transactionPoid={}", transactionPoid);
+                    itemsToCreate.add(item);
+                }
+            } else {
+                // CREATE or null actionType - add as new item
+                itemsToCreate.add(item);
+            }
+        }
+        
+        // Save new items
+        if (!itemsToCreate.isEmpty()) {
+            saveItemDetails(transactionPoid, itemsToCreate, userId);
+        }
+    }
+
     private void calculateTotals(Long transactionPoid) {
         // Calculate total amount from item details (only items with CheckAll = "Y")
         Long totalAmount = itemDtlRepository.sumAmountByTransactionPoid(transactionPoid);
@@ -549,10 +652,12 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
     @Override
     public ValidateCustomerChangeResponse validateCustomerChange(Long transactionPoid,
-            Long companyPoid) {
+            Long customerPoid) {
         ValidateCustomerChangeResponse response = new ValidateCustomerChangeResponse();
-        response.setCanChange(
-                salesDeliveryNoteRepository.callSalesSCDNCustomerValidateProc(companyPoid, transactionPoid));
+        boolean valid = salesDeliveryNoteRepository.callSalesSCDNCustomerValidateProc(customerPoid, transactionPoid);
+        response.setCanChange(valid);
+        response.setMessage(valid ? "Customer can be changed" : "Customer cannot be changed");
+        response.setSuccess(true);
         return response;
     }
 
@@ -692,24 +797,15 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         boolean linkedToQuotation = dn.getQtnRefNo() != null && !dn.getQtnRefNo().trim().isEmpty();
         resp.setLinkedToQuotation(linkedToQuotation);
 
-        // try to detect sales invoice references using common column names.
-        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        String[] candidateSqls = new String[] {
-                "SELECT COUNT(1) FROM AR_SCH_SALES_INVOICE_DTL WHERE TRANSACTION_POID = ? AND COMPANY_POID = ? AND NVL(DELETED,'N') <> 'Y'"
-        };
-
-        int invoiceCount = 0;
-        for (String sql : candidateSqls) {
-            try {
-                Integer cnt = jdbc.queryForObject(sql, Integer.class, transactionPoid, companyPoid);
-                if (cnt != null) {
-                    invoiceCount = cnt;
-                    break;
-                }
-            } catch (Exception ex) {
-                throw new CustomException("Error while checking sales invoice references: " + ex.getMessage());
-            }
-        }
+        // Count sales invoice references using repository
+        // This uses JPQL which handles deleted check: (deleted IS NULL OR UPPER(deleted) <> 'Y')
+        // Equivalent to Oracle's NVL(DELETED,'N') <> 'Y'
+        Long invoiceCountLong = salesDnDtlRepository.countByDnPoidFkAndCompanyPoidAndInvoiceNotDeleted(
+                transactionPoid, companyPoid);
+        int invoiceCount = invoiceCountLong != null ? invoiceCountLong.intValue() : 0;
+        
+        log.debug("Found {} sales invoice(s) referencing delivery note {} for companyPoid={}", 
+                invoiceCount, transactionPoid, companyPoid);
 
         resp.setSalesInvoiceCount(invoiceCount);
 

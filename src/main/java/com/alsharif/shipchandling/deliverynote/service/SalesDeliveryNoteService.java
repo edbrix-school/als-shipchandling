@@ -43,7 +43,7 @@ public interface SalesDeliveryNoteService {
 
         // Business Logic APIs
         ValidateCustomerChangeResponse validateCustomerChange(Long transactionPoid,
-                        Long companyPoid);
+                        Long customerPoid);
 
         LoadQuotationItemsResponse loadQuotationItems(Long groupPoid, Long transactionPoid,
                         Long companyPoid, String userId);

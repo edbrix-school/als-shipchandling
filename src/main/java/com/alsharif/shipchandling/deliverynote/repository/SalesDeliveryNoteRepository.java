@@ -19,14 +19,14 @@ public class SalesDeliveryNoteRepository {
     @Autowired
     private DataSource dataSource;
 
-    public boolean callSalesSCDNCustomerValidateProc(Long companyPoid,
+    public boolean callSalesSCDNCustomerValidateProc(Long customerPoid,
             Long transactionPoid) {
         String proc = "{call PROC_SALES_SCDN_CUST_VALIDATE(?, ?, ?)}";
         try (Connection conn = dataSource.getConnection();
                 CallableStatement cs = conn.prepareCall(proc)) {
 
             cs.setLong(1, transactionPoid);
-            cs.setLong(2, companyPoid);
+            cs.setLong(2, customerPoid);
             cs.registerOutParameter(3, Types.VARCHAR);
 
             cs.execute();
