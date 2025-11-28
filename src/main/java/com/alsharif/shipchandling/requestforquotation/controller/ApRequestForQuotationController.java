@@ -149,22 +149,23 @@ public class ApRequestForQuotationController {
         // return success("Item detail added successfully", dto);
         // }
 
-        @Operation(summary = "Update Item Detail", description = "Updates an existing item detail in RFQ.", tags = "RFQ's Item Details", responses = {
-                        @ApiResponse(responseCode = "200", description = "Item detail updated successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnItemDtlDto.class)))
-        })
-        @PutMapping("/{transactionPoid}/item-details/{detRowId}")
-        public ResponseEntity<?> updateItemDetail(
-                        @PathVariable Long transactionPoid,
-                        @PathVariable Long detRowId,
-                        @Valid @RequestBody CreateApRequestForQtnItemDtlRequest request,
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+        // DEPRECATED: Use PUT /api/ap/request-for-quotations/{transactionPoid} with action field in itemDetails
+        // @Operation(summary = "Update Item Detail", description = "Updates an existing item detail in RFQ.", tags = "RFQ's Item Details", responses = {
+        //                 @ApiResponse(responseCode = "200", description = "Item detail updated successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnItemDtlDto.class)))
+        // })
+        // @PutMapping("/{transactionPoid}/item-details/{detRowId}")
+        // public ResponseEntity<?> updateItemDetail(
+        //                 @PathVariable Long transactionPoid,
+        //                 @PathVariable Long detRowId,
+        //                 @Valid @RequestBody CreateApRequestForQtnItemDtlRequest request,
+        //                 @RequestHeader("X-Group-Poid") Long groupPoid,
+        //                 @RequestHeader("X-Company-Poid") Long companyPoid,
+        //                 @RequestHeader("X-User-Id") String userId) {
 
-                ApRequestForQtnItemDtlDto dto = rfqService.updateItemDetail(
-                                transactionPoid, detRowId, request, groupPoid, companyPoid, userId);
-                return success("Item detail updated successfully", dto);
-        }
+        //         ApRequestForQtnItemDtlDto dto = rfqService.updateItemDetail(
+        //                         transactionPoid, detRowId, request, groupPoid, companyPoid, userId);
+        //         return success("Item detail updated successfully", dto);
+        // }
 
         // @Operation(summary = "Delete Item Detail", description = "Deletes an existing
         // item detail in RFQ.", tags = "RFQ's Item Details")
@@ -194,52 +195,55 @@ public class ApRequestForQuotationController {
                 return success("Item details fetched successfully", itemDetails);
         }
 
-        @Operation(summary = "Add Supplier Detail", description = "Adds a new supplier detail to RFQ. Auto-populates last price and default unit if applicable.", tags = "RFQ's Supplier Details", responses = {
-                        @ApiResponse(responseCode = "200", description = "Supplier detail added successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnSupDtlDto.class)))
-        })
-        @PostMapping("/{transactionPoid}/supplier-details")
-        public ResponseEntity<?> addSupplierDetail(
-                        @PathVariable Long transactionPoid,
-                        @Valid @RequestBody CreateApRequestForQtnSupDtlRequest request,
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+        // DEPRECATED: Use POST/PUT /api/ap/request-for-quotations/{transactionPoid} with action field in supplierDetails
+        // @Operation(summary = "Add Supplier Detail", description = "Adds a new supplier detail to RFQ. Auto-populates last price and default unit if applicable.", tags = "RFQ's Supplier Details", responses = {
+        //                 @ApiResponse(responseCode = "200", description = "Supplier detail added successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnSupDtlDto.class)))
+        // })
+        // @PostMapping("/{transactionPoid}/supplier-details")
+        // public ResponseEntity<?> addSupplierDetail(
+        //                 @PathVariable Long transactionPoid,
+        //                 @Valid @RequestBody CreateApRequestForQtnSupDtlRequest request,
+        //                 @RequestHeader("X-Group-Poid") Long groupPoid,
+        //                 @RequestHeader("X-Company-Poid") Long companyPoid,
+        //                 @RequestHeader("X-User-Id") String userId) {
 
-                ApRequestForQtnSupDtlDto dto = rfqService.addSupplierDetail(
-                                transactionPoid, request, groupPoid, companyPoid, userId);
-                return success("Supplier detail added successfully", dto);
-        }
+        //         ApRequestForQtnSupDtlDto dto = rfqService.addSupplierDetail(
+        //                         transactionPoid, request, groupPoid, companyPoid, userId);
+        //         return success("Supplier detail added successfully", dto);
+        // }
 
-        @Operation(summary = "Update Supplier Detail", description = "Updates an existing supplier detail in RFQ.", tags = "RFQ's Supplier Details", responses = {
-                        @ApiResponse(responseCode = "200", description = "Supplier detail updated successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnSupDtlDto.class)))
-        })
-        @PutMapping("/{transactionPoid}/supplier-details/{detRowId}")
-        public ResponseEntity<?> updateSupplierDetail(
-                        @PathVariable Long transactionPoid,
-                        @PathVariable Long detRowId,
-                        @Valid @RequestBody CreateApRequestForQtnSupDtlRequest request,
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+        // DEPRECATED: Use PUT /api/ap/request-for-quotations/{transactionPoid} with action field in supplierDetails
+        // @Operation(summary = "Update Supplier Detail", description = "Updates an existing supplier detail in RFQ.", tags = "RFQ's Supplier Details", responses = {
+        //                 @ApiResponse(responseCode = "200", description = "Supplier detail updated successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnSupDtlDto.class)))
+        // })
+        // @PutMapping("/{transactionPoid}/supplier-details/{detRowId}")
+        // public ResponseEntity<?> updateSupplierDetail(
+        //                 @PathVariable Long transactionPoid,
+        //                 @PathVariable Long detRowId,
+        //                 @Valid @RequestBody CreateApRequestForQtnSupDtlRequest request,
+        //                 @RequestHeader("X-Group-Poid") Long groupPoid,
+        //                 @RequestHeader("X-Company-Poid") Long companyPoid,
+        //                 @RequestHeader("X-User-Id") String userId) {
 
-                ApRequestForQtnSupDtlDto dto = rfqService.updateSupplierDetail(
-                                transactionPoid, detRowId, request, groupPoid, companyPoid, userId);
-                return success("Supplier detail updated successfully", dto);
-        }
+        //         ApRequestForQtnSupDtlDto dto = rfqService.updateSupplierDetail(
+        //                         transactionPoid, detRowId, request, groupPoid, companyPoid, userId);
+        //         return success("Supplier detail updated successfully", dto);
+        // }
 
-        @Operation(summary = "Delete Supplier Detail", description = "Deletes an existing supplier detail in RFQ.", tags = "RFQ's Supplier Details", responses = {
-                        @ApiResponse(responseCode = "200", description = "Supplier detail deleted successfully")
-        })
-        @DeleteMapping("/{transactionPoid}/supplier-details/{detRowId}")
-        public ResponseEntity<?> deleteSupplierDetail(
-                        @PathVariable Long transactionPoid,
-                        @PathVariable Long detRowId,
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+        // DEPRECATED: Use PUT /api/ap/request-for-quotations/{transactionPoid} with action="isDeleted" in supplierDetails
+        // @Operation(summary = "Delete Supplier Detail", description = "Deletes an existing supplier detail in RFQ.", tags = "RFQ's Supplier Details", responses = {
+        //                 @ApiResponse(responseCode = "200", description = "Supplier detail deleted successfully")
+        // })
+        // @DeleteMapping("/{transactionPoid}/supplier-details/{detRowId}")
+        // public ResponseEntity<?> deleteSupplierDetail(
+        //                 @PathVariable Long transactionPoid,
+        //                 @PathVariable Long detRowId,
+        //                 @RequestHeader("X-Group-Poid") Long groupPoid,
+        //                 @RequestHeader("X-Company-Poid") Long companyPoid) {
 
-                rfqService.deleteSupplierDetail(transactionPoid, detRowId, groupPoid, companyPoid);
-                return success("Supplier detail deleted successfully", null);
-        }
+        //         rfqService.deleteSupplierDetail(transactionPoid, detRowId, groupPoid, companyPoid);
+        //         return success("Supplier detail deleted successfully", null);
+        // }
 
         @Operation(summary = "Get Supplier Details", description = "Returns a list of supplier details for a specific RFQ.", tags = "RFQ's Supplier Details", responses = {
                         @ApiResponse(responseCode = "200", description = "Supplier details fetched successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnSupDtlDto.class)))

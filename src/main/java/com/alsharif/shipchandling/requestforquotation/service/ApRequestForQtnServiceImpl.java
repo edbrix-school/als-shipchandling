@@ -114,20 +114,13 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         ApRequestForQtnHdr savedRfq = rfqHdrRepository.saveAndFlush(rfq);
         log.info("RFQ Header saved with Transaction POID: {}", savedRfq.getTransactionPoid());
 
-        // Save item details
-        /*
-         * if (request.getItemDetails() != null && !request.getItemDetails().isEmpty())
-         * {
-         * saveItemDetails(savedRfq.getTransactionPoid(), request.getItemDetails(),
-         * normalizedUserId,
-         * groupPoid, companyPoid);
-         * }
-         */
+        // Process item details based on action field
+        processItemDetailsWithAction(savedRfq.getTransactionPoid(), request.getItemDetails(),
+                normalizedUserId, groupPoid, companyPoid, true);
 
-        // Save supplier details
-        if (request.getSupplierDetails() != null && !request.getSupplierDetails().isEmpty()) {
-            saveSupplierDetails(savedRfq.getTransactionPoid(), request.getSupplierDetails(), normalizedUserId);
-        }
+        // Process supplier details based on action field
+        processSupplierDetailsWithAction(savedRfq.getTransactionPoid(), request.getSupplierDetails(),
+                normalizedUserId, true);
 
         // Call stored procedure AFTER SAVE -
         callItemsWithoutSupplierProcedure(groupPoid, companyPoid, normalizedUserId, savedRfq.getTransactionPoid());
@@ -244,19 +237,16 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         rfq.setLastmodifiedBy(normalizedUserId);
         rfq.setLastmodifiedDate(new Timestamp(System.currentTimeMillis()));
 
-        /*
-         * // Update detail tables
-         * updateItemDetails(transactionPoid, request.getItemDetails(), groupPoid,
-         * companyPoid, userId);
-         * 
-         * updateSupplierDetails(transactionPoid, request.getSupplierDetails(), userId);
-         * 
-         * // Save
-         * ApRequestForQtnHdr savedRfq = rfqHdrRepository.save(rfq);
-         */
-
         // Save header first
         ApRequestForQtnHdr savedRfq = rfqHdrRepository.save(rfq);
+
+        // Process item details based on action field
+        processItemDetailsWithAction(transactionPoid, request.getItemDetails(),
+                normalizedUserId, groupPoid, companyPoid, false);
+
+        // Process supplier details based on action field
+        processSupplierDetailsWithAction(transactionPoid, request.getSupplierDetails(),
+                normalizedUserId, false);
 
         // Call stored procedure AFTER SAVE
         callItemsWithoutSupplierProcedure(groupPoid, companyPoid, normalizedUserId, transactionPoid);
@@ -616,6 +606,363 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         if (details != null && !details.isEmpty()) {
             saveSupplierDetails(transactionPoid, details, userId);
         }
+    }
+
+    /**
+     * Process item details based on action field (isCreated, isUpdated, isDeleted, noChange)
+     */
+    private void processItemDetailsWithAction(Long transactionPoid,
+            List<CreateApRequestForQtnItemDtlRequest> itemDetails,
+            String userId,
+            Long groupPoid,
+            Long companyPoid,
+            boolean isCreateOperation) {
+        if (itemDetails == null || itemDetails.isEmpty()) {
+            return;
+        }
+
+        // Validate RFQ exists and is not closed (for update operations)
+        if (!isCreateOperation) {
+            ApRequestForQtnHdr rfq = rfqHdrRepository
+                    .findByTransactionPoid(transactionPoid)
+                    .orElseThrow(() -> new ResourceNotFoundException("RFQ", "transactionPoid", transactionPoid));
+            if ("CLOSED".equalsIgnoreCase(rfq.getStatus())) {
+                throw new CustomException("Cannot modify items. RFQ is in closed status");
+            }
+        }
+
+        Long maxDetRowId = rfqItemDtlRepository.findMaxDetRowIdByTransactionPoid(transactionPoid);
+        Long nextDetRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
+
+        for (CreateApRequestForQtnItemDtlRequest detail : itemDetails) {
+            String action = detail.getAction();
+            if (action == null || action.trim().isEmpty()) {
+                // Default action based on operation type
+                // NOTE: isCreated is disabled for itemDetails, so default to noChange
+                action = "noChange";
+            } else {
+                action = action.trim();
+            }
+
+            // Validate action value - reject disabled actions
+            if ("isCreated".equalsIgnoreCase(action) || "isDeleted".equalsIgnoreCase(action)) {
+                throw new CustomException("Action '" + action + "' is currently disabled for itemDetails. Only 'isUpdated' and 'noChange' are supported.");
+            }
+
+            // Validate action value
+            if (!isValidAction(action)) {
+                throw new CustomException("Invalid action value: " + action + ". Valid values are: isUpdated, noChange");
+            }
+
+            // For create operation, skip itemDetails processing (isCreated is disabled)
+            if (isCreateOperation) {
+                continue;
+            }
+
+            switch (action.toLowerCase()) {
+                // COMMENTED OUT: isCreated action for itemDetails is temporarily disabled
+                // case "iscreated":
+                //     // Validate detRowId is null for new items
+                //     if (detail.getDetRowId() != null) {
+                //         throw new CustomException("detRowId must be null for isCreated action");
+                //     }
+                //     validateItemDetail(detail);
+                //     createItemDetail(transactionPoid, detail, userId, groupPoid, companyPoid, nextDetRowId++);
+                //     break;
+
+                case "isupdated":
+                    // Validate detRowId is provided
+                    if (detail.getDetRowId() == null) {
+                        throw new CustomException("detRowId is required for isUpdated action");
+                    }
+                    validateItemDetail(detail);
+                    updateItemDetailByAction(transactionPoid, detail, userId, groupPoid, companyPoid);
+                    break;
+
+                // COMMENTED OUT: isDeleted action for itemDetails is temporarily disabled
+                // case "isdeleted":
+                //     // Validate detRowId is provided
+                //     if (detail.getDetRowId() == null) {
+                //         throw new CustomException("detRowId is required for isDeleted action");
+                //     }
+                //     deleteItemDetailByAction(transactionPoid, detail.getDetRowId(), groupPoid, companyPoid);
+                //     break;
+
+                case "nochange":
+                    // Skip processing
+                    break;
+
+                default:
+                    // Check if it's a disabled action
+                    if ("iscreated".equalsIgnoreCase(action) || "isdeleted".equalsIgnoreCase(action)) {
+                        throw new CustomException("Action '" + action + "' is currently disabled for itemDetails. Only 'isUpdated' and 'noChange' are supported.");
+                    }
+                    throw new CustomException("Unsupported action: " + action);
+            }
+        }
+    }
+
+    /**
+     * Process supplier details based on action field (isCreated, isUpdated, isDeleted, noChange)
+     */
+    private void processSupplierDetailsWithAction(Long transactionPoid,
+            List<CreateApRequestForQtnSupDtlRequest> supplierDetails,
+            String userId,
+            boolean isCreateOperation) {
+        if (supplierDetails == null || supplierDetails.isEmpty()) {
+            return;
+        }
+
+        // Validate RFQ exists and is not closed (for update operations)
+        if (!isCreateOperation) {
+            ApRequestForQtnHdr rfq = rfqHdrRepository
+                    .findByTransactionPoid(transactionPoid)
+                    .orElseThrow(() -> new ResourceNotFoundException("RFQ", "transactionPoid", transactionPoid));
+            if ("CLOSED".equalsIgnoreCase(rfq.getStatus())) {
+                throw new CustomException("Cannot modify suppliers. RFQ is in closed status");
+            }
+        }
+
+        Long maxDetRowId = rfqSupDtlRepository.findMaxDetRowIdByTransactionPoid(transactionPoid);
+        Long nextDetRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
+
+        for (CreateApRequestForQtnSupDtlRequest detail : supplierDetails) {
+            String action = detail.getAction();
+            if (action == null || action.trim().isEmpty()) {
+                // Default action based on operation type
+                action = isCreateOperation ? "isCreated" : "noChange";
+            } else {
+                action = action.trim();
+            }
+
+            // Validate action value
+            if (!isValidAction(action)) {
+                throw new CustomException("Invalid action value: " + action + ". Valid values are: isCreated, isUpdated, isDeleted, noChange");
+            }
+
+            // For create operation, only process isCreated items
+            if (isCreateOperation && !"isCreated".equalsIgnoreCase(action)) {
+                continue;
+            }
+
+            switch (action.toLowerCase()) {
+                case "iscreated":
+                    // Validate detRowId is null for new items
+                    if (detail.getDetRowId() != null) {
+                        throw new CustomException("detRowId must be null for isCreated action");
+                    }
+                    if (detail.getSupplierPoid() == null && !hasText(detail.getRemarks())) {
+                        throw new CustomException("Supplier or remarks must be provided when adding supplier detail");
+                    }
+                    createSupplierDetail(transactionPoid, detail, userId, nextDetRowId++);
+                    break;
+
+                case "isupdated":
+                    // Validate detRowId is provided
+                    if (detail.getDetRowId() == null) {
+                        throw new CustomException("detRowId is required for isUpdated action");
+                    }
+                    if (detail.getSupplierPoid() == null && !hasText(detail.getRemarks())) {
+                        throw new CustomException("Supplier or remarks must be provided when updating supplier detail");
+                    }
+                    updateSupplierDetailByAction(transactionPoid, detail, userId);
+                    break;
+
+                case "isdeleted":
+                    // Validate detRowId is provided
+                    if (detail.getDetRowId() == null) {
+                        throw new CustomException("detRowId is required for isDeleted action");
+                    }
+                    deleteSupplierDetailByAction(transactionPoid, detail.getDetRowId());
+                    break;
+
+                case "nochange":
+                    // Skip processing
+                    break;
+
+                default:
+                    throw new CustomException("Unsupported action: " + action);
+            }
+        }
+    }
+
+    /**
+     * Validate action value
+     */
+    private boolean isValidAction(String action) {
+        if (action == null) {
+            return false;
+        }
+        String normalized = action.trim().toLowerCase();
+        return "iscreated".equals(normalized) || "isupdated".equals(normalized) 
+                || "isdeleted".equals(normalized) || "nochange".equals(normalized);
+    }
+
+    /**
+     * Create a new item detail
+     */
+    private void createItemDetail(Long transactionPoid, CreateApRequestForQtnItemDtlRequest request,
+            String userId, Long groupPoid, Long companyPoid, Long detRowId) {
+        ApRequestForQtnItemDtl itemDtl = new ApRequestForQtnItemDtl();
+        itemDtl.setTransactionPoid(transactionPoid);
+        itemDtl.setDetRowId(detRowId);
+        itemDtl.setStockPoid(request.getStockPoid());
+        itemDtl.setQty(request.getQty());
+        itemDtl.setPrice(request.getPrice());
+
+        Long stockUnitPoid = request.getStockUnitPoid();
+        if (stockUnitPoid == null) {
+            stockUnitPoid = getDefaultUnitFromProcedure(request.getStockPoid());
+            if (stockUnitPoid == null) {
+                throw new CustomException(
+                        "Unable to determine default stock unit for stock POID: " + request.getStockPoid());
+            }
+        }
+        itemDtl.setStockUnitPoid(stockUnitPoid);
+        itemDtl.setSupplierPoid(request.getSupplierPoid());
+
+        // Get last price if stock, unit, and supplier are all set
+        if (request.getSupplierPoid() != null) {
+            BigDecimal lastPrice = getLastPriceFromProcedure(request.getStockPoid(), stockUnitPoid,
+                    request.getSupplierPoid(), groupPoid, companyPoid, userId);
+            if (lastPrice != null) {
+                itemDtl.setLastRate(lastPrice);
+            }
+        }
+
+        populateTaxDetails(itemDtl, request.getTaxPoid(), request.getQty(), request.getPrice());
+        itemDtl.setRemarks(request.getRemarks());
+        itemDtl.setCreatedBy(userId);
+        itemDtl.setLastmodifiedBy(userId);
+
+        rfqItemDtlRepository.save(itemDtl);
+    }
+
+    /**
+     * Update an existing item detail by action
+     */
+    private void updateItemDetailByAction(Long transactionPoid, CreateApRequestForQtnItemDtlRequest request,
+            String userId, Long groupPoid, Long companyPoid) {
+        // Find existing item detail
+        ApRequestForQtnItemDtl itemDtl = rfqItemDtlRepository
+                .findById(new ApRequestForQtnItemDtlId(transactionPoid, request.getDetRowId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Item Detail", "detRowId", request.getDetRowId()));
+
+        // Check conditional read-only: If RefPoid > 0, some fields become read-only
+        if (itemDtl.getRefPoid() != null && !itemDtl.getRefPoid().isEmpty() &&
+                Long.parseLong(itemDtl.getRefPoid()) > 0) {
+            // StockPoid, StockUnitPoid, SupplierPoid become read-only
+            if (!request.getStockPoid().equals(itemDtl.getStockPoid()) ||
+                    !request.getStockUnitPoid().equals(itemDtl.getStockUnitPoid()) ||
+                    (request.getSupplierPoid() != null
+                            && !request.getSupplierPoid().equals(itemDtl.getSupplierPoid()))) {
+                throw new CustomException(
+                        "Cannot modify stock, unit, or supplier. Item is linked to another document.");
+            }
+        }
+
+        // Check if RefDocId contains "400" (Purchase Order) - Price becomes read-only
+        if (itemDtl.getRefDocId() != null && itemDtl.getRefDocId().contains("400")) {
+            if (request.getPrice() != null && !request.getPrice().equals(itemDtl.getPrice())) {
+                throw new CustomException("Cannot modify price. Item is linked to Purchase Order.");
+            }
+        }
+
+        // Update fields
+        itemDtl.setStockPoid(request.getStockPoid());
+        Long stockUnitPoid = request.getStockUnitPoid();
+        if (stockUnitPoid == null) {
+            stockUnitPoid = getDefaultUnitFromProcedure(request.getStockPoid());
+            if (stockUnitPoid == null) {
+                throw new CustomException(
+                        "Unable to determine default stock unit for stock POID: " + request.getStockPoid());
+            }
+        }
+        itemDtl.setStockUnitPoid(stockUnitPoid);
+        itemDtl.setQty(request.getQty());
+        if (itemDtl.getRefDocId() == null || !itemDtl.getRefDocId().contains("400")) {
+            itemDtl.setPrice(request.getPrice());
+        }
+        itemDtl.setSupplierPoid(request.getSupplierPoid());
+        itemDtl.setRemarks(request.getRemarks());
+
+        // Update last price if stock, unit, and supplier are all set
+        if (request.getSupplierPoid() != null) {
+            BigDecimal lastPrice = getLastPriceFromProcedure(request.getStockPoid(), stockUnitPoid,
+                    request.getSupplierPoid(), groupPoid, companyPoid, userId);
+            if (lastPrice != null) {
+                itemDtl.setLastRate(lastPrice);
+            }
+        }
+
+        populateTaxDetails(itemDtl, request.getTaxPoid(), itemDtl.getQty(), itemDtl.getPrice());
+        itemDtl.setLastmodifiedBy(userId);
+
+        rfqItemDtlRepository.save(itemDtl);
+    }
+
+    /**
+     * Delete an existing item detail by action
+     */
+    private void deleteItemDetailByAction(Long transactionPoid, Long detRowId, Long groupPoid, Long companyPoid) {
+        ApRequestForQtnItemDtl itemDtl = rfqItemDtlRepository
+                .findById(new ApRequestForQtnItemDtlId(transactionPoid, detRowId))
+                .orElseThrow(() -> new ResourceNotFoundException("Item Detail", "detRowId", detRowId));
+
+        if (itemDtl.getRefPoid() != null && !itemDtl.getRefPoid().isEmpty() &&
+                Long.parseLong(itemDtl.getRefPoid()) > 0) {
+            throw new CustomException("Cannot delete item detail. It is linked to another document.");
+        }
+        if (itemDtl.getRefDocId() != null && itemDtl.getRefDocId().contains("400")) {
+            throw new CustomException("Cannot delete item detail linked to Purchase Order.");
+        }
+
+        rfqItemDtlRepository.delete(itemDtl);
+    }
+
+    /**
+     * Create a new supplier detail
+     */
+    private void createSupplierDetail(Long transactionPoid, CreateApRequestForQtnSupDtlRequest request,
+            String userId, Long detRowId) {
+        ApRequestForQtnSupDtl supDtl = new ApRequestForQtnSupDtl();
+        supDtl.setTransactionPoid(transactionPoid);
+        supDtl.setDetRowId(detRowId);
+        supDtl.setSupplierPoid(request.getSupplierPoid());
+        supDtl.setRemarks(hasText(request.getRemarks()) ? request.getRemarks().trim() : null);
+        supDtl.setCreatedBy(userId);
+        supDtl.setLastmodifiedBy(userId);
+
+        rfqSupDtlRepository.save(supDtl);
+    }
+
+    /**
+     * Update an existing supplier detail by action
+     */
+    private void updateSupplierDetailByAction(Long transactionPoid, CreateApRequestForQtnSupDtlRequest request,
+            String userId) {
+        // Find existing supplier detail
+        ApRequestForQtnSupDtl supDtl = rfqSupDtlRepository
+                .findById(new ApRequestForQtnSupDtlId(transactionPoid, request.getDetRowId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Supplier Detail", "detRowId", request.getDetRowId()));
+
+        // Update fields
+        supDtl.setSupplierPoid(request.getSupplierPoid());
+        supDtl.setRemarks(hasText(request.getRemarks()) ? request.getRemarks().trim() : null);
+        supDtl.setLastmodifiedBy(userId);
+
+        rfqSupDtlRepository.save(supDtl);
+    }
+
+    /**
+     * Delete an existing supplier detail by action
+     */
+    private void deleteSupplierDetailByAction(Long transactionPoid, Long detRowId) {
+        ApRequestForQtnSupDtl supDtl = rfqSupDtlRepository
+                .findById(new ApRequestForQtnSupDtlId(transactionPoid, detRowId))
+                .orElseThrow(() -> new ResourceNotFoundException("Supplier Detail", "detRowId", detRowId));
+
+        rfqSupDtlRepository.delete(supDtl);
     }
 
     private void validateItemDetail(CreateApRequestForQtnItemDtlRequest detail) {
