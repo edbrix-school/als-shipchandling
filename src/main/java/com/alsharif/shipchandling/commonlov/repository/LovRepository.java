@@ -20,21 +20,17 @@ import java.util.List;
 public class LovRepository {
     @Autowired
     private JdbcTemplate jdbcTemplate;
-    public LovResponse getLovList(String lovName, Long docKeyPoid, String filterValue) {
+    public LovResponse getLovList(String lovName, Long docKeyPoid, String filterValue, String filterField) {
         try {
             final String sql = "BEGIN PROC_LOV_GETLIST(?,?,?,?,?,?,?); END;";
-            log.info("Executing PROC_LOV_GETLIST for lovName={} docKeyPoid={} filterValue={}", lovName, docKeyPoid, filterValue);
+            log.info("Executing PROC_LOV_GETLIST for lovName={} docKeyPoid={} filterValue={} filterField={}", lovName, docKeyPoid, filterValue, filterField);
             return jdbcTemplate.execute((Connection con) -> {
                 try (CallableStatement cs = con.prepareCall(sql)) {
                     cs.setLong(1, 1);
                     cs.setLong(2, 1);
                     cs.setLong(3, 1);
                     cs.setString(4, lovName);
-                    if (docKeyPoid != null) {
-                        cs.setString(5, "");
-                    } else {
-                        cs.setObject(5, null);
-                    }
+                    cs.setString(5, filterField != null ? filterField : "");
                     cs.setString(6, filterValue != null ? filterValue : "");
                     cs.registerOutParameter(7, OracleTypes.CURSOR);
                     cs.execute();

@@ -31,8 +31,10 @@ public class LovController {
 
             @Parameter(description = "Document context POID (may be TransactionPoid for RFQ)") @RequestParam(value = "docKeyPoid", required = false) Long docKeyPoid,
 
-            @Parameter(description = "Additional filter value") @RequestParam(value = "filterValue", required = false) String filterValue) {
-        LovResponse lovResponse = lovService.getLovList(lovName, docKeyPoid, filterValue);
+            @Parameter(description = "Additional filter value") @RequestParam(value = "filterValue", required = false) String filterValue,
+
+            @Parameter(description = "Additional filter field") @RequestParam(value = "filterField", required = false) String filterField) {
+        LovResponse lovResponse = lovService.getLovList(lovName, docKeyPoid, filterValue, filterField);
         return success("Task fetched successfully", lovResponse);
 
     }
