@@ -1,5 +1,6 @@
 package com.alsharif.shipchandling.requestforquotation.service;
 
+import com.alsharif.shipchandling.commonlov.dto.LovItem;
 import com.alsharif.shipchandling.exceptions.CustomException;
 import com.alsharif.shipchandling.exceptions.ResourceNotFoundException;
 import com.alsharif.shipchandling.requestforquotation.dto.ItemWithoutSupplierDto;
@@ -1138,6 +1139,10 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         ApRequestForQtnHdrDto dto = new ApRequestForQtnHdrDto();
         BeanUtils.copyProperties(rfq, dto);
 
+        // Populate LOV details for header
+        dto.setDivisionPoidDetail(getDivisionPoidDetail(rfq.getDivisionPoid()));
+        dto.setSalesQtnPoidDetails(getSalesQtnPoidDetails(rfq.getSalesQtnPoid()));
+
         if (includeDetails) {
             List<ApRequestForQtnItemDtl> itemDetails = rfqItemDtlRepository
                     .findByTransactionPoid(rfq.getTransactionPoid())
@@ -1145,7 +1150,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                     .sorted(Comparator.comparing(ApRequestForQtnItemDtl::getDetRowId))
                     .collect(Collectors.toList());
             dto.setItemDetails(itemDetails.stream()
-                    .map(this::convertItemDtlToDto)
+                    .map(item -> convertItemDtlToDto(item, rfq.getGroupPoid()))
                     .collect(Collectors.toList()));
 
             List<ApRequestForQtnSupDtl> supplierDetails = rfqSupDtlRepository
@@ -1162,14 +1167,39 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     }
 
     private ApRequestForQtnItemDtlDto convertItemDtlToDto(ApRequestForQtnItemDtl itemDtl) {
+        return convertItemDtlToDto(itemDtl, null);
+    }
+
+    private ApRequestForQtnItemDtlDto convertItemDtlToDto(ApRequestForQtnItemDtl itemDtl, Long groupPoid) {
         ApRequestForQtnItemDtlDto dto = new ApRequestForQtnItemDtlDto();
         BeanUtils.copyProperties(itemDtl, dto);
+
+        // Populate LOV details for item
+        dto.setStockPoidDetails(getStockPoidDetails(itemDtl.getStockPoid()));
+        dto.setStockUnitDetails(getStockUnitDetails(itemDtl.getStockUnitPoid()));
+        dto.setTaxPoidDetails(getTaxPoidDetails(itemDtl.getTaxPoid()));
+        
+        // For supplier in item details, use the special method that checks transaction and excludes cash/cheque suppliers
+        if (groupPoid != null) {
+            dto.setSupplierPoidDetails(getSupplierPoidDetailsForItem(
+                    itemDtl.getSupplierPoid(), 
+                    itemDtl.getTransactionPoid(), 
+                    groupPoid));
+        } else {
+            // Fallback: use simple supplier lookup if groupPoid is not available
+            dto.setSupplierPoidDetails(getSupplierPoidDetailsForSupplier(itemDtl.getSupplierPoid()));
+        }
+
         return dto;
     }
 
     private ApRequestForQtnSupDtlDto convertSupDtlToDto(ApRequestForQtnSupDtl supDtl) {
         ApRequestForQtnSupDtlDto dto = new ApRequestForQtnSupDtlDto();
         BeanUtils.copyProperties(supDtl, dto);
+
+        // Populate LOV details for supplier
+        dto.setSupplierPoidDetails(getSupplierPoidDetailsForSupplier(supDtl.getSupplierPoid()));
+
         return dto;
     }
 
@@ -1240,7 +1270,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         itemDtl.setLastmodifiedBy(normalizedUserId);
 
         ApRequestForQtnItemDtl savedItemDtl = rfqItemDtlRepository.save(itemDtl);
-        return convertItemDtlToDto(savedItemDtl);
+        return convertItemDtlToDto(savedItemDtl, groupPoid);
     }
 
     @Override
@@ -1327,7 +1357,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         itemDtl.setLastmodifiedBy(normalizedUserId);
 
         ApRequestForQtnItemDtl savedItemDtl = rfqItemDtlRepository.save(itemDtl);
-        return convertItemDtlToDto(savedItemDtl);
+        return convertItemDtlToDto(savedItemDtl, groupPoid);
     }
 
     @Override
@@ -1381,7 +1411,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                 .sorted(Comparator.comparing(ApRequestForQtnItemDtl::getDetRowId))
                 .collect(Collectors.toList());
         return itemDetails.stream()
-                .map(this::convertItemDtlToDto)
+                .map(item -> convertItemDtlToDto(item, groupPoid))
                 .collect(Collectors.toList());
     }
 
@@ -1967,6 +1997,262 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         } catch (SQLException ex) {
             log.error("Failed to execute stored procedure PROC_AP_RFQ_SET_DFLT_DTL for stock {}", stockPoid, ex);
             throw new CustomException("Database error while fetching default stock unit: " + ex.getMessage());
+        }
+    }
+
+    // LOV Fetching Methods
+    private LovItem getDivisionPoidDetail(Long divisionPoid) {
+        if (divisionPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping division LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT DIVISION_POID AS POID, DIVISION_CODE AS CODE, DIVISION_NAME AS DESCRIPTION " +
+                "FROM GLOBAL_DIVISION_MASTER WHERE DIVISION_POID = ?";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, divisionPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch division LOV for divisionPoid {}", divisionPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getSalesQtnPoidDetails(Long salesQtnPoid) {
+        if (salesQtnPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping sales quotation LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT SQH.TRANSACTION_POID AS POID, " +
+                "SQH.DOC_REF AS CODE, " +
+                "GAM.ADDRESS_NAME AS DESCRIPTION " +
+                "FROM SALES_QUOTATION_HDR SQH " +
+                "INNER JOIN GLOBAL_ADDRESS_DETAILS GAD ON GAD.ADDRESS_POID = SQH.CUSTOMER_POID " +
+                "INNER JOIN GLOBAL_ADDRESS_MASTER GAM ON GAM.ADDRESS_MASTER_POID = GAD.ADDRESS_MASTER_POID " +
+                "WHERE SQH.TRANSACTION_POID = ?";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, salesQtnPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch sales quotation LOV for salesQtnPoid {}", salesQtnPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getStockPoidDetails(Long stockPoid) {
+        if (stockPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping stock LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT STOCK_POID AS POID, STOCK_CODE AS CODE, STOCK_NAME AS DESCRIPTION " +
+                "FROM STOCK_MASTER WHERE STOCK_POID = ?";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, stockPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch stock LOV for stockPoid {}", stockPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getStockUnitDetails(Long stockUnitPoid) {
+        if (stockUnitPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping stock unit LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT STOCK_UNIT_POID AS POID, STOCK_UNIT_CODE AS CODE, STOCK_UNIT_CODE AS DESCRIPTION " +
+                "FROM STOCK_UNIT_MASTER WHERE STOCK_UNIT_POID = ?";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, stockUnitPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch stock unit LOV for stockUnitPoid {}", stockUnitPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getSupplierPoidDetailsForItem(Long supplierPoid, Long transactionPoid, Long groupPoid) {
+        if (supplierPoid == null || transactionPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping supplier LOV fetch for item");
+            return null;
+        }
+
+        try (Connection connection = dataSource.getConnection()) {
+            // First, get Cash and Cheque supplier POIDs
+            String paramSql = "SELECT RTN_GLOBAL_PARAMETER(1, 'Cash Suppliers', 'GROUP', '1', NULL) AS CASH_SUPPLIER, " +
+                    "RTN_GLOBAL_PARAMETER(1, 'Cheque Suppliers', 'GROUP', '1', NULL) AS CHEQUE_SUPPLIER FROM DUAL";
+            Long cashSupplier = null;
+            Long chequeSupplier = null;
+
+            try (PreparedStatement paramStatement = connection.prepareStatement(paramSql);
+                    ResultSet paramRs = paramStatement.executeQuery()) {
+                if (paramRs.next()) {
+                    Object cashObj = paramRs.getObject("CASH_SUPPLIER");
+                    Object chequeObj = paramRs.getObject("CHEQUE_SUPPLIER");
+                    if (cashObj != null) {
+                        cashSupplier = paramRs.getLong("CASH_SUPPLIER");
+                    }
+                    if (chequeObj != null) {
+                        chequeSupplier = paramRs.getLong("CHEQUE_SUPPLIER");
+                    }
+                }
+            }
+
+            // Check if supplier is cash or cheque supplier - if so, return null
+            if ((cashSupplier != null && supplierPoid.equals(cashSupplier)) ||
+                    (chequeSupplier != null && supplierPoid.equals(chequeSupplier))) {
+                return null;
+            }
+
+            final String sql = "SELECT DISTINCT ASM.SUPPLIER_POID AS POID, " +
+                    "ASM.SUPPLIER_CODE AS CODE, " +
+                    "ASM.SUPPLIER_NAME AS DESCRIPTION " +
+                    "FROM AP_REQUEST_FOR_QTN_ITEM_DTL RFQI " +
+                    "INNER JOIN AP_REQUEST_FOR_QTN_HDR RFQH ON RFQH.TRANSACTION_POID = RFQI.TRANSACTION_POID " +
+                    "INNER JOIN AP_SUPPLIER_MASTER ASM ON ASM.SUPPLIER_POID = RFQI.SUPPLIER_POID " +
+                    "WHERE RFQI.TRANSACTION_POID = ? AND RFQI.SUPPLIER_POID = ? " +
+                    "AND RFQH.STATUS != 'CLOSED' " +
+                    "AND RFQI.SUPPLIER_POID != NVL(?, -1) " +
+                    "AND RFQI.SUPPLIER_POID != NVL(?, -1)";
+
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setLong(1, transactionPoid);
+                statement.setLong(2, supplierPoid);
+                statement.setObject(3, cashSupplier);
+                statement.setObject(4, chequeSupplier);
+                try (ResultSet rs = statement.executeQuery()) {
+                    if (rs.next()) {
+                        Long poid = rs.getLong("POID");
+                        String code = rs.getString("CODE");
+                        String description = rs.getString("DESCRIPTION");
+                        return new LovItem(poid, code, description);
+                    }
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch supplier LOV for item supplierPoid {} transactionPoid {}", supplierPoid, transactionPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getTaxPoidDetails(Long taxPoid) {
+        if (taxPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping tax LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT TAX_POID AS POID, TAX_CODE AS CODE, TAX_NAME AS DESCRIPTION " +
+                "FROM GLOBAL_TAX_MASTER " +
+                "WHERE TAX_POID = ? AND NVL(ACTIVE, 'Y') = 'Y' AND NVL(DELETED, 'N') = 'N' AND TAX_TYPE = 'INPUT_VAT'";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, taxPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch tax LOV for taxPoid {}", taxPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getSupplierPoidDetailsForSupplier(Long supplierPoid) {
+        if (supplierPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping supplier LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT SUPPLIER_POID AS POID, SUPPLIER_CODE AS CODE, SUPPLIER_NAME AS DESCRIPTION " +
+                "FROM AP_SUPPLIER_MASTER " +
+                "WHERE SUPPLIER_POID = ? AND NVL(ACTIVE, 'Y') = 'Y'";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, supplierPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch supplier LOV for supplierPoid {}", supplierPoid, ex);
+            return null;
         }
     }
 }
