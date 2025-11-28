@@ -48,4 +48,23 @@ public class SalesDeliveryNoteHdrDto {
 
     // Detail tables (optional, included when includeDetails = true)
     private List<SalesDeliveryNoteItemDtlDto> itemDetails;
+    
+    // LOV Details (similar to StockMaster)
+    private LovDetailDto customerDetails;
+    private LovDetailDto salesmanDetails;
+    private LovDetailDto lineDetails;
+    private LovDetailDto portDetails;
+    private LovDetailDto vesselDetails;
+    private LovDetailDto printDivisionDetails;
+    private LovDetailDto principalDetails;
+    
+    // Inner class for LOV details
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LovDetailDto {
+        private Long poid;
+        private String code;
+        private String description;
+    }
 }
