@@ -57,6 +57,7 @@ public class ApRequestForQuotationController {
                 displayFields.put("TRANSACTION_DATE", "date");
                 displayFields.put("DOC_REF", "text");
                 displayFields.put("SALES_QTN_REF", "text");
+                displayFields.put("TRANSACTION_POID", "text");
 
                 // Create paginated response with new structure
                 Map<String, Object> response = new HashMap<>();
