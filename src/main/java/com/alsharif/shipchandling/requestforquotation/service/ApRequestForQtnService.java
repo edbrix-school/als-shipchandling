@@ -26,6 +26,11 @@ public interface ApRequestForQtnService {
                                                             java.time.LocalDate fromDate, java.time.LocalDate toDate,
                                                             int page, int size);
     
+    org.springframework.data.domain.Page<com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto> getAllRequestForQuotationsWithFilters(
+                                                            Long groupPoid, Long companyPoid,
+                                                            GetAllRfqFilterRequest filterRequest,
+                                                            int page, int size);
+    
     // Detail Table APIs
     ApRequestForQtnItemDtlDto addItemDetail(Long transactionPoid, CreateApRequestForQtnItemDtlRequest request,
                                              Long groupPoid, Long companyPoid, String userId);

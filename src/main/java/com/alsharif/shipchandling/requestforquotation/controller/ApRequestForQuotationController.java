@@ -2,6 +2,7 @@ package com.alsharif.shipchandling.requestforquotation.controller;
 
 // import com.alsharif.shipchandling.requestforquotation.dto.RfqDependenciesDto;
 import com.alsharif.shipchandling.requestforquotation.dto.request.*;
+import com.alsharif.shipchandling.requestforquotation.dto.request.GetAllRfqFilterRequest;
 import com.alsharif.shipchandling.requestforquotation.dto.response.*;
 import com.alsharif.shipchandling.requestforquotation.service.ApRequestForQtnService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,7 +13,6 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.data.domain.Page;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,6 +29,47 @@ import static com.alsharif.shipchandling.common.ApiResponse.success;
 public class ApRequestForQuotationController {
 
         private final ApRequestForQtnService rfqService;
+
+        @Operation(summary = "Get all RFQs", description = "Returns paginated list of RFQs with optional filters. Supports pagination with page and size parameters.", tags = "RFQ", responses = {
+                        @ApiResponse(responseCode = "200", description = "Task list fetched successfully", content = @Content(schema = @Schema(implementation = Page.class)))
+        })
+        @PostMapping("/search")
+        public ResponseEntity<?> getAllRequestForQuotations(
+                        @RequestHeader("X-Group-Poid") Long groupPoid,
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestBody(required = false) GetAllRfqFilterRequest filterRequest,
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "20") int size) {
+
+                // If filterRequest is null, create a default one
+                if (filterRequest == null) {
+                        filterRequest = new GetAllRfqFilterRequest();
+                        filterRequest.setIsDeleted("N");
+                        filterRequest.setOperator("AND");
+                        filterRequest.setFilters(new java.util.ArrayList<>());
+                }
+
+                org.springframework.data.domain.Page<com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto> rfqPage = rfqService
+                                .getAllRequestForQuotationsWithFilters(groupPoid, companyPoid, filterRequest, page, size);
+
+                // Create displayFields
+                Map<String, String> displayFields = new HashMap<>();
+                displayFields.put("TRANSACTION_DATE", "date");
+                displayFields.put("DOC_REF", "text");
+                displayFields.put("SALES_QTN_REF", "text");
+
+                // Create paginated response with new structure
+                Map<String, Object> response = new HashMap<>();
+                response.put("content", rfqPage.getContent());
+                response.put("pageNumber", rfqPage.getNumber());
+                response.put("displayFields", displayFields);
+                response.put("pageSize", rfqPage.getSize());
+                response.put("totalElements", rfqPage.getTotalElements());
+                response.put("totalPages", rfqPage.getTotalPages());
+                response.put("last", rfqPage.isLast());
+
+                return success("Task list fetched successfully", response);
+        }
 
         @Operation(summary = "Create Request For Quotation", description = "Creates a new RFQ document. DocRef is auto-generated. Calls stored procedure after save.", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully created RFQ", content = @Content(schema = @Schema(implementation = ApRequestForQtnHdrDto.class))),
@@ -50,7 +91,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Get RFQ by ID", description = "Returns a specific RFQ document by its Poid.", tags = "RFQ", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully fetched RFQ", content = @Content(schema = @Schema(implementation = ApRequestForQtnHdrDto.class)))
         })
-        @GetMapping("/{transactionPoid}")
+        @GetMapping("/{transactionPoid:\\d+}")
         public ResponseEntity<?> getRequestForQuotationByPoid(
                         @PathVariable Long transactionPoid,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
@@ -65,7 +106,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Update RFQ", description = "Updates an existing RFQ document by its Poid.", tags = "RFQ", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully updated RFQ", content = @Content(schema = @Schema(implementation = ApRequestForQtnHdrDto.class)))
         })
-        @PutMapping("/{transactionPoid}")
+        @PutMapping("/{transactionPoid:\\d+}")
         public ResponseEntity<?> updateRequestForQuotation(
                         @PathVariable Long transactionPoid,
                         @Valid @RequestBody UpdateApRequestForQtnRequest request,
@@ -90,40 +131,6 @@ public class ApRequestForQuotationController {
         // companyPoid);
         // return success("RFQ deleted successfully", null);
         // }
-
-        @Operation(summary = "Get all RFQs", description = "Returns paginated list of RFQs with optional filters. Supports pagination with page and size parameters.", tags = "RFQ", responses = {
-                        @ApiResponse(responseCode = "200", description = "RFQs fetched successfully", content = @Content(schema = @Schema(implementation = Page.class)))
-        })
-        @GetMapping
-        public ResponseEntity<?> getAllRequestForQuotations(
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestParam(required = false) String status,
-                        @RequestParam(required = false) Long divisionPoid,
-                        @RequestParam(required = false) Long salesQtnPoid,
-                        @RequestParam(required = false) String search,
-                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) java.time.LocalDate fromDate,
-                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) java.time.LocalDate toDate,
-                        @RequestParam(defaultValue = "0") int page,
-                        @RequestParam(defaultValue = "20") int size) {
-
-                org.springframework.data.domain.Page<ApRequestForQtnHdrDto> rfqPage = rfqService
-                                .getAllRequestForQuotations(
-                                                groupPoid, companyPoid, status, divisionPoid, salesQtnPoid, search,
-                                                fromDate, toDate, page, size);
-
-                // Create paginated response
-                Map<String, Object> response = new HashMap<>();
-                response.put("content", rfqPage.getContent());
-                response.put("totalElements", rfqPage.getTotalElements());
-                response.put("totalPages", rfqPage.getTotalPages());
-                response.put("currentPage", rfqPage.getNumber());
-                response.put("pageSize", rfqPage.getSize());
-                response.put("hasNext", rfqPage.hasNext());
-                response.put("hasPrevious", rfqPage.hasPrevious());
-
-                return success("RFQs fetched successfully", response);
-        }
 
         // Detail Table APIs
         // @Operation(summary = "Add Item Detail", description = "Adds a new item detail

@@ -10,14 +10,19 @@ import com.alsharif.shipchandling.requestforquotation.entity.*;
 import com.alsharif.shipchandling.requestforquotation.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
@@ -46,6 +51,9 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
     @Autowired
     private DataSource dataSource;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     // Add DataSource for stored procedure calls
     // private final DataSource dataSource;
@@ -318,6 +326,160 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
         // Convert to DTO page
         return rfqPage.map(r -> convertToDto(r, false));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto> getAllRequestForQuotationsWithFilters(
+            Long groupPoid, Long companyPoid,
+            GetAllRfqFilterRequest filterRequest,
+            int page, int size) {
+
+        // Build dynamic SQL query
+        StringBuilder sqlBuilder = new StringBuilder();
+        sqlBuilder.append("SELECT r.TRANSACTION_POID, r.DOC_REF, r.TRANSACTION_DATE, r.DESCRIPTION, ");
+        sqlBuilder.append("r.STATUS, r.TYPE, r.EXPECTED_DATE, r.REMARKS, r.DESCRIPTION_PRINT_YN, ");
+        sqlBuilder.append("SQH.DOC_REF AS SALES_QTN_REF, r.SALES_INV_DOC_REF, r.DELETED, ");
+        sqlBuilder.append("r.CREATED_DATE, r.LASTMODIFIED_DATE ");
+        sqlBuilder.append("FROM AP_REQUEST_FOR_QTN_HDR r ");
+        sqlBuilder.append("LEFT JOIN SALES_QUOTATION_HDR SQH ON SQH.TRANSACTION_POID = r.SALES_QTN_POID ");
+        sqlBuilder.append("WHERE r.GROUP_POID = :groupPoid AND r.COMPANY_POID = :companyPoid ");
+
+        // Apply isDeleted filter
+        if (filterRequest.getIsDeleted() != null && "N".equalsIgnoreCase(filterRequest.getIsDeleted())) {
+            sqlBuilder.append("AND (r.DELETED IS NULL OR r.DELETED != 'Y') ");
+        } else if (filterRequest.getIsDeleted() != null && "Y".equalsIgnoreCase(filterRequest.getIsDeleted())) {
+            sqlBuilder.append("AND r.DELETED = 'Y' ");
+        }
+
+        // Apply date range filters
+        if (StringUtils.hasText(filterRequest.getFrom())) {
+            sqlBuilder.append("AND TRUNC(r.TRANSACTION_DATE) >= TO_DATE(:fromDate, 'YYYY-MM-DD') ");
+        }
+        if (StringUtils.hasText(filterRequest.getTo())) {
+            sqlBuilder.append("AND TRUNC(r.TRANSACTION_DATE) <= TO_DATE(:toDate, 'YYYY-MM-DD') ");
+        }
+
+        // Build filter conditions
+        List<String> filterConditions = new java.util.ArrayList<>();
+        if (filterRequest.getFilters() != null && !filterRequest.getFilters().isEmpty()) {
+            for (int i = 0; i < filterRequest.getFilters().size(); i++) {
+                GetAllRfqFilterRequest.FilterItem filter = filterRequest.getFilters().get(i);
+                if (StringUtils.hasText(filter.getSearchField()) && StringUtils.hasText(filter.getSearchValue())) {
+                    String columnName = mapSearchFieldToColumn(filter.getSearchField());
+                    filterConditions.add("LOWER(" + columnName + ") LIKE LOWER(:filterValue" + i + ")");
+                }
+            }
+        }
+
+        // Add filter conditions with operator
+        if (!filterConditions.isEmpty()) {
+            String operator = "AND".equalsIgnoreCase(filterRequest.getOperator()) ? " AND " : " OR ";
+            sqlBuilder.append("AND (").append(String.join(operator, filterConditions)).append(") ");
+        }
+
+        sqlBuilder.append("ORDER BY r.TRANSACTION_DATE DESC");
+
+        // Create count query
+        String countSql = "SELECT COUNT(*) FROM (" + sqlBuilder.toString() + ")";
+
+        // Create query
+        Query query = entityManager.createNativeQuery(sqlBuilder.toString());
+        Query countQuery = entityManager.createNativeQuery(countSql);
+
+        // Set parameters
+        query.setParameter("groupPoid", groupPoid);
+        query.setParameter("companyPoid", companyPoid);
+        countQuery.setParameter("groupPoid", groupPoid);
+        countQuery.setParameter("companyPoid", companyPoid);
+
+        if (StringUtils.hasText(filterRequest.getFrom())) {
+            query.setParameter("fromDate", filterRequest.getFrom());
+            countQuery.setParameter("fromDate", filterRequest.getFrom());
+        }
+        if (StringUtils.hasText(filterRequest.getTo())) {
+            query.setParameter("toDate", filterRequest.getTo());
+            countQuery.setParameter("toDate", filterRequest.getTo());
+        }
+
+        // Set filter parameters
+        if (filterRequest.getFilters() != null && !filterRequest.getFilters().isEmpty()) {
+            for (int i = 0; i < filterRequest.getFilters().size(); i++) {
+                GetAllRfqFilterRequest.FilterItem filter = filterRequest.getFilters().get(i);
+                if (StringUtils.hasText(filter.getSearchField()) && StringUtils.hasText(filter.getSearchValue())) {
+                    String paramValue = "%" + filter.getSearchValue() + "%";
+                    query.setParameter("filterValue" + i, paramValue);
+                    countQuery.setParameter("filterValue" + i, paramValue);
+                }
+            }
+        }
+
+        // Get total count
+        Long totalCount = ((Number) countQuery.getSingleResult()).longValue();
+
+        // Apply pagination
+        int offset = page * size;
+        query.setFirstResult(offset);
+        query.setMaxResults(size);
+
+        // Execute query and map results
+        @SuppressWarnings("unchecked")
+        List<Object[]> results = query.getResultList();
+        List<com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto> dtos = results.stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+
+        // Create page
+        Pageable pageable = PageRequest.of(page, size);
+        return new PageImpl<>(dtos, pageable, totalCount);
+    }
+
+    private String mapSearchFieldToColumn(String searchField) {
+        switch (searchField.toUpperCase()) {
+            case "DOC_REF":
+                return "r.DOC_REF";
+            case "TASK_DESCRIPTION":
+                return "r.DESCRIPTION";
+            case "SALES_QTN_REF":
+                return "SQH.DOC_REF";
+            default:
+                return "r." + searchField;
+        }
+    }
+
+    private com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto mapToResponseDto(Object[] row) {
+        com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto dto = 
+            new com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto();
+        
+        dto.setTransactionPoid(row[0] != null ? ((Number) row[0]).longValue() : null);
+        dto.setDocRef(convertToString(row[1]));
+        dto.setTransactionDate((Timestamp) row[2]);
+        dto.setDescription(convertToString(row[3]));
+        dto.setStatus(convertToString(row[4]));
+        dto.setType(convertToString(row[5]));
+        dto.setExpectedDate((Timestamp) row[6]);
+        dto.setRemarks(convertToString(row[7]));
+        dto.setDescriptionPrintYn(convertToString(row[8]));
+        dto.setSalesQtnRef(convertToString(row[9]));
+        dto.setSalesInvDocRef(convertToString(row[10]));
+        dto.setDeleted(convertToString(row[11]));
+        dto.setCreatedDate((Timestamp) row[12]);
+        dto.setLastmodifiedDate((Timestamp) row[13]);
+        
+        return dto;
+    }
+
+    private String convertToString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String) {
+            return (String) value;
+        }
+        if (value instanceof Character) {
+            return String.valueOf((Character) value);
+        }
+        return value.toString();
     }
 
     private void callItemsWithoutSupplierProcedure(Long groupPoid, Long companyPoid, String userId,
