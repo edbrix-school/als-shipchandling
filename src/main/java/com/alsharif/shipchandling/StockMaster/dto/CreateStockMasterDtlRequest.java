@@ -11,4 +11,5 @@ public class CreateStockMasterDtlRequest {
     private Long supplierPoid;
     private String supplierStockCode;
     private String remarks;
+    private String actionType;
 }

@@ -32,15 +32,12 @@ import com.alsharif.shipchandling.exceptions.ResourceNotFoundException;
 
 import org.springframework.transaction.annotation.Transactional;
 
-import oracle.jdbc.OracleTypes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.commons.lang3.StringUtils;
 
-import java.sql.CallableStatement;
-import java.sql.Connection;
-import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.*;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -70,11 +67,8 @@ public class StockMasterServiceImpl implements StockMasterService {
     public StockMasterViewResponse getStockMasterById(Long stockPoid, boolean includeDetails, Long groupPoid) {
 
         StockMasterEntity entity = stockMasterRepository.findById(stockPoid).orElse(null);
-        if (entity == null)
-            return null;
-
-        if ("Y".equalsIgnoreCase(entity.getDeleted())) {
-            return null;
+        if (entity == null) {
+            throw new ResourceNotFoundException("Stock Master", "Stock Poid", stockPoid);
         }
 
         if (groupPoid != null && !groupPoid.equals(entity.getGroupPoid())) {
@@ -207,7 +201,7 @@ public class StockMasterServiceImpl implements StockMasterService {
         spec = spec.and((root, query, cb) -> cb.or(
                 cb.isNull(root.get("deleted")),
                 cb.notEqual(root.get("deleted"), "Y")));
-        
+
         List<StockMasterEntity> allStockItems = stockMasterRepository.findAll(spec);
 
         // Group stock items by categoryPoid
@@ -217,7 +211,7 @@ public class StockMasterServiceImpl implements StockMasterService {
 
         // Fetch all categories for the group
         List<StockCategoryMasterEntity> allCategories = categoryMasterRepository.findByGroupPoid(groupPoid);
-        
+
         // Create a map for quick category lookup
         Map<Long, StockCategoryMasterEntity> categoryMap = allCategories.stream()
                 .collect(Collectors.toMap(StockCategoryMasterEntity::getCategoryPoid, cat -> cat));
@@ -244,7 +238,7 @@ public class StockMasterServiceImpl implements StockMasterService {
             StockCategoryMasterEntity category,
             Map<Long, StockCategoryMasterEntity> categoryMap,
             Map<Long, List<StockMasterEntity>> stockItemsByCategory) {
-        
+
         Map<String, Object> node = new HashMap<>();
         node.put("categoryPoid", category.getCategoryPoid());
         node.put("categoryCode", category.getCategoryCode());
@@ -381,18 +375,17 @@ public class StockMasterServiceImpl implements StockMasterService {
     /**
      * Executes the stored procedure PROC_STOCK_MASTER_BEFORE_SAVE before saving stock master data.
      * This procedure is called to perform validation and business logic checks before the save operation.
-     * 
-     * @param groupPoid The group POID associated with the stock master
+     *
+     * @param groupPoid   The group POID associated with the stock master
      * @param companyPoid The company POID associated with the stock master
-     * @param userId The user ID performing the operation
-     * @param stockPoid The stock master POID (primary key)
+     * @param userId      The user ID performing the operation
+     * @param stockPoid   The stock master POID (primary key)
      * @param serviceItem Indicates if the stock item is a service item ("Y" or "N")
-     * 
      * @throws RuntimeException If the procedure returns "ERROR" or if any SQL/database error occurs.
      *                          This exception will prevent the save operation from proceeding.
      */
     private void callBeforeSaveProcedure(Long groupPoid, Long companyPoid, String userId,
-            Long stockPoid, String serviceItem) {
+                                         Long stockPoid, String serviceItem) {
         // TODO: Implement stored procedure call using CallableStatement
         // String sql = "BEGIN PROC_STOCK_MASTER_BEFORE_SAVE(?,?,?,?,?,?); END;";
         // Check result for "ERROR" and throw BusinessException if found
@@ -438,7 +431,7 @@ public class StockMasterServiceImpl implements StockMasterService {
     @Override
     @Transactional
     public StockMasterDto createStockMaster(CreateStockMasterRequest request, Long groupPoid,
-            Long companyPoid, String userId) {
+                                            Long companyPoid, String userId) {
 
         // --- Validate required parent fields ---
         if (request.getStockName() == null || request.getStockName().isEmpty()) {
@@ -478,49 +471,12 @@ public class StockMasterServiceImpl implements StockMasterService {
 
         // --- Save Supplier Details ---
         if (request.getSupplierDetails() != null && !request.getSupplierDetails().isEmpty()) {
-            Long detRowId = 1L;
-            for (CreateStockMasterDtlRequest dtlRequest : request.getSupplierDetails()) {
-                StockMasterDTLEntity dtl = new StockMasterDTLEntity();
-                dtl.setStockPoid(stockPoid); // must match parent exactly
-                dtl.setDetRowId(detRowId++);
-                dtl.setSupplierPoid(dtlRequest.getSupplierPoid());
-                dtl.setSupplierStockCode(dtlRequest.getSupplierStockCode());
-                dtl.setRemarks(dtlRequest.getRemarks());
-                dtl.setCreatedBy(userId);
-                dtl.setLastmodifiedBy(userId);
-                // System.out.println("Supplier after setting values: " +
-                // "StockPoid=" + dtl.getStockPoid() +
-                // ", DetRowId=" + dtl.getDetRowId() +
-                // ", SupplierPoid=" + dtl.getSupplierPoid() +
-                // ", SupplierStockCode=" + dtl.getSupplierStockCode() +
-                // ", Remarks=" + dtl.getRemarks());
-                dtlRepository.save(dtl);
-            }
-            dtlRepository.flush(); // commit child rows
+            processSupplierDetails(stockPoid, request.getSupplierDetails(), userId);
         }
 
         // --- Save Warehouse Details ---
         if (request.getWarehouseDetails() != null && !request.getWarehouseDetails().isEmpty()) {
-            Long detRowId = 1L;
-            for (CreateStockMasterWarehouseDtlRequest whRequest : request.getWarehouseDetails()) {
-                StockMasterWarehouseDtl wh = new StockMasterWarehouseDtl();
-                wh.setStockPoid(stockPoid);
-                wh.setDetRowId(detRowId++);
-                wh.setTransactionDate(whRequest.getTransactionDate());
-                wh.setLocationPoid(whRequest.getLocationPoid());
-                wh.setAisleNo(whRequest.getAisleNo());
-                wh.setBayNo(whRequest.getBayNo());
-                wh.setShelfNo(whRequest.getShelfNo());
-                wh.setBinNo(whRequest.getBinNo());
-                wh.setReorderLevel(whRequest.getReorderLevel());
-                wh.setReorderQty(whRequest.getReorderQty());
-                wh.setCreatedBy(userId);
-                wh.setLastmodifiedBy(userId);
-                // System.out.println("warehouse after setting values: " +
-                // "StockPoid=" + wh.getStockPoid());
-                warehouseRepository.save(wh);
-            }
-            warehouseRepository.flush();
+            processWarehouseDetails(stockPoid, request.getWarehouseDetails(), userId);
         }
 
         // just call the function
@@ -535,7 +491,7 @@ public class StockMasterServiceImpl implements StockMasterService {
     @Override
     @Transactional
     public StockMasterDto updateStockMaster(Long stockPoid, UpdateStockMasterRequest request,
-            Long groupPoid, Long companyPoid, String userId) {
+                                            Long groupPoid, Long companyPoid, String userId) {
         StockMasterEntity stock = stockMasterRepository
                 .findByStockPoidAndGroupPoid(stockPoid, groupPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Stock Master", "stockPoid", stockPoid));
@@ -558,8 +514,12 @@ public class StockMasterServiceImpl implements StockMasterService {
         callBeforeSaveProcedure(groupPoid, companyPoid, userId, stockPoid, stock.getServiceItem());
 
         // Update detail tables
-        updateSupplierDetails(stockPoid, request.getSupplierDetails(), userId);
-        updateWarehouseDetails(stockPoid, request.getWarehouseDetails(), userId);
+        if (request.getSupplierDetails() != null && !request.getSupplierDetails().isEmpty()) {
+            processSupplierDetails(stockPoid, request.getSupplierDetails(), userId);
+        }
+        if (request.getWarehouseDetails() != null && !request.getWarehouseDetails().isEmpty()) {
+            processWarehouseDetails(stockPoid, request.getWarehouseDetails(), userId);
+        }
 
         // Save
         StockMasterEntity savedStock = stockMasterRepository.save(stock);
@@ -570,68 +530,180 @@ public class StockMasterServiceImpl implements StockMasterService {
         return convertToDto(savedStock, true);
     }
 
-    private void saveSupplierDetails(Long stockPoid, List<CreateStockMasterDtlRequest> details, String userId) {
-        Long detRowId = 1L;
-        for (CreateStockMasterDtlRequest detail : details) {
-            StockMasterDTLEntity dtl = new StockMasterDTLEntity();
-            dtl.setStockPoid(stockPoid);
-            dtl.setDetRowId(detRowId++);
-            dtl.setSupplierPoid(detail.getSupplierPoid());
-            dtl.setSupplierStockCode(detail.getSupplierStockCode());
-            dtl.setRemarks(detail.getRemarks());
-            dtl.setCreatedBy(userId);
-            dtl.setLastmodifiedBy(userId);
-            dtlRepository.save(dtl);
+    private void processSupplierDetails(Long stockPoid, List<CreateStockMasterDtlRequest> details, String userId) {
+        List<StockMasterDTLEntity> entitiesToDelete = new ArrayList<>();
+        List<StockMasterDTLEntity> entitiesToSave = new ArrayList<>();
+
+        for (CreateStockMasterDtlRequest dto : details) {
+            String action = StringUtils.isBlank(dto.getActionType()) ? "" : dto.getActionType().toLowerCase();
+
+            switch (action) {
+                case "isdeleted" -> handleSupplierDeleteAction(stockPoid, dto, entitiesToDelete);
+                case "iscreated", "isupdated" ->
+                        handleSupplierCreateOrUpdateAction(stockPoid, dto, entitiesToSave, userId);
+                default ->
+                        logger.warn("Unknown actionType '{}' for detRowId={}", dto.getActionType(), dto.getSupplierPoid());
+            }
+        }
+
+        if (!entitiesToDelete.isEmpty()) {
+            dtlRepository.deleteAll(entitiesToDelete);
+        }
+        if (!entitiesToSave.isEmpty()) {
+            dtlRepository.saveAll(entitiesToSave);
         }
     }
 
-    private void saveWarehouseDetails(Long stockPoid, List<CreateStockMasterWarehouseDtlRequest> details,
-            String userId) {
-        Long detRowId = 1L;
-        for (CreateStockMasterWarehouseDtlRequest detail : details) {
-            StockMasterWarehouseDtl dtl = new StockMasterWarehouseDtl();
-            dtl.setStockPoid(stockPoid);
-            dtl.setDetRowId(detRowId++);
-            dtl.setTransactionDate(detail.getTransactionDate());
-            dtl.setLocationPoid(detail.getLocationPoid());
-            dtl.setAisleNo(detail.getAisleNo());
-            dtl.setBayNo(detail.getBayNo());
-            dtl.setShelfNo(detail.getShelfNo());
-            dtl.setBinNo(detail.getBinNo());
-            dtl.setReorderLevel(detail.getReorderLevel());
-            dtl.setReorderQty(detail.getReorderQty());
-            dtl.setCreatedBy(userId);
-            dtl.setLastmodifiedBy(userId);
-            warehouseRepository.save(dtl);
+    private void handleSupplierDeleteAction(Long stockPoid, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToDelete) {
+        if (dto.getSupplierPoid() != null) {
+            dtlRepository.findByStockPoid(stockPoid).stream()
+                    .filter(entity -> entity.getSupplierPoid().equals(dto.getSupplierPoid()))
+                    .findFirst()
+                    .ifPresentOrElse(
+                            entitiesToDelete::add,
+                            () -> logger.warn("No StockMasterDTLEntity found for stockPoid={} and supplierPoid={}, skipping delete.",
+                                    stockPoid, dto.getSupplierPoid())
+                    );
+        } else {
+            logger.warn("supplierPoid is null for stockPoid={}, skipping delete.", stockPoid);
         }
     }
 
-    private void updateSupplierDetails(Long stockPoid, List<CreateStockMasterDtlRequest> details, String userId) {
-        // Delete existing
-        dtlRepository.deleteByStockPoid(stockPoid);
-        // Save new
-        if (details != null && !details.isEmpty()) {
-            saveSupplierDetails(stockPoid, details, userId);
+    private void handleSupplierCreateOrUpdateAction(Long stockPoid, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToSave, String userId) {
+        if (dto.getSupplierPoid() != null) {
+            dtlRepository.findByStockPoid(stockPoid).stream()
+                    .filter(entity -> entity.getSupplierPoid().equals(dto.getSupplierPoid()))
+                    .findFirst()
+                    .ifPresentOrElse(
+                            existingEntity -> updateExistingSupplierEntity(existingEntity, dto, entitiesToSave, userId),
+                            () -> createNewSupplierEntity(stockPoid, dto, entitiesToSave, userId)
+                    );
+        } else {
+            createNewSupplierEntity(stockPoid, dto, entitiesToSave, userId);
         }
     }
 
-    private void updateWarehouseDetails(Long stockPoid, List<CreateStockMasterWarehouseDtlRequest> details,
-            String userId) {
-        // Delete existing
-        warehouseRepository.deleteByStockPoid(stockPoid);
-        // Save new
-        if (details != null && !details.isEmpty()) {
-            saveWarehouseDetails(stockPoid, details, userId);
+    private void updateExistingSupplierEntity(StockMasterDTLEntity entity, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToSave, String userId) {
+        entity.setSupplierStockCode(dto.getSupplierStockCode());
+        entity.setRemarks(dto.getRemarks());
+        entity.setLastmodifiedBy(userId);
+        entity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
+        entitiesToSave.add(entity);
+    }
+
+    private void createNewSupplierEntity(Long stockPoid, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToSave, String userId) {
+        Long maxDetRowId = dtlRepository.findMaxDetRowIdByStockPoid(stockPoid);
+        Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
+
+        StockMasterDTLEntity newEntity = new StockMasterDTLEntity();
+        newEntity.setStockPoid(stockPoid);
+        newEntity.setDetRowId(detRowId);
+        newEntity.setSupplierPoid(dto.getSupplierPoid());
+        newEntity.setSupplierStockCode(dto.getSupplierStockCode());
+        newEntity.setRemarks(dto.getRemarks());
+        newEntity.setCreatedBy(userId);
+        newEntity.setCreatedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
+        newEntity.setLastmodifiedBy(userId);
+        newEntity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
+        entitiesToSave.add(newEntity);
+    }
+
+    private void processWarehouseDetails(Long stockPoid, List<CreateStockMasterWarehouseDtlRequest> details, String userId) {
+        List<StockMasterWarehouseDtl> entitiesToDelete = new ArrayList<>();
+        List<StockMasterWarehouseDtl> entitiesToSave = new ArrayList<>();
+
+        for (CreateStockMasterWarehouseDtlRequest dto : details) {
+            String action = StringUtils.isBlank(dto.getActionType()) ? "" : dto.getActionType().toLowerCase();
+
+            switch (action) {
+                case "isdeleted" -> handleWarehouseDeleteAction(stockPoid, dto, entitiesToDelete);
+                case "iscreated", "isupdated" ->
+                        handleWarehouseCreateOrUpdateAction(stockPoid, dto, entitiesToSave, userId);
+                default ->
+                        logger.warn("Unknown actionType '{}' for locationPoid={}", dto.getActionType(), dto.getLocationPoid());
+            }
+        }
+
+        if (!entitiesToDelete.isEmpty()) {
+            warehouseRepository.deleteAll(entitiesToDelete);
+        }
+        if (!entitiesToSave.isEmpty()) {
+            warehouseRepository.saveAll(entitiesToSave);
         }
     }
+
+    private void handleWarehouseDeleteAction(Long stockPoid, CreateStockMasterWarehouseDtlRequest dto, List<StockMasterWarehouseDtl> entitiesToDelete) {
+        if (dto.getLocationPoid() != null) {
+            warehouseRepository.findByStockPoid(stockPoid).stream()
+                    .filter(entity -> entity.getLocationPoid().equals(dto.getLocationPoid()))
+                    .findFirst()
+                    .ifPresentOrElse(
+                            entitiesToDelete::add,
+                            () -> logger.warn("No StockMasterWarehouseDtl found for stockPoid={} and locationPoid={}, skipping delete.",
+                                    stockPoid, dto.getLocationPoid())
+                    );
+        } else {
+            logger.warn("locationPoid is null for stockPoid={}, skipping delete.", stockPoid);
+        }
+    }
+
+    private void handleWarehouseCreateOrUpdateAction(Long stockPoid, CreateStockMasterWarehouseDtlRequest dto, List<StockMasterWarehouseDtl> entitiesToSave, String userId) {
+        if (dto.getLocationPoid() != null) {
+            warehouseRepository.findByStockPoid(stockPoid).stream()
+                    .filter(entity -> entity.getLocationPoid().equals(dto.getLocationPoid()))
+                    .findFirst()
+                    .ifPresentOrElse(
+                            existingEntity -> updateExistingWarehouseEntity(existingEntity, dto, entitiesToSave, userId),
+                            () -> createNewWarehouseEntity(stockPoid, dto, entitiesToSave, userId)
+                    );
+        } else {
+            createNewWarehouseEntity(stockPoid, dto, entitiesToSave, userId);
+        }
+    }
+
+    private void updateExistingWarehouseEntity(StockMasterWarehouseDtl entity, CreateStockMasterWarehouseDtlRequest dto, List<StockMasterWarehouseDtl> entitiesToSave, String userId) {
+        entity.setTransactionDate(dto.getTransactionDate());
+        entity.setAisleNo(dto.getAisleNo());
+        entity.setBayNo(dto.getBayNo());
+        entity.setShelfNo(dto.getShelfNo());
+        entity.setBinNo(dto.getBinNo());
+        entity.setReorderLevel(dto.getReorderLevel());
+        entity.setReorderQty(dto.getReorderQty());
+        entity.setLastmodifiedBy(userId);
+        entity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
+        entitiesToSave.add(entity);
+    }
+
+    private void createNewWarehouseEntity(Long stockPoid, CreateStockMasterWarehouseDtlRequest dto, List<StockMasterWarehouseDtl> entitiesToSave, String userId) {
+        Long maxDetRowId = warehouseRepository.findMaxDetRowIdByStockPoid(stockPoid);
+        Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
+
+        StockMasterWarehouseDtl newEntity = new StockMasterWarehouseDtl();
+        newEntity.setStockPoid(stockPoid);
+        newEntity.setDetRowId(detRowId);
+        newEntity.setTransactionDate(dto.getTransactionDate());
+        newEntity.setLocationPoid(dto.getLocationPoid());
+        newEntity.setAisleNo(dto.getAisleNo());
+        newEntity.setBayNo(dto.getBayNo());
+        newEntity.setShelfNo(dto.getShelfNo());
+        newEntity.setBinNo(dto.getBinNo());
+        newEntity.setReorderLevel(dto.getReorderLevel());
+        newEntity.setReorderQty(dto.getReorderQty());
+        newEntity.setCreatedBy(userId);
+        newEntity.setCreatedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
+        newEntity.setLastmodifiedBy(userId);
+        newEntity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
+        entitiesToSave.add(newEntity);
+    }
+
 
     @Transactional
     @Override
 
     public StockMasterDtlDto addSupplierDetail(Long stockPoid,
-            CreateStockMasterDtlRequest request,
-            Long groupPoid,
-            String userId) {
+                                               CreateStockMasterDtlRequest request,
+                                               Long groupPoid,
+                                               String userId) {
 
         StockMasterEntity stock = stockMasterRepository
                 .findByStockPoidAndGroupPoid(stockPoid, groupPoid)
@@ -671,8 +743,8 @@ public class StockMasterServiceImpl implements StockMasterService {
     @Override
     @Transactional
     public StockMasterDtlDto updateSupplierDetail(Long stockPoid, Long detRowId,
-            CreateStockMasterDtlRequest request,
-            Long groupPoid, String userId) {
+                                                  CreateStockMasterDtlRequest request,
+                                                  Long groupPoid, String userId) {
         // Validate stock exists
         StockMasterEntity stock = stockMasterRepository
                 .findByStockPoidAndGroupPoid(stockPoid, groupPoid)
@@ -734,7 +806,7 @@ public class StockMasterServiceImpl implements StockMasterService {
     @Override
     @Transactional
     public StockMasterWarehouseDtlDto addWarehouseDetail(Long stockPoid, CreateStockMasterWarehouseDtlRequest request,
-            Long groupPoid, String userId) {
+                                                         Long groupPoid, String userId) {
         // Validate stock exists and belongs to group
         StockMasterEntity stock = stockMasterRepository
                 .findByStockPoidAndGroupPoid(stockPoid, groupPoid)
@@ -768,8 +840,8 @@ public class StockMasterServiceImpl implements StockMasterService {
     @Override
     @Transactional
     public StockMasterWarehouseDtlDto updateWarehouseDetail(Long stockPoid, Long detRowId,
-            CreateStockMasterWarehouseDtlRequest request,
-            Long groupPoid, String userId) {
+                                                            CreateStockMasterWarehouseDtlRequest request,
+                                                            Long groupPoid, String userId) {
         // Validate stock exists
         StockMasterEntity stock = stockMasterRepository
                 .findByStockPoidAndGroupPoid(stockPoid, groupPoid)
