@@ -2,6 +2,7 @@ package com.alsharif.shipchandling.requestforquotation.controller;
 
 // import com.alsharif.shipchandling.requestforquotation.dto.RfqDependenciesDto;
 import com.alsharif.shipchandling.requestforquotation.dto.request.*;
+import com.alsharif.shipchandling.requestforquotation.dto.request.GetAllRfqFilterRequest;
 import com.alsharif.shipchandling.requestforquotation.dto.response.*;
 import com.alsharif.shipchandling.requestforquotation.service.ApRequestForQtnService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,10 +13,10 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.data.domain.Page;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,48 @@ import static com.alsharif.shipchandling.common.ApiResponse.success;
 public class ApRequestForQuotationController {
 
         private final ApRequestForQtnService rfqService;
+
+        @Operation(summary = "Get all RFQs", description = "Returns paginated list of RFQs with optional filters. Supports pagination with page and size parameters.", tags = "RFQ", responses = {
+                        @ApiResponse(responseCode = "200", description = "Task list fetched successfully", content = @Content(schema = @Schema(implementation = Page.class)))
+        })
+        @PostMapping("/search")
+        public ResponseEntity<?> getAllRequestForQuotations(
+                        @RequestHeader("X-Group-Poid") Long groupPoid,
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestBody(required = false) GetAllRfqFilterRequest filterRequest,
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "20") int size) {
+
+                // If filterRequest is null, create a default one
+                if (filterRequest == null) {
+                        filterRequest = new GetAllRfqFilterRequest();
+                        filterRequest.setIsDeleted("N");
+                        filterRequest.setOperator("AND");
+                        filterRequest.setFilters(new java.util.ArrayList<>());
+                }
+
+                org.springframework.data.domain.Page<com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto> rfqPage = rfqService
+                                .getAllRequestForQuotationsWithFilters(groupPoid, companyPoid, filterRequest, page, size);
+
+                // Create displayFields
+                Map<String, String> displayFields = new HashMap<>();
+                displayFields.put("TRANSACTION_DATE", "date");
+                displayFields.put("DOC_REF", "text");
+                displayFields.put("SALES_QTN_REF", "text");
+                displayFields.put("TRANSACTION_POID", "text");
+
+                // Create paginated response with new structure
+                Map<String, Object> response = new HashMap<>();
+                response.put("content", rfqPage.getContent());
+                response.put("pageNumber", rfqPage.getNumber());
+                response.put("displayFields", displayFields);
+                response.put("pageSize", rfqPage.getSize());
+                response.put("totalElements", rfqPage.getTotalElements());
+                response.put("totalPages", rfqPage.getTotalPages());
+                response.put("last", rfqPage.isLast());
+
+                return success("Task list fetched successfully", response);
+        }
 
         @Operation(summary = "Create Request For Quotation", description = "Creates a new RFQ document. DocRef is auto-generated. Calls stored procedure after save.", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully created RFQ", content = @Content(schema = @Schema(implementation = ApRequestForQtnHdrDto.class))),
@@ -49,7 +92,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Get RFQ by ID", description = "Returns a specific RFQ document by its Poid.", tags = "RFQ", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully fetched RFQ", content = @Content(schema = @Schema(implementation = ApRequestForQtnHdrDto.class)))
         })
-        @GetMapping("/{transactionPoid}")
+        @GetMapping("/{transactionPoid:\\d+}")
         public ResponseEntity<?> getRequestForQuotationByPoid(
                         @PathVariable Long transactionPoid,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
@@ -64,7 +107,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Update RFQ", description = "Updates an existing RFQ document by its Poid.", tags = "RFQ", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully updated RFQ", content = @Content(schema = @Schema(implementation = ApRequestForQtnHdrDto.class)))
         })
-        @PutMapping("/{transactionPoid}")
+        @PutMapping("/{transactionPoid:\\d+}")
         public ResponseEntity<?> updateRequestForQuotation(
                         @PathVariable Long transactionPoid,
                         @Valid @RequestBody UpdateApRequestForQtnRequest request,
@@ -90,40 +133,6 @@ public class ApRequestForQuotationController {
         // return success("RFQ deleted successfully", null);
         // }
 
-        @Operation(summary = "Get all RFQs", description = "Returns paginated list of RFQs with optional filters. Supports pagination with page and size parameters.", tags = "RFQ", responses = {
-                        @ApiResponse(responseCode = "200", description = "RFQs fetched successfully", content = @Content(schema = @Schema(implementation = Page.class)))
-        })
-        @GetMapping
-        public ResponseEntity<?> getAllRequestForQuotations(
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestParam(required = false) String status,
-                        @RequestParam(required = false) Long divisionPoid,
-                        @RequestParam(required = false) Long salesQtnPoid,
-                        @RequestParam(required = false) String search,
-                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) java.time.LocalDate fromDate,
-                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) java.time.LocalDate toDate,
-                        @RequestParam(defaultValue = "0") int page,
-                        @RequestParam(defaultValue = "20") int size) {
-
-                org.springframework.data.domain.Page<ApRequestForQtnHdrDto> rfqPage = rfqService
-                                .getAllRequestForQuotations(
-                                                groupPoid, companyPoid, status, divisionPoid, salesQtnPoid, search,
-                                                fromDate, toDate, page, size);
-
-                // Create paginated response
-                Map<String, Object> response = new HashMap<>();
-                response.put("content", rfqPage.getContent());
-                response.put("totalElements", rfqPage.getTotalElements());
-                response.put("totalPages", rfqPage.getTotalPages());
-                response.put("currentPage", rfqPage.getNumber());
-                response.put("pageSize", rfqPage.getSize());
-                response.put("hasNext", rfqPage.hasNext());
-                response.put("hasPrevious", rfqPage.hasPrevious());
-
-                return success("RFQs fetched successfully", response);
-        }
-
         // Detail Table APIs
         // @Operation(summary = "Add Item Detail", description = "Adds a new item detail
         // to RFQ. Auto-populates last price and default unit if applicable.", tags =
@@ -141,22 +150,23 @@ public class ApRequestForQuotationController {
         // return success("Item detail added successfully", dto);
         // }
 
-        @Operation(summary = "Update Item Detail", description = "Updates an existing item detail in RFQ.", tags = "RFQ's Item Details", responses = {
-                        @ApiResponse(responseCode = "200", description = "Item detail updated successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnItemDtlDto.class)))
-        })
-        @PutMapping("/{transactionPoid}/item-details/{detRowId}")
-        public ResponseEntity<?> updateItemDetail(
-                        @PathVariable Long transactionPoid,
-                        @PathVariable Long detRowId,
-                        @Valid @RequestBody CreateApRequestForQtnItemDtlRequest request,
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+        // DEPRECATED: Use PUT /api/ap/request-for-quotations/{transactionPoid} with action field in itemDetails
+        // @Operation(summary = "Update Item Detail", description = "Updates an existing item detail in RFQ.", tags = "RFQ's Item Details", responses = {
+        //                 @ApiResponse(responseCode = "200", description = "Item detail updated successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnItemDtlDto.class)))
+        // })
+        // @PutMapping("/{transactionPoid}/item-details/{detRowId}")
+        // public ResponseEntity<?> updateItemDetail(
+        //                 @PathVariable Long transactionPoid,
+        //                 @PathVariable Long detRowId,
+        //                 @Valid @RequestBody CreateApRequestForQtnItemDtlRequest request,
+        //                 @RequestHeader("X-Group-Poid") Long groupPoid,
+        //                 @RequestHeader("X-Company-Poid") Long companyPoid,
+        //                 @RequestHeader("X-User-Id") String userId) {
 
-                ApRequestForQtnItemDtlDto dto = rfqService.updateItemDetail(
-                                transactionPoid, detRowId, request, groupPoid, companyPoid, userId);
-                return success("Item detail updated successfully", dto);
-        }
+        //         ApRequestForQtnItemDtlDto dto = rfqService.updateItemDetail(
+        //                         transactionPoid, detRowId, request, groupPoid, companyPoid, userId);
+        //         return success("Item detail updated successfully", dto);
+        // }
 
         // @Operation(summary = "Delete Item Detail", description = "Deletes an existing
         // item detail in RFQ.", tags = "RFQ's Item Details")
@@ -186,52 +196,55 @@ public class ApRequestForQuotationController {
                 return success("Item details fetched successfully", itemDetails);
         }
 
-        @Operation(summary = "Add Supplier Detail", description = "Adds a new supplier detail to RFQ. Auto-populates last price and default unit if applicable.", tags = "RFQ's Supplier Details", responses = {
-                        @ApiResponse(responseCode = "200", description = "Supplier detail added successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnSupDtlDto.class)))
-        })
-        @PostMapping("/{transactionPoid}/supplier-details")
-        public ResponseEntity<?> addSupplierDetail(
-                        @PathVariable Long transactionPoid,
-                        @Valid @RequestBody CreateApRequestForQtnSupDtlRequest request,
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+        // DEPRECATED: Use POST/PUT /api/ap/request-for-quotations/{transactionPoid} with action field in supplierDetails
+        // @Operation(summary = "Add Supplier Detail", description = "Adds a new supplier detail to RFQ. Auto-populates last price and default unit if applicable.", tags = "RFQ's Supplier Details", responses = {
+        //                 @ApiResponse(responseCode = "200", description = "Supplier detail added successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnSupDtlDto.class)))
+        // })
+        // @PostMapping("/{transactionPoid}/supplier-details")
+        // public ResponseEntity<?> addSupplierDetail(
+        //                 @PathVariable Long transactionPoid,
+        //                 @Valid @RequestBody CreateApRequestForQtnSupDtlRequest request,
+        //                 @RequestHeader("X-Group-Poid") Long groupPoid,
+        //                 @RequestHeader("X-Company-Poid") Long companyPoid,
+        //                 @RequestHeader("X-User-Id") String userId) {
 
-                ApRequestForQtnSupDtlDto dto = rfqService.addSupplierDetail(
-                                transactionPoid, request, groupPoid, companyPoid, userId);
-                return success("Supplier detail added successfully", dto);
-        }
+        //         ApRequestForQtnSupDtlDto dto = rfqService.addSupplierDetail(
+        //                         transactionPoid, request, groupPoid, companyPoid, userId);
+        //         return success("Supplier detail added successfully", dto);
+        // }
 
-        @Operation(summary = "Update Supplier Detail", description = "Updates an existing supplier detail in RFQ.", tags = "RFQ's Supplier Details", responses = {
-                        @ApiResponse(responseCode = "200", description = "Supplier detail updated successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnSupDtlDto.class)))
-        })
-        @PutMapping("/{transactionPoid}/supplier-details/{detRowId}")
-        public ResponseEntity<?> updateSupplierDetail(
-                        @PathVariable Long transactionPoid,
-                        @PathVariable Long detRowId,
-                        @Valid @RequestBody CreateApRequestForQtnSupDtlRequest request,
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+        // DEPRECATED: Use PUT /api/ap/request-for-quotations/{transactionPoid} with action field in supplierDetails
+        // @Operation(summary = "Update Supplier Detail", description = "Updates an existing supplier detail in RFQ.", tags = "RFQ's Supplier Details", responses = {
+        //                 @ApiResponse(responseCode = "200", description = "Supplier detail updated successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnSupDtlDto.class)))
+        // })
+        // @PutMapping("/{transactionPoid}/supplier-details/{detRowId}")
+        // public ResponseEntity<?> updateSupplierDetail(
+        //                 @PathVariable Long transactionPoid,
+        //                 @PathVariable Long detRowId,
+        //                 @Valid @RequestBody CreateApRequestForQtnSupDtlRequest request,
+        //                 @RequestHeader("X-Group-Poid") Long groupPoid,
+        //                 @RequestHeader("X-Company-Poid") Long companyPoid,
+        //                 @RequestHeader("X-User-Id") String userId) {
 
-                ApRequestForQtnSupDtlDto dto = rfqService.updateSupplierDetail(
-                                transactionPoid, detRowId, request, groupPoid, companyPoid, userId);
-                return success("Supplier detail updated successfully", dto);
-        }
+        //         ApRequestForQtnSupDtlDto dto = rfqService.updateSupplierDetail(
+        //                         transactionPoid, detRowId, request, groupPoid, companyPoid, userId);
+        //         return success("Supplier detail updated successfully", dto);
+        // }
 
-        @Operation(summary = "Delete Supplier Detail", description = "Deletes an existing supplier detail in RFQ.", tags = "RFQ's Supplier Details", responses = {
-                        @ApiResponse(responseCode = "200", description = "Supplier detail deleted successfully")
-        })
-        @DeleteMapping("/{transactionPoid}/supplier-details/{detRowId}")
-        public ResponseEntity<?> deleteSupplierDetail(
-                        @PathVariable Long transactionPoid,
-                        @PathVariable Long detRowId,
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+        // DEPRECATED: Use PUT /api/ap/request-for-quotations/{transactionPoid} with action="isDeleted" in supplierDetails
+        // @Operation(summary = "Delete Supplier Detail", description = "Deletes an existing supplier detail in RFQ.", tags = "RFQ's Supplier Details", responses = {
+        //                 @ApiResponse(responseCode = "200", description = "Supplier detail deleted successfully")
+        // })
+        // @DeleteMapping("/{transactionPoid}/supplier-details/{detRowId}")
+        // public ResponseEntity<?> deleteSupplierDetail(
+        //                 @PathVariable Long transactionPoid,
+        //                 @PathVariable Long detRowId,
+        //                 @RequestHeader("X-Group-Poid") Long groupPoid,
+        //                 @RequestHeader("X-Company-Poid") Long companyPoid) {
 
-                rfqService.deleteSupplierDetail(transactionPoid, detRowId, groupPoid, companyPoid);
-                return success("Supplier detail deleted successfully", null);
-        }
+        //         rfqService.deleteSupplierDetail(transactionPoid, detRowId, groupPoid, companyPoid);
+        //         return success("Supplier detail deleted successfully", null);
+        // }
 
         @Operation(summary = "Get Supplier Details", description = "Returns a list of supplier details for a specific RFQ.", tags = "RFQ's Supplier Details", responses = {
                         @ApiResponse(responseCode = "200", description = "Supplier details fetched successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnSupDtlDto.class)))
@@ -355,6 +368,22 @@ public class ApRequestForQuotationController {
                 ItemsWithoutSuppliersResponse response = rfqService.getItemsWithoutSuppliers(
                                 transactionPoid, groupPoid, companyPoid, userId);
                 return success("Items without suppliers fetched successfully", response);
+        }
+
+        @Operation(summary = "Get Tax Percentage", description = "Retrieves tax percentage for the provided Tax POID using active tax configuration.", tags = "RFQ's Business Logic", responses = {
+                        @ApiResponse(responseCode = "200", description = "Tax percentage fetched successfully")
+        })
+        @GetMapping("/tax-percentage")
+        public ResponseEntity<?> getTaxPercentage(
+                        @RequestParam Long taxPoid,
+                        @RequestHeader("X-Group-Poid") Long groupPoid,
+                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+
+                BigDecimal taxPercentage = rfqService.getTaxPercentage(groupPoid, companyPoid, taxPoid);
+                Map<String, Object> response = Map.of(
+                                "taxPoid", taxPoid,
+                                "taxPercentage", taxPercentage);
+                return success("Tax percentage fetched successfully", response);
         }
 
         // @Operation(summary = "Check RFQ Dependencies",

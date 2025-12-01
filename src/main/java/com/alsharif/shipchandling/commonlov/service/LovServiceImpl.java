@@ -14,9 +14,9 @@ public class LovServiceImpl implements LovService{
     LovRepository lovRepository;
 
     @Override
-    public LovResponse getLovList(String lovName, Long docKeyPoid, String filterValue) {
-        log.info("Fetching LOV list for lovName={} docKeyPoid={} filterValue={}", lovName, docKeyPoid, filterValue);
-        LovResponse response = lovRepository.getLovList(lovName,docKeyPoid,filterValue);
+    public LovResponse getLovList(String lovName, Long docKeyPoid, String filterValue, String filterField) {
+        log.info("Fetching LOV list for lovName={} docKeyPoid={} filterValue={} filterField={}", lovName, docKeyPoid, filterValue, filterField);
+        LovResponse response = lovRepository.getLovList(lovName,docKeyPoid,filterValue, filterField);
         log.info("Fetched LOV list for lovName={} itemCount={}", lovName,
                 response != null && response.getItems() != null ? response.getItems().size() : 0);
         return response;

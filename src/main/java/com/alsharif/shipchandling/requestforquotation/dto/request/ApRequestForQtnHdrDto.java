@@ -1,5 +1,6 @@
 package com.alsharif.shipchandling.requestforquotation.dto.request;
 
+import com.alsharif.shipchandling.commonlov.dto.LovItem;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -21,12 +22,14 @@ public class ApRequestForQtnHdrDto {
     private String status;
     private String type;
     private Long divisionPoid;
+    private LovItem divisionPoidDetail;
     private Timestamp expectedDate;
     private String remarks;
     private String descriptionPrintYn;
     private String currencyCode;
     private BigDecimal currencyRate;
     private Long salesQtnPoid;
+    private LovItem salesQtnPoidDetails;
     private String salesQtnRef;
     private String salesInvDocRef;
     private String deleted;

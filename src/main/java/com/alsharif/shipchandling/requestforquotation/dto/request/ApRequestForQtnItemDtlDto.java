@@ -1,5 +1,6 @@
 package com.alsharif.shipchandling.requestforquotation.dto.request;
 
+import com.alsharif.shipchandling.commonlov.dto.LovItem;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -15,11 +16,15 @@ public class ApRequestForQtnItemDtlDto {
     private Long transactionPoid;
     private Long detRowId;
     private Long stockPoid;
+    private LovItem stockPoidDetails;
     private Long stockUnitPoid;
+    private LovItem stockUnitDetails;
     private BigDecimal qty;
     private Long supplierPoid;
+    private LovItem supplierPoidDetails;
     private BigDecimal price;
     private Long taxPoid;
+    private LovItem taxPoidDetails;
     private BigDecimal taxPercentage;
     private BigDecimal taxAmount;
     private BigDecimal lastRate;

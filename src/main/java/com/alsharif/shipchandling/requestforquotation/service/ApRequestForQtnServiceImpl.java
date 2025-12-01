@@ -1,5 +1,6 @@
 package com.alsharif.shipchandling.requestforquotation.service;
 
+import com.alsharif.shipchandling.commonlov.dto.LovItem;
 import com.alsharif.shipchandling.exceptions.CustomException;
 import com.alsharif.shipchandling.exceptions.ResourceNotFoundException;
 import com.alsharif.shipchandling.requestforquotation.dto.ItemWithoutSupplierDto;
@@ -10,14 +11,19 @@ import com.alsharif.shipchandling.requestforquotation.entity.*;
 import com.alsharif.shipchandling.requestforquotation.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
@@ -46,6 +52,9 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
     @Autowired
     private DataSource dataSource;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     // Add DataSource for stored procedure calls
     // private final DataSource dataSource;
@@ -106,20 +115,13 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         ApRequestForQtnHdr savedRfq = rfqHdrRepository.saveAndFlush(rfq);
         log.info("RFQ Header saved with Transaction POID: {}", savedRfq.getTransactionPoid());
 
-        // Save item details
-        /*
-         * if (request.getItemDetails() != null && !request.getItemDetails().isEmpty())
-         * {
-         * saveItemDetails(savedRfq.getTransactionPoid(), request.getItemDetails(),
-         * normalizedUserId,
-         * groupPoid, companyPoid);
-         * }
-         */
+        // Process item details based on action field
+        processItemDetailsWithAction(savedRfq.getTransactionPoid(), request.getItemDetails(),
+                normalizedUserId, groupPoid, companyPoid, true);
 
-        // Save supplier details
-        if (request.getSupplierDetails() != null && !request.getSupplierDetails().isEmpty()) {
-            saveSupplierDetails(savedRfq.getTransactionPoid(), request.getSupplierDetails(), normalizedUserId);
-        }
+        // Process supplier details based on action field
+        processSupplierDetailsWithAction(savedRfq.getTransactionPoid(), request.getSupplierDetails(),
+                normalizedUserId, true);
 
         // Call stored procedure AFTER SAVE -
         callItemsWithoutSupplierProcedure(groupPoid, companyPoid, normalizedUserId, savedRfq.getTransactionPoid());
@@ -236,19 +238,16 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         rfq.setLastmodifiedBy(normalizedUserId);
         rfq.setLastmodifiedDate(new Timestamp(System.currentTimeMillis()));
 
-        /*
-         * // Update detail tables
-         * updateItemDetails(transactionPoid, request.getItemDetails(), groupPoid,
-         * companyPoid, userId);
-         * 
-         * updateSupplierDetails(transactionPoid, request.getSupplierDetails(), userId);
-         * 
-         * // Save
-         * ApRequestForQtnHdr savedRfq = rfqHdrRepository.save(rfq);
-         */
-
         // Save header first
         ApRequestForQtnHdr savedRfq = rfqHdrRepository.save(rfq);
+
+        // Process item details based on action field
+        processItemDetailsWithAction(transactionPoid, request.getItemDetails(),
+                normalizedUserId, groupPoid, companyPoid, false);
+
+        // Process supplier details based on action field
+        processSupplierDetailsWithAction(transactionPoid, request.getSupplierDetails(),
+                normalizedUserId, false);
 
         // Call stored procedure AFTER SAVE
         callItemsWithoutSupplierProcedure(groupPoid, companyPoid, normalizedUserId, transactionPoid);
@@ -318,6 +317,160 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
         // Convert to DTO page
         return rfqPage.map(r -> convertToDto(r, false));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto> getAllRequestForQuotationsWithFilters(
+            Long groupPoid, Long companyPoid,
+            GetAllRfqFilterRequest filterRequest,
+            int page, int size) {
+
+        // Build dynamic SQL query
+        StringBuilder sqlBuilder = new StringBuilder();
+        sqlBuilder.append("SELECT r.TRANSACTION_POID, r.DOC_REF, r.TRANSACTION_DATE, r.DESCRIPTION, ");
+        sqlBuilder.append("r.STATUS, r.TYPE, r.EXPECTED_DATE, r.REMARKS, r.DESCRIPTION_PRINT_YN, ");
+        sqlBuilder.append("SQH.DOC_REF AS SALES_QTN_REF, r.SALES_INV_DOC_REF, r.DELETED, ");
+        sqlBuilder.append("r.CREATED_DATE, r.LASTMODIFIED_DATE ");
+        sqlBuilder.append("FROM AP_REQUEST_FOR_QTN_HDR r ");
+        sqlBuilder.append("LEFT JOIN SALES_QUOTATION_HDR SQH ON SQH.TRANSACTION_POID = r.SALES_QTN_POID ");
+        sqlBuilder.append("WHERE r.GROUP_POID = :groupPoid AND r.COMPANY_POID = :companyPoid ");
+
+        // Apply isDeleted filter
+        if (filterRequest.getIsDeleted() != null && "N".equalsIgnoreCase(filterRequest.getIsDeleted())) {
+            sqlBuilder.append("AND (r.DELETED IS NULL OR r.DELETED != 'Y') ");
+        } else if (filterRequest.getIsDeleted() != null && "Y".equalsIgnoreCase(filterRequest.getIsDeleted())) {
+            sqlBuilder.append("AND r.DELETED = 'Y' ");
+        }
+
+        // Apply date range filters
+        if (StringUtils.hasText(filterRequest.getFrom())) {
+            sqlBuilder.append("AND TRUNC(r.TRANSACTION_DATE) >= TO_DATE(:fromDate, 'YYYY-MM-DD') ");
+        }
+        if (StringUtils.hasText(filterRequest.getTo())) {
+            sqlBuilder.append("AND TRUNC(r.TRANSACTION_DATE) <= TO_DATE(:toDate, 'YYYY-MM-DD') ");
+        }
+
+        // Build filter conditions
+        List<String> filterConditions = new java.util.ArrayList<>();
+        if (filterRequest.getFilters() != null && !filterRequest.getFilters().isEmpty()) {
+            for (int i = 0; i < filterRequest.getFilters().size(); i++) {
+                GetAllRfqFilterRequest.FilterItem filter = filterRequest.getFilters().get(i);
+                if (StringUtils.hasText(filter.getSearchField()) && StringUtils.hasText(filter.getSearchValue())) {
+                    String columnName = mapSearchFieldToColumn(filter.getSearchField());
+                    filterConditions.add("LOWER(" + columnName + ") LIKE LOWER(:filterValue" + i + ")");
+                }
+            }
+        }
+
+        // Add filter conditions with operator
+        if (!filterConditions.isEmpty()) {
+            String operator = "AND".equalsIgnoreCase(filterRequest.getOperator()) ? " AND " : " OR ";
+            sqlBuilder.append("AND (").append(String.join(operator, filterConditions)).append(") ");
+        }
+
+        sqlBuilder.append("ORDER BY r.TRANSACTION_DATE DESC");
+
+        // Create count query
+        String countSql = "SELECT COUNT(*) FROM (" + sqlBuilder.toString() + ")";
+
+        // Create query
+        Query query = entityManager.createNativeQuery(sqlBuilder.toString());
+        Query countQuery = entityManager.createNativeQuery(countSql);
+
+        // Set parameters
+        query.setParameter("groupPoid", groupPoid);
+        query.setParameter("companyPoid", companyPoid);
+        countQuery.setParameter("groupPoid", groupPoid);
+        countQuery.setParameter("companyPoid", companyPoid);
+
+        if (StringUtils.hasText(filterRequest.getFrom())) {
+            query.setParameter("fromDate", filterRequest.getFrom());
+            countQuery.setParameter("fromDate", filterRequest.getFrom());
+        }
+        if (StringUtils.hasText(filterRequest.getTo())) {
+            query.setParameter("toDate", filterRequest.getTo());
+            countQuery.setParameter("toDate", filterRequest.getTo());
+        }
+
+        // Set filter parameters
+        if (filterRequest.getFilters() != null && !filterRequest.getFilters().isEmpty()) {
+            for (int i = 0; i < filterRequest.getFilters().size(); i++) {
+                GetAllRfqFilterRequest.FilterItem filter = filterRequest.getFilters().get(i);
+                if (StringUtils.hasText(filter.getSearchField()) && StringUtils.hasText(filter.getSearchValue())) {
+                    String paramValue = "%" + filter.getSearchValue() + "%";
+                    query.setParameter("filterValue" + i, paramValue);
+                    countQuery.setParameter("filterValue" + i, paramValue);
+                }
+            }
+        }
+
+        // Get total count
+        Long totalCount = ((Number) countQuery.getSingleResult()).longValue();
+
+        // Apply pagination
+        int offset = page * size;
+        query.setFirstResult(offset);
+        query.setMaxResults(size);
+
+        // Execute query and map results
+        @SuppressWarnings("unchecked")
+        List<Object[]> results = query.getResultList();
+        List<com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto> dtos = results.stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+
+        // Create page
+        Pageable pageable = PageRequest.of(page, size);
+        return new PageImpl<>(dtos, pageable, totalCount);
+    }
+
+    private String mapSearchFieldToColumn(String searchField) {
+        switch (searchField.toUpperCase()) {
+            case "DOC_REF":
+                return "r.DOC_REF";
+            case "TASK_DESCRIPTION":
+                return "r.DESCRIPTION";
+            case "SALES_QTN_REF":
+                return "SQH.DOC_REF";
+            default:
+                return "r." + searchField;
+        }
+    }
+
+    private com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto mapToResponseDto(Object[] row) {
+        com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto dto = 
+            new com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto();
+        
+        dto.setTransactionPoid(row[0] != null ? ((Number) row[0]).longValue() : null);
+        dto.setDocRef(convertToString(row[1]));
+        dto.setTransactionDate((Timestamp) row[2]);
+        dto.setDescription(convertToString(row[3]));
+        dto.setStatus(convertToString(row[4]));
+        dto.setType(convertToString(row[5]));
+        dto.setExpectedDate((Timestamp) row[6]);
+        dto.setRemarks(convertToString(row[7]));
+        dto.setDescriptionPrintYn(convertToString(row[8]));
+        dto.setSalesQtnRef(convertToString(row[9]));
+        dto.setSalesInvDocRef(convertToString(row[10]));
+        dto.setDeleted(convertToString(row[11]));
+        dto.setCreatedDate((Timestamp) row[12]);
+        dto.setLastmodifiedDate((Timestamp) row[13]);
+        
+        return dto;
+    }
+
+    private String convertToString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String) {
+            return (String) value;
+        }
+        if (value instanceof Character) {
+            return String.valueOf((Character) value);
+        }
+        return value.toString();
     }
 
     private void callItemsWithoutSupplierProcedure(Long groupPoid, Long companyPoid, String userId,
@@ -456,6 +609,363 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         }
     }
 
+    /**
+     * Process item details based on action field (isCreated, isUpdated, isDeleted, noChange)
+     */
+    private void processItemDetailsWithAction(Long transactionPoid,
+            List<CreateApRequestForQtnItemDtlRequest> itemDetails,
+            String userId,
+            Long groupPoid,
+            Long companyPoid,
+            boolean isCreateOperation) {
+        if (itemDetails == null || itemDetails.isEmpty()) {
+            return;
+        }
+
+        // Validate RFQ exists and is not closed (for update operations)
+        if (!isCreateOperation) {
+            ApRequestForQtnHdr rfq = rfqHdrRepository
+                    .findByTransactionPoid(transactionPoid)
+                    .orElseThrow(() -> new ResourceNotFoundException("RFQ", "transactionPoid", transactionPoid));
+            if ("CLOSED".equalsIgnoreCase(rfq.getStatus())) {
+                throw new CustomException("Cannot modify items. RFQ is in closed status");
+            }
+        }
+
+        Long maxDetRowId = rfqItemDtlRepository.findMaxDetRowIdByTransactionPoid(transactionPoid);
+        Long nextDetRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
+
+        for (CreateApRequestForQtnItemDtlRequest detail : itemDetails) {
+            String action = detail.getAction();
+            if (action == null || action.trim().isEmpty()) {
+                // Default action based on operation type
+                // NOTE: isCreated is disabled for itemDetails, so default to noChange
+                action = "noChange";
+            } else {
+                action = action.trim();
+            }
+
+            // Validate action value - reject disabled actions
+            if ("isCreated".equalsIgnoreCase(action) || "isDeleted".equalsIgnoreCase(action)) {
+                throw new CustomException("Action '" + action + "' is currently disabled for itemDetails. Only 'isUpdated' and 'noChange' are supported.");
+            }
+
+            // Validate action value
+            if (!isValidAction(action)) {
+                throw new CustomException("Invalid action value: " + action + ". Valid values are: isUpdated, noChange");
+            }
+
+            // For create operation, skip itemDetails processing (isCreated is disabled)
+            if (isCreateOperation) {
+                continue;
+            }
+
+            switch (action.toLowerCase()) {
+                // COMMENTED OUT: isCreated action for itemDetails is temporarily disabled
+                // case "iscreated":
+                //     // Validate detRowId is null for new items
+                //     if (detail.getDetRowId() != null) {
+                //         throw new CustomException("detRowId must be null for isCreated action");
+                //     }
+                //     validateItemDetail(detail);
+                //     createItemDetail(transactionPoid, detail, userId, groupPoid, companyPoid, nextDetRowId++);
+                //     break;
+
+                case "isupdated":
+                    // Validate detRowId is provided
+                    if (detail.getDetRowId() == null) {
+                        throw new CustomException("detRowId is required for isUpdated action");
+                    }
+                    validateItemDetail(detail);
+                    updateItemDetailByAction(transactionPoid, detail, userId, groupPoid, companyPoid);
+                    break;
+
+                // COMMENTED OUT: isDeleted action for itemDetails is temporarily disabled
+                // case "isdeleted":
+                //     // Validate detRowId is provided
+                //     if (detail.getDetRowId() == null) {
+                //         throw new CustomException("detRowId is required for isDeleted action");
+                //     }
+                //     deleteItemDetailByAction(transactionPoid, detail.getDetRowId(), groupPoid, companyPoid);
+                //     break;
+
+                case "nochange":
+                    // Skip processing
+                    break;
+
+                default:
+                    // Check if it's a disabled action
+                    if ("iscreated".equalsIgnoreCase(action) || "isdeleted".equalsIgnoreCase(action)) {
+                        throw new CustomException("Action '" + action + "' is currently disabled for itemDetails. Only 'isUpdated' and 'noChange' are supported.");
+                    }
+                    throw new CustomException("Unsupported action: " + action);
+            }
+        }
+    }
+
+    /**
+     * Process supplier details based on action field (isCreated, isUpdated, isDeleted, noChange)
+     */
+    private void processSupplierDetailsWithAction(Long transactionPoid,
+            List<CreateApRequestForQtnSupDtlRequest> supplierDetails,
+            String userId,
+            boolean isCreateOperation) {
+        if (supplierDetails == null || supplierDetails.isEmpty()) {
+            return;
+        }
+
+        // Validate RFQ exists and is not closed (for update operations)
+        if (!isCreateOperation) {
+            ApRequestForQtnHdr rfq = rfqHdrRepository
+                    .findByTransactionPoid(transactionPoid)
+                    .orElseThrow(() -> new ResourceNotFoundException("RFQ", "transactionPoid", transactionPoid));
+            if ("CLOSED".equalsIgnoreCase(rfq.getStatus())) {
+                throw new CustomException("Cannot modify suppliers. RFQ is in closed status");
+            }
+        }
+
+        Long maxDetRowId = rfqSupDtlRepository.findMaxDetRowIdByTransactionPoid(transactionPoid);
+        Long nextDetRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
+
+        for (CreateApRequestForQtnSupDtlRequest detail : supplierDetails) {
+            String action = detail.getAction();
+            if (action == null || action.trim().isEmpty()) {
+                // Default action based on operation type
+                action = isCreateOperation ? "isCreated" : "noChange";
+            } else {
+                action = action.trim();
+            }
+
+            // Validate action value
+            if (!isValidAction(action)) {
+                throw new CustomException("Invalid action value: " + action + ". Valid values are: isCreated, isUpdated, isDeleted, noChange");
+            }
+
+            // For create operation, only process isCreated items
+            if (isCreateOperation && !"isCreated".equalsIgnoreCase(action)) {
+                continue;
+            }
+
+            switch (action.toLowerCase()) {
+                case "iscreated":
+                    // Validate detRowId is null for new items
+                    if (detail.getDetRowId() != null) {
+                        throw new CustomException("detRowId must be null for isCreated action");
+                    }
+                    if (detail.getSupplierPoid() == null && !hasText(detail.getRemarks())) {
+                        throw new CustomException("Supplier or remarks must be provided when adding supplier detail");
+                    }
+                    createSupplierDetail(transactionPoid, detail, userId, nextDetRowId++);
+                    break;
+
+                case "isupdated":
+                    // Validate detRowId is provided
+                    if (detail.getDetRowId() == null) {
+                        throw new CustomException("detRowId is required for isUpdated action");
+                    }
+                    if (detail.getSupplierPoid() == null && !hasText(detail.getRemarks())) {
+                        throw new CustomException("Supplier or remarks must be provided when updating supplier detail");
+                    }
+                    updateSupplierDetailByAction(transactionPoid, detail, userId);
+                    break;
+
+                case "isdeleted":
+                    // Validate detRowId is provided
+                    if (detail.getDetRowId() == null) {
+                        throw new CustomException("detRowId is required for isDeleted action");
+                    }
+                    deleteSupplierDetailByAction(transactionPoid, detail.getDetRowId());
+                    break;
+
+                case "nochange":
+                    // Skip processing
+                    break;
+
+                default:
+                    throw new CustomException("Unsupported action: " + action);
+            }
+        }
+    }
+
+    /**
+     * Validate action value
+     */
+    private boolean isValidAction(String action) {
+        if (action == null) {
+            return false;
+        }
+        String normalized = action.trim().toLowerCase();
+        return "iscreated".equals(normalized) || "isupdated".equals(normalized) 
+                || "isdeleted".equals(normalized) || "nochange".equals(normalized);
+    }
+
+    /**
+     * Create a new item detail
+     */
+    private void createItemDetail(Long transactionPoid, CreateApRequestForQtnItemDtlRequest request,
+            String userId, Long groupPoid, Long companyPoid, Long detRowId) {
+        ApRequestForQtnItemDtl itemDtl = new ApRequestForQtnItemDtl();
+        itemDtl.setTransactionPoid(transactionPoid);
+        itemDtl.setDetRowId(detRowId);
+        itemDtl.setStockPoid(request.getStockPoid());
+        itemDtl.setQty(request.getQty());
+        itemDtl.setPrice(request.getPrice());
+
+        Long stockUnitPoid = request.getStockUnitPoid();
+        if (stockUnitPoid == null) {
+            stockUnitPoid = getDefaultUnitFromProcedure(request.getStockPoid());
+            if (stockUnitPoid == null) {
+                throw new CustomException(
+                        "Unable to determine default stock unit for stock POID: " + request.getStockPoid());
+            }
+        }
+        itemDtl.setStockUnitPoid(stockUnitPoid);
+        itemDtl.setSupplierPoid(request.getSupplierPoid());
+
+        // Get last price if stock, unit, and supplier are all set
+        if (request.getSupplierPoid() != null) {
+            BigDecimal lastPrice = getLastPriceFromProcedure(request.getStockPoid(), stockUnitPoid,
+                    request.getSupplierPoid(), groupPoid, companyPoid, userId);
+            if (lastPrice != null) {
+                itemDtl.setLastRate(lastPrice);
+            }
+        }
+
+        populateTaxDetails(itemDtl, request.getTaxPoid(), request.getQty(), request.getPrice());
+        itemDtl.setRemarks(request.getRemarks());
+        itemDtl.setCreatedBy(userId);
+        itemDtl.setLastmodifiedBy(userId);
+
+        rfqItemDtlRepository.save(itemDtl);
+    }
+
+    /**
+     * Update an existing item detail by action
+     */
+    private void updateItemDetailByAction(Long transactionPoid, CreateApRequestForQtnItemDtlRequest request,
+            String userId, Long groupPoid, Long companyPoid) {
+        // Find existing item detail
+        ApRequestForQtnItemDtl itemDtl = rfqItemDtlRepository
+                .findById(new ApRequestForQtnItemDtlId(transactionPoid, request.getDetRowId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Item Detail", "detRowId", request.getDetRowId()));
+
+        // Check conditional read-only: If RefPoid > 0, some fields become read-only
+        if (itemDtl.getRefPoid() != null && !itemDtl.getRefPoid().isEmpty() &&
+                Long.parseLong(itemDtl.getRefPoid()) > 0) {
+            // StockPoid, StockUnitPoid, SupplierPoid become read-only
+            if (!request.getStockPoid().equals(itemDtl.getStockPoid()) ||
+                    !request.getStockUnitPoid().equals(itemDtl.getStockUnitPoid()) ||
+                    (request.getSupplierPoid() != null
+                            && !request.getSupplierPoid().equals(itemDtl.getSupplierPoid()))) {
+                throw new CustomException(
+                        "Cannot modify stock, unit, or supplier. Item is linked to another document.");
+            }
+        }
+
+        // Check if RefDocId contains "400" (Purchase Order) - Price becomes read-only
+        if (itemDtl.getRefDocId() != null && itemDtl.getRefDocId().contains("400")) {
+            if (request.getPrice() != null && !request.getPrice().equals(itemDtl.getPrice())) {
+                throw new CustomException("Cannot modify price. Item is linked to Purchase Order.");
+            }
+        }
+
+        // Update fields
+        itemDtl.setStockPoid(request.getStockPoid());
+        Long stockUnitPoid = request.getStockUnitPoid();
+        if (stockUnitPoid == null) {
+            stockUnitPoid = getDefaultUnitFromProcedure(request.getStockPoid());
+            if (stockUnitPoid == null) {
+                throw new CustomException(
+                        "Unable to determine default stock unit for stock POID: " + request.getStockPoid());
+            }
+        }
+        itemDtl.setStockUnitPoid(stockUnitPoid);
+        itemDtl.setQty(request.getQty());
+        if (itemDtl.getRefDocId() == null || !itemDtl.getRefDocId().contains("400")) {
+            itemDtl.setPrice(request.getPrice());
+        }
+        itemDtl.setSupplierPoid(request.getSupplierPoid());
+        itemDtl.setRemarks(request.getRemarks());
+
+        // Update last price if stock, unit, and supplier are all set
+        if (request.getSupplierPoid() != null) {
+            BigDecimal lastPrice = getLastPriceFromProcedure(request.getStockPoid(), stockUnitPoid,
+                    request.getSupplierPoid(), groupPoid, companyPoid, userId);
+            if (lastPrice != null) {
+                itemDtl.setLastRate(lastPrice);
+            }
+        }
+
+        populateTaxDetails(itemDtl, request.getTaxPoid(), itemDtl.getQty(), itemDtl.getPrice());
+        itemDtl.setLastmodifiedBy(userId);
+
+        rfqItemDtlRepository.save(itemDtl);
+    }
+
+    /**
+     * Delete an existing item detail by action
+     */
+    private void deleteItemDetailByAction(Long transactionPoid, Long detRowId, Long groupPoid, Long companyPoid) {
+        ApRequestForQtnItemDtl itemDtl = rfqItemDtlRepository
+                .findById(new ApRequestForQtnItemDtlId(transactionPoid, detRowId))
+                .orElseThrow(() -> new ResourceNotFoundException("Item Detail", "detRowId", detRowId));
+
+        if (itemDtl.getRefPoid() != null && !itemDtl.getRefPoid().isEmpty() &&
+                Long.parseLong(itemDtl.getRefPoid()) > 0) {
+            throw new CustomException("Cannot delete item detail. It is linked to another document.");
+        }
+        if (itemDtl.getRefDocId() != null && itemDtl.getRefDocId().contains("400")) {
+            throw new CustomException("Cannot delete item detail linked to Purchase Order.");
+        }
+
+        rfqItemDtlRepository.delete(itemDtl);
+    }
+
+    /**
+     * Create a new supplier detail
+     */
+    private void createSupplierDetail(Long transactionPoid, CreateApRequestForQtnSupDtlRequest request,
+            String userId, Long detRowId) {
+        ApRequestForQtnSupDtl supDtl = new ApRequestForQtnSupDtl();
+        supDtl.setTransactionPoid(transactionPoid);
+        supDtl.setDetRowId(detRowId);
+        supDtl.setSupplierPoid(request.getSupplierPoid());
+        supDtl.setRemarks(hasText(request.getRemarks()) ? request.getRemarks().trim() : null);
+        supDtl.setCreatedBy(userId);
+        supDtl.setLastmodifiedBy(userId);
+
+        rfqSupDtlRepository.save(supDtl);
+    }
+
+    /**
+     * Update an existing supplier detail by action
+     */
+    private void updateSupplierDetailByAction(Long transactionPoid, CreateApRequestForQtnSupDtlRequest request,
+            String userId) {
+        // Find existing supplier detail
+        ApRequestForQtnSupDtl supDtl = rfqSupDtlRepository
+                .findById(new ApRequestForQtnSupDtlId(transactionPoid, request.getDetRowId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Supplier Detail", "detRowId", request.getDetRowId()));
+
+        // Update fields
+        supDtl.setSupplierPoid(request.getSupplierPoid());
+        supDtl.setRemarks(hasText(request.getRemarks()) ? request.getRemarks().trim() : null);
+        supDtl.setLastmodifiedBy(userId);
+
+        rfqSupDtlRepository.save(supDtl);
+    }
+
+    /**
+     * Delete an existing supplier detail by action
+     */
+    private void deleteSupplierDetailByAction(Long transactionPoid, Long detRowId) {
+        ApRequestForQtnSupDtl supDtl = rfqSupDtlRepository
+                .findById(new ApRequestForQtnSupDtlId(transactionPoid, detRowId))
+                .orElseThrow(() -> new ResourceNotFoundException("Supplier Detail", "detRowId", detRowId));
+
+        rfqSupDtlRepository.delete(supDtl);
+    }
+
     private void validateItemDetail(CreateApRequestForQtnItemDtlRequest detail) {
         if (detail == null) {
             throw new CustomException("Item detail cannot be null");
@@ -486,10 +996,10 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         }
 
         GlobalTaxMaster tax = globalTaxMasterRepository
-                .findActiveByTaxPoid(taxPoid)
+                .findActiveByTaxPoid(BigDecimal.valueOf(taxPoid))
                 .orElseThrow(() -> new CustomException("Invalid or inactive Tax POID: " + taxPoid));
 
-        BigDecimal taxPercentage = tax.getPercentage() != null ? tax.getPercentage() : tax.getTaxPercent();
+        BigDecimal taxPercentage = tax.getPercentage();
         if (taxPercentage == null) {
             throw new CustomException("Tax percentage is not configured for Tax POID: " + taxPoid);
         }
@@ -497,6 +1007,35 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         itemDtl.setTaxPoid(taxPoid);
         itemDtl.setTaxPercentage(taxPercentage);
         itemDtl.setTaxAmount(calculateTaxAmount(qty, price, taxPercentage));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BigDecimal getTaxPercentage(Long groupPoid, Long companyPoid, Long taxPoid) {
+        if (groupPoid == null) {
+            throw new CustomException("Group POID header is required");
+        }
+        if (companyPoid == null) {
+            throw new CustomException("Company POID header is required");
+        }
+        if (taxPoid == null) {
+            throw new CustomException("Tax POID is required");
+        }
+
+        GlobalTaxMaster tax = globalTaxMasterRepository
+                .findActiveByTaxPoid(BigDecimal.valueOf(taxPoid))
+                .orElseThrow(() -> new CustomException("Invalid or inactive Tax POID: " + taxPoid));
+
+        if (tax.getGroupPoid() != null
+                && BigDecimal.valueOf(groupPoid).compareTo(tax.getGroupPoid()) != 0) {
+            throw new CustomException("Tax POID does not belong to the provided group");
+        }
+
+        BigDecimal taxPercentage = tax.getPercentage();
+        if (taxPercentage == null) {
+            throw new CustomException("Tax percentage is not configured for Tax POID: " + taxPoid);
+        }
+        return taxPercentage;
     }
 
     private BigDecimal calculateTaxAmount(BigDecimal qty, BigDecimal price, BigDecimal taxPercentage) {
@@ -600,6 +1139,10 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         ApRequestForQtnHdrDto dto = new ApRequestForQtnHdrDto();
         BeanUtils.copyProperties(rfq, dto);
 
+        // Populate LOV details for header
+        dto.setDivisionPoidDetail(getDivisionPoidDetail(rfq.getDivisionPoid()));
+        dto.setSalesQtnPoidDetails(getSalesQtnPoidDetails(rfq.getSalesQtnPoid()));
+
         if (includeDetails) {
             List<ApRequestForQtnItemDtl> itemDetails = rfqItemDtlRepository
                     .findByTransactionPoid(rfq.getTransactionPoid())
@@ -607,7 +1150,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                     .sorted(Comparator.comparing(ApRequestForQtnItemDtl::getDetRowId))
                     .collect(Collectors.toList());
             dto.setItemDetails(itemDetails.stream()
-                    .map(this::convertItemDtlToDto)
+                    .map(item -> convertItemDtlToDto(item, rfq.getGroupPoid()))
                     .collect(Collectors.toList()));
 
             List<ApRequestForQtnSupDtl> supplierDetails = rfqSupDtlRepository
@@ -624,14 +1167,39 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     }
 
     private ApRequestForQtnItemDtlDto convertItemDtlToDto(ApRequestForQtnItemDtl itemDtl) {
+        return convertItemDtlToDto(itemDtl, null);
+    }
+
+    private ApRequestForQtnItemDtlDto convertItemDtlToDto(ApRequestForQtnItemDtl itemDtl, Long groupPoid) {
         ApRequestForQtnItemDtlDto dto = new ApRequestForQtnItemDtlDto();
         BeanUtils.copyProperties(itemDtl, dto);
+
+        // Populate LOV details for item
+        dto.setStockPoidDetails(getStockPoidDetails(itemDtl.getStockPoid()));
+        dto.setStockUnitDetails(getStockUnitDetails(itemDtl.getStockUnitPoid()));
+        dto.setTaxPoidDetails(getTaxPoidDetails(itemDtl.getTaxPoid()));
+        
+        // For supplier in item details, use the special method that checks transaction and excludes cash/cheque suppliers
+        if (groupPoid != null) {
+            dto.setSupplierPoidDetails(getSupplierPoidDetailsForItem(
+                    itemDtl.getSupplierPoid(), 
+                    itemDtl.getTransactionPoid(), 
+                    groupPoid));
+        } else {
+            // Fallback: use simple supplier lookup if groupPoid is not available
+            dto.setSupplierPoidDetails(getSupplierPoidDetailsForSupplier(itemDtl.getSupplierPoid()));
+        }
+
         return dto;
     }
 
     private ApRequestForQtnSupDtlDto convertSupDtlToDto(ApRequestForQtnSupDtl supDtl) {
         ApRequestForQtnSupDtlDto dto = new ApRequestForQtnSupDtlDto();
         BeanUtils.copyProperties(supDtl, dto);
+
+        // Populate LOV details for supplier
+        dto.setSupplierPoidDetails(getSupplierPoidDetailsForSupplier(supDtl.getSupplierPoid()));
+
         return dto;
     }
 
@@ -702,7 +1270,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         itemDtl.setLastmodifiedBy(normalizedUserId);
 
         ApRequestForQtnItemDtl savedItemDtl = rfqItemDtlRepository.save(itemDtl);
-        return convertItemDtlToDto(savedItemDtl);
+        return convertItemDtlToDto(savedItemDtl, groupPoid);
     }
 
     @Override
@@ -789,7 +1357,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         itemDtl.setLastmodifiedBy(normalizedUserId);
 
         ApRequestForQtnItemDtl savedItemDtl = rfqItemDtlRepository.save(itemDtl);
-        return convertItemDtlToDto(savedItemDtl);
+        return convertItemDtlToDto(savedItemDtl, groupPoid);
     }
 
     @Override
@@ -843,7 +1411,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                 .sorted(Comparator.comparing(ApRequestForQtnItemDtl::getDetRowId))
                 .collect(Collectors.toList());
         return itemDetails.stream()
-                .map(this::convertItemDtlToDto)
+                .map(item -> convertItemDtlToDto(item, groupPoid))
                 .collect(Collectors.toList());
     }
 
@@ -1349,21 +1917,88 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
     private String callCreatePurchaseOrderProcedure(Long groupPoid, Long companyPoid, String userId,
             Long transactionPoid, Long supplierPoid) {
-        // TODO: Implement stored procedure call using CallableStatement
-        // String sql = "BEGIN PROC_AP_RFQ_CREATE_PO_NEW(?,?,?,?,?,?); END;";
-        // Parameters: P_GROUP_POID, P_USER_POID, P_COMPANY_POID, P_TRANSACTION_POID,
-        // P_SUPPLIER_POID, P_RESULT (OUT VARCHAR)
-        // Return result string (may contain PO DocRef)
-        return null;
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping call to PROC_AP_RFQ_CREATE_PO_NEW");
+            return null;
+        }
+        String sql = "{ call PROC_AP_RFQ_CREATE_PO_NEW(?, ?, ?, ?, ?, ?) }";
+
+        try (Connection connection = dataSource.getConnection();
+                CallableStatement callableStatement = connection.prepareCall(sql)) {
+
+            // --- Set IN parameters ---
+            callableStatement.setLong(1, groupPoid);
+            callableStatement.setString(2, userId);
+            callableStatement.setLong(3, companyPoid);
+            callableStatement.setLong(4, transactionPoid);
+            callableStatement.setLong(5, supplierPoid);
+
+            // --- Register OUT parameter ---
+            callableStatement.registerOutParameter(6, Types.VARCHAR);
+
+            // --- Execute the stored procedure ---
+            callableStatement.execute();
+
+            // --- Retrieve the OUT parameter ---
+            String result = callableStatement.getString(6);
+
+            // --- Log and handle any "ERROR" response from procedure ---
+            if (result != null && result.toUpperCase().contains("ERROR")) {
+                log.warn("PROC_AP_RFQ_CREATE_PO_NEW returned error: {}", result);
+            } else {
+                log.info("PROC_AP_RFQ_CREATE_PO_NEW executed successfully for RFQ POID: {} Supplier POID: {} - Result: {}",
+                        transactionPoid, supplierPoid, result);
+            }
+
+            return result;
+
+        } catch (SQLException ex) {
+            log.error("Failed to execute stored procedure PROC_AP_RFQ_CREATE_PO_NEW for RFQ POID: {} Supplier POID: {}",
+                    transactionPoid, supplierPoid, ex);
+            throw new CustomException("Database error while calling stored procedure: " + ex.getMessage());
+        }
     }
 
     private String callUpdateCostProcedure(Long groupPoid, Long companyPoid, String userId, Long transactionPoid) {
-        // TODO: Implement stored procedure call using CallableStatement
-        // String sql = "BEGIN PROC_AP_RFQ_PRICE_UPDATE(?,?,?,?,?); END;";
-        // Parameters: P_GROUP_POID, P_USER_POID, P_COMPANY_POID, P_TRANSACTION_POID,
-        // P_RESULT (OUT VARCHAR)
-        // Return result string
-        return null;
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping call to PROC_AP_RFQ_PRICE_UPDATE");
+            return null;
+        }
+        String sql = "{ call PROC_AP_RFQ_PRICE_UPDATE(?, ?, ?, ?, ?) }";
+
+        try (Connection connection = dataSource.getConnection();
+                CallableStatement callableStatement = connection.prepareCall(sql)) {
+
+            // --- Set IN parameters ---
+            callableStatement.setLong(1, groupPoid);
+            callableStatement.setString(2, userId);
+            callableStatement.setLong(3, companyPoid);
+            callableStatement.setLong(4, transactionPoid);
+
+            // --- Register OUT parameter ---
+            callableStatement.registerOutParameter(5, Types.VARCHAR);
+
+            // --- Execute the stored procedure ---
+            callableStatement.execute();
+
+            // --- Retrieve the OUT parameter ---
+            String result = callableStatement.getString(5);
+
+            // --- Log and handle any "ERROR" response from procedure ---
+            if (result != null && result.toUpperCase().contains("ERROR")) {
+                log.warn("PROC_AP_RFQ_PRICE_UPDATE returned error: {}", result);
+            } else {
+                log.info("PROC_AP_RFQ_PRICE_UPDATE executed successfully for RFQ POID: {} - Result: {}",
+                        transactionPoid, result);
+            }
+
+            return result;
+
+        } catch (SQLException ex) {
+            log.error("Failed to execute stored procedure PROC_AP_RFQ_PRICE_UPDATE for RFQ POID: {}", transactionPoid,
+                    ex);
+            throw new CustomException("Database error while calling stored procedure: " + ex.getMessage());
+        }
     }
 
     private BigDecimal getLastPriceFromProcedure(Long stockPoid, Long stockUnitPoid, Long supplierPoid,
@@ -1429,6 +2064,262 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         } catch (SQLException ex) {
             log.error("Failed to execute stored procedure PROC_AP_RFQ_SET_DFLT_DTL for stock {}", stockPoid, ex);
             throw new CustomException("Database error while fetching default stock unit: " + ex.getMessage());
+        }
+    }
+
+    // LOV Fetching Methods
+    private LovItem getDivisionPoidDetail(Long divisionPoid) {
+        if (divisionPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping division LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT DIVISION_POID AS POID, DIVISION_CODE AS CODE, DIVISION_NAME AS DESCRIPTION " +
+                "FROM GLOBAL_DIVISION_MASTER WHERE DIVISION_POID = ?";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, divisionPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch division LOV for divisionPoid {}", divisionPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getSalesQtnPoidDetails(Long salesQtnPoid) {
+        if (salesQtnPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping sales quotation LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT SQH.TRANSACTION_POID AS POID, " +
+                "SQH.DOC_REF AS CODE, " +
+                "GAM.ADDRESS_NAME AS DESCRIPTION " +
+                "FROM SALES_QUOTATION_HDR SQH " +
+                "INNER JOIN GLOBAL_ADDRESS_DETAILS GAD ON GAD.ADDRESS_POID = SQH.CUSTOMER_POID " +
+                "INNER JOIN GLOBAL_ADDRESS_MASTER GAM ON GAM.ADDRESS_MASTER_POID = GAD.ADDRESS_MASTER_POID " +
+                "WHERE SQH.TRANSACTION_POID = ?";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, salesQtnPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch sales quotation LOV for salesQtnPoid {}", salesQtnPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getStockPoidDetails(Long stockPoid) {
+        if (stockPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping stock LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT STOCK_POID AS POID, STOCK_CODE AS CODE, STOCK_NAME AS DESCRIPTION " +
+                "FROM STOCK_MASTER WHERE STOCK_POID = ?";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, stockPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch stock LOV for stockPoid {}", stockPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getStockUnitDetails(Long stockUnitPoid) {
+        if (stockUnitPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping stock unit LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT STOCK_UNIT_POID AS POID, STOCK_UNIT_CODE AS CODE, STOCK_UNIT_CODE AS DESCRIPTION " +
+                "FROM STOCK_UNIT_MASTER WHERE STOCK_UNIT_POID = ?";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, stockUnitPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch stock unit LOV for stockUnitPoid {}", stockUnitPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getSupplierPoidDetailsForItem(Long supplierPoid, Long transactionPoid, Long groupPoid) {
+        if (supplierPoid == null || transactionPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping supplier LOV fetch for item");
+            return null;
+        }
+
+        try (Connection connection = dataSource.getConnection()) {
+            // First, get Cash and Cheque supplier POIDs
+            String paramSql = "SELECT RTN_GLOBAL_PARAMETER(1, 'Cash Suppliers', 'GROUP', '1', NULL) AS CASH_SUPPLIER, " +
+                    "RTN_GLOBAL_PARAMETER(1, 'Cheque Suppliers', 'GROUP', '1', NULL) AS CHEQUE_SUPPLIER FROM DUAL";
+            Long cashSupplier = null;
+            Long chequeSupplier = null;
+
+            try (PreparedStatement paramStatement = connection.prepareStatement(paramSql);
+                    ResultSet paramRs = paramStatement.executeQuery()) {
+                if (paramRs.next()) {
+                    Object cashObj = paramRs.getObject("CASH_SUPPLIER");
+                    Object chequeObj = paramRs.getObject("CHEQUE_SUPPLIER");
+                    if (cashObj != null) {
+                        cashSupplier = paramRs.getLong("CASH_SUPPLIER");
+                    }
+                    if (chequeObj != null) {
+                        chequeSupplier = paramRs.getLong("CHEQUE_SUPPLIER");
+                    }
+                }
+            }
+
+            // Check if supplier is cash or cheque supplier - if so, return null
+            if ((cashSupplier != null && supplierPoid.equals(cashSupplier)) ||
+                    (chequeSupplier != null && supplierPoid.equals(chequeSupplier))) {
+                return null;
+            }
+
+            final String sql = "SELECT DISTINCT ASM.SUPPLIER_POID AS POID, " +
+                    "ASM.SUPPLIER_CODE AS CODE, " +
+                    "ASM.SUPPLIER_NAME AS DESCRIPTION " +
+                    "FROM AP_REQUEST_FOR_QTN_ITEM_DTL RFQI " +
+                    "INNER JOIN AP_REQUEST_FOR_QTN_HDR RFQH ON RFQH.TRANSACTION_POID = RFQI.TRANSACTION_POID " +
+                    "INNER JOIN AP_SUPPLIER_MASTER ASM ON ASM.SUPPLIER_POID = RFQI.SUPPLIER_POID " +
+                    "WHERE RFQI.TRANSACTION_POID = ? AND RFQI.SUPPLIER_POID = ? " +
+                    "AND RFQH.STATUS != 'CLOSED' " +
+                    "AND RFQI.SUPPLIER_POID != NVL(?, -1) " +
+                    "AND RFQI.SUPPLIER_POID != NVL(?, -1)";
+
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setLong(1, transactionPoid);
+                statement.setLong(2, supplierPoid);
+                statement.setObject(3, cashSupplier);
+                statement.setObject(4, chequeSupplier);
+                try (ResultSet rs = statement.executeQuery()) {
+                    if (rs.next()) {
+                        Long poid = rs.getLong("POID");
+                        String code = rs.getString("CODE");
+                        String description = rs.getString("DESCRIPTION");
+                        return new LovItem(poid, code, description);
+                    }
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch supplier LOV for item supplierPoid {} transactionPoid {}", supplierPoid, transactionPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getTaxPoidDetails(Long taxPoid) {
+        if (taxPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping tax LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT TAX_POID AS POID, TAX_CODE AS CODE, TAX_NAME AS DESCRIPTION " +
+                "FROM GLOBAL_TAX_MASTER " +
+                "WHERE TAX_POID = ? AND NVL(ACTIVE, 'Y') = 'Y' AND NVL(DELETED, 'N') = 'N' AND TAX_TYPE = 'INPUT_VAT'";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, taxPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch tax LOV for taxPoid {}", taxPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getSupplierPoidDetailsForSupplier(Long supplierPoid) {
+        if (supplierPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping supplier LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT SUPPLIER_POID AS POID, SUPPLIER_CODE AS CODE, SUPPLIER_NAME AS DESCRIPTION " +
+                "FROM AP_SUPPLIER_MASTER " +
+                "WHERE SUPPLIER_POID = ? AND NVL(ACTIVE, 'Y') = 'Y'";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, supplierPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch supplier LOV for supplierPoid {}", supplierPoid, ex);
+            return null;
         }
     }
 }
