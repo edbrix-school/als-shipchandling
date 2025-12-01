@@ -4,6 +4,7 @@ package com.alsharif.shipchandling.requestforquotation.controller;
 import com.alsharif.shipchandling.requestforquotation.dto.request.*;
 import com.alsharif.shipchandling.requestforquotation.dto.response.*;
 import com.alsharif.shipchandling.requestforquotation.service.ApRequestForQtnService;
+import com.asg.common.lib.security.util.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -23,7 +24,7 @@ import java.util.Map;
 import static com.alsharif.shipchandling.common.ApiResponse.success;
 
 @RestController
-@RequestMapping("api/ap/request-for-quotations")
+@RequestMapping("request-for-quotations")
 @RequiredArgsConstructor
 public class ApRequestForQuotationController {
 
@@ -52,12 +53,10 @@ public class ApRequestForQuotationController {
         @GetMapping("/{transactionPoid}")
         public ResponseEntity<?> getRequestForQuotationByPoid(
                         @PathVariable Long transactionPoid,
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
                         @RequestParam(required = false, defaultValue = "false") Boolean includeDetails) {
 
                 ApRequestForQtnHdrDto dto = rfqService.getRequestForQuotationByPoid(
-                                transactionPoid, groupPoid, companyPoid, includeDetails);
+                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), includeDetails);
                 return success("RFQ fetched successfully", dto);
         }
 
