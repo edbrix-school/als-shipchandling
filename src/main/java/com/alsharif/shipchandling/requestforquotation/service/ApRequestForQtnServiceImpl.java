@@ -1917,21 +1917,88 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
     private String callCreatePurchaseOrderProcedure(Long groupPoid, Long companyPoid, String userId,
             Long transactionPoid, Long supplierPoid) {
-        // TODO: Implement stored procedure call using CallableStatement
-        // String sql = "BEGIN PROC_AP_RFQ_CREATE_PO_NEW(?,?,?,?,?,?); END;";
-        // Parameters: P_GROUP_POID, P_USER_POID, P_COMPANY_POID, P_TRANSACTION_POID,
-        // P_SUPPLIER_POID, P_RESULT (OUT VARCHAR)
-        // Return result string (may contain PO DocRef)
-        return null;
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping call to PROC_AP_RFQ_CREATE_PO_NEW");
+            return null;
+        }
+        String sql = "{ call PROC_AP_RFQ_CREATE_PO_NEW(?, ?, ?, ?, ?, ?) }";
+
+        try (Connection connection = dataSource.getConnection();
+                CallableStatement callableStatement = connection.prepareCall(sql)) {
+
+            // --- Set IN parameters ---
+            callableStatement.setLong(1, groupPoid);
+            callableStatement.setString(2, userId);
+            callableStatement.setLong(3, companyPoid);
+            callableStatement.setLong(4, transactionPoid);
+            callableStatement.setLong(5, supplierPoid);
+
+            // --- Register OUT parameter ---
+            callableStatement.registerOutParameter(6, Types.VARCHAR);
+
+            // --- Execute the stored procedure ---
+            callableStatement.execute();
+
+            // --- Retrieve the OUT parameter ---
+            String result = callableStatement.getString(6);
+
+            // --- Log and handle any "ERROR" response from procedure ---
+            if (result != null && result.toUpperCase().contains("ERROR")) {
+                log.warn("PROC_AP_RFQ_CREATE_PO_NEW returned error: {}", result);
+            } else {
+                log.info("PROC_AP_RFQ_CREATE_PO_NEW executed successfully for RFQ POID: {} Supplier POID: {} - Result: {}",
+                        transactionPoid, supplierPoid, result);
+            }
+
+            return result;
+
+        } catch (SQLException ex) {
+            log.error("Failed to execute stored procedure PROC_AP_RFQ_CREATE_PO_NEW for RFQ POID: {} Supplier POID: {}",
+                    transactionPoid, supplierPoid, ex);
+            throw new CustomException("Database error while calling stored procedure: " + ex.getMessage());
+        }
     }
 
     private String callUpdateCostProcedure(Long groupPoid, Long companyPoid, String userId, Long transactionPoid) {
-        // TODO: Implement stored procedure call using CallableStatement
-        // String sql = "BEGIN PROC_AP_RFQ_PRICE_UPDATE(?,?,?,?,?); END;";
-        // Parameters: P_GROUP_POID, P_USER_POID, P_COMPANY_POID, P_TRANSACTION_POID,
-        // P_RESULT (OUT VARCHAR)
-        // Return result string
-        return null;
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping call to PROC_AP_RFQ_PRICE_UPDATE");
+            return null;
+        }
+        String sql = "{ call PROC_AP_RFQ_PRICE_UPDATE(?, ?, ?, ?, ?) }";
+
+        try (Connection connection = dataSource.getConnection();
+                CallableStatement callableStatement = connection.prepareCall(sql)) {
+
+            // --- Set IN parameters ---
+            callableStatement.setLong(1, groupPoid);
+            callableStatement.setString(2, userId);
+            callableStatement.setLong(3, companyPoid);
+            callableStatement.setLong(4, transactionPoid);
+
+            // --- Register OUT parameter ---
+            callableStatement.registerOutParameter(5, Types.VARCHAR);
+
+            // --- Execute the stored procedure ---
+            callableStatement.execute();
+
+            // --- Retrieve the OUT parameter ---
+            String result = callableStatement.getString(5);
+
+            // --- Log and handle any "ERROR" response from procedure ---
+            if (result != null && result.toUpperCase().contains("ERROR")) {
+                log.warn("PROC_AP_RFQ_PRICE_UPDATE returned error: {}", result);
+            } else {
+                log.info("PROC_AP_RFQ_PRICE_UPDATE executed successfully for RFQ POID: {} - Result: {}",
+                        transactionPoid, result);
+            }
+
+            return result;
+
+        } catch (SQLException ex) {
+            log.error("Failed to execute stored procedure PROC_AP_RFQ_PRICE_UPDATE for RFQ POID: {}", transactionPoid,
+                    ex);
+            throw new CustomException("Database error while calling stored procedure: " + ex.getMessage());
+        }
     }
 
     private BigDecimal getLastPriceFromProcedure(Long stockPoid, Long stockUnitPoid, Long supplierPoid,
