@@ -79,5 +79,6 @@ public final class SalesQuotationSchSpecifications {
             );
         };
     }
+    
 }
 

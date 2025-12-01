@@ -25,7 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -222,18 +224,203 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 .map(this::toSummaryDto)
                 .collect(Collectors.toList());
         
+        // Build display fields map
+        Map<String, String> displayFields = new HashMap<>();
+        displayFields.put("docRef", "text");
+        displayFields.put("quotationStatus", "text");
+        displayFields.put("transactionDate", "date");
+        displayFields.put("customerRef", "text");
+        displayFields.put("vesselName", "text");
+        
         // Build response
-        SalesQuotationSchListResponse response = new SalesQuotationSchListResponse(
-                content,
-                pageResult.getTotalElements(),
-                pageResult.getTotalPages(),
-                page,
-                size
-        );
+        SalesQuotationSchListResponse response = new SalesQuotationSchListResponse();
+        response.setContent(content);
+        response.setLast(pageResult.isLast());
+        response.setTotalPages(pageResult.getTotalPages());
+        response.setTotalElements(pageResult.getTotalElements());
+        response.setPageSize(size);
+        response.setDisplayFields(displayFields);
+        response.setPageNumber(page);
         
         log.info("search sales quotation sch completed for companyPoid={} totalElements={} totalPages={}", 
                 filter.getCompanyPoid(), response.getTotalElements(), response.getTotalPages());
         return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SalesQuotationSchListResponse listSalesQuotationSchWithFilters(FilterRequestDto filterRequest, Long companyPoid, Pageable pageable) {
+        log.info("listSalesQuotationSchWithFilters started for companyPoid={}", companyPoid);
+        
+        Specification<SalesQuotationSchHdr> spec = null;
+
+        // Handle isDeleted filter
+        String isDeleted = filterRequest.isDeleted();
+        if (isDeleted != null && !isDeleted.trim().isEmpty()) {
+            if ("Y".equalsIgnoreCase(isDeleted)) {
+                // Show only deleted records
+                spec = (root, query, cb) -> 
+                    cb.equal(root.get("deleted"), "Y");
+            } else if ("N".equalsIgnoreCase(isDeleted)) {
+                // Show only non-deleted records
+                spec = (root, query, cb) -> 
+                    cb.or(
+                        cb.isNull(root.get("deleted")),
+                        cb.notEqual(root.get("deleted"), "Y")
+                    );
+            }
+        } else {
+            // Default: Show only non-deleted records when isDeleted is not provided
+            spec = (root, query, cb) -> 
+                cb.or(
+                    cb.isNull(root.get("deleted")),
+                    cb.notEqual(root.get("deleted"), "Y")
+                );
+        }
+
+        // Company filtering (mandatory for data isolation)
+        Specification<SalesQuotationSchHdr> companySpec = SalesQuotationSchSpecifications.companyIs(companyPoid);
+        if (spec != null) {
+            spec = spec.and(companySpec);
+        } else {
+            spec = companySpec;
+        }
+
+        // Handle operator and filters
+        String operator = filterRequest.operator() != null ? filterRequest.operator().toUpperCase() : "OR";
+        List<FilterDto> filters = filterRequest.filters() != null ? filterRequest.filters() : new ArrayList<>();
+
+        if (!filters.isEmpty()) {
+            boolean isAndOperator = "AND".equals(operator);
+            List<Specification<SalesQuotationSchHdr>> filterSpecs = new ArrayList<>();
+            
+            for (FilterDto filter : filters) {
+                String searchField = filter.searchField();
+                String searchValue = filter.searchValue();
+                
+                if (searchField == null || searchValue == null || searchValue.trim().isEmpty()) {
+                    continue;
+                }
+
+                Specification<SalesQuotationSchHdr> filterSpec = buildFilterSpecification(searchField, searchValue, companyPoid);
+                
+                if (filterSpec != null) {
+                    filterSpecs.add(filterSpec);
+                }
+            }
+            
+            // Combine filters based on operator
+            if (!filterSpecs.isEmpty()) {
+                Specification<SalesQuotationSchHdr> combinedFilterSpec = filterSpecs.get(0);
+                for (int i = 1; i < filterSpecs.size(); i++) {
+                    if (isAndOperator) {
+                        combinedFilterSpec = combinedFilterSpec.and(filterSpecs.get(i));
+                    } else {
+                        combinedFilterSpec = combinedFilterSpec.or(filterSpecs.get(i));
+                    }
+                }
+                if (spec != null) {
+                    spec = spec.and(combinedFilterSpec);
+                } else {
+                    spec = combinedFilterSpec;
+                }
+            }
+        }
+
+        // Execute query
+        Page<SalesQuotationSchHdr> page;
+        if (spec != null) {
+            page = quotationSchHdrRepository.findAll(spec, pageable);
+        } else {
+            page = quotationSchHdrRepository.findAll(pageable);
+        }
+
+        // Convert to DTOs
+        List<SalesQuotationSchSummaryDto> dtoList = page.getContent().stream()
+            .map(this::toSummaryDto)
+            .collect(Collectors.toList());
+
+        // Build display fields map
+        Map<String, String> displayFields = new HashMap<>();
+        displayFields.put("docRef", "text");
+        displayFields.put("quotationStatus", "text");
+        displayFields.put("transactionDate", "date");
+        displayFields.put("customerRef", "text");
+        displayFields.put("vesselName", "text");
+
+        // Build response
+        SalesQuotationSchListResponse response = new SalesQuotationSchListResponse();
+        response.setContent(dtoList);
+        response.setLast(page.isLast());
+        response.setTotalPages(page.getTotalPages());
+        response.setTotalElements(page.getTotalElements());
+        response.setPageSize(page.getSize());
+        response.setDisplayFields(displayFields);
+        response.setPageNumber(page.getNumber());
+
+        log.info("listSalesQuotationSchWithFilters completed for companyPoid={} totalElements={} totalPages={}", 
+                companyPoid, response.getTotalElements(), response.getTotalPages());
+        return response;
+    }
+
+    private Specification<SalesQuotationSchHdr> buildFilterSpecification(String searchField, String searchValue, Long companyPoid) {
+        String upperField = searchField.toUpperCase();
+        String searchPattern = "%" + searchValue.trim().toUpperCase() + "%";
+
+        // DOC_REF filter
+        if ("DOC_REF".equals(upperField) || "DOCREF".equals(upperField)) {
+            return (root, query, cb) -> cb.like(cb.upper(root.get("docRef")), searchPattern);
+        }
+        
+        // QUOTATION_STATUS filter
+        if ("QUOTATION_STATUS".equals(upperField) || "STATUS".equals(upperField) || "QUOTATIONSTATUS".equals(upperField)) {
+            return (root, query, cb) -> cb.equal(cb.upper(root.get("quotationStatus")), searchValue.trim().toUpperCase());
+        }
+        
+        // CUSTOMER_NAME filter - fetch customer POIDs and filter by them
+        // Note: This is called within a transaction, so it uses the same connection
+        if ("CUSTOMER_NAME".equals(upperField) || "CUSTOMERNAME".equals(upperField)) {
+            String customerNamePattern = "%" + searchValue.trim().toUpperCase() + "%";
+            List<Long> customerPoids = quotationSchHdrRepository.findCustomerPoidsByName(customerNamePattern);
+            
+            if (customerPoids == null || customerPoids.isEmpty()) {
+                // No matching customers, return specification that matches nothing
+                return (root, query, cb) -> cb.disjunction();
+            }
+            
+            // Filter by customer POIDs
+            return (root, query, cb) -> root.get("customerPoid").in(customerPoids);
+        }
+        
+        // TRANSACTION_DATE filter - supports date range or exact date
+        if ("TRANSACTION_DATE".equals(upperField) || "TRANSACTIONDATE".equals(upperField)) {
+            try {
+                // Try to parse as date
+                Timestamp dateValue = Timestamp.valueOf(searchValue.trim() + " 00:00:00");
+                Timestamp nextDay = new Timestamp(dateValue.getTime() + 24 * 60 * 60 * 1000);
+                return (root, query, cb) -> cb.and(
+                    cb.greaterThanOrEqualTo(root.get("transactionDate"), dateValue),
+                    cb.lessThan(root.get("transactionDate"), nextDay)
+                );
+            } catch (Exception e) {
+                // If parsing fails, try to use as pattern
+                return (root, query, cb) -> cb.like(
+                    cb.function("TO_CHAR", String.class, root.get("transactionDate"), cb.literal("YYYY-MM-DD")), 
+                    searchPattern
+                );
+            }
+        }
+        
+        // GLOBALSEARCH - search across multiple fields
+        if ("GLOBALSEARCH".equals(upperField)) {
+            return (root, query, cb) -> cb.or(
+                cb.like(cb.upper(cb.coalesce(root.get("docRef"), "")), searchPattern),
+                cb.like(cb.upper(cb.coalesce(root.get("customerRef"), "")), searchPattern),
+                cb.like(cb.upper(cb.coalesce(root.get("details"), "")), searchPattern)
+            );
+        }
+        
+        return null;
     }
 
     @Override

@@ -7,6 +7,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -175,6 +177,26 @@ public class SalesQuotationSchController {
                 log.info("getAllSalesQuotationSch completed for companyPoid={} groupPoid={} totalElements={} totalPages={}",
                                 companyPoid, groupPoid, response.getTotalElements(), response.getTotalPages());
                 return success("Sales quotation sch fetched successfully", response);
+        }
+
+        @Operation(summary = "Get Sales Quotation SCH List with Filters", description = "Retrieves sales quotation sch list with dynamic filters (docRef, status, customer name, transactionDate). Supports AND/OR operators.", responses = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved sales quotation sch list"),
+                        @ApiResponse(responseCode = "401", description = "Unauthorized")
+        }, security = @SecurityRequirement(name = "bearerAuth"))
+        @PostMapping("/list")
+        public ResponseEntity<?> getSalesQuotationSchListWithFilters(
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested,
+                        @Valid @RequestBody FilterRequestDto filterRequest,
+                        @ParameterObject Pageable pageable) {
+
+                log.info("getSalesQuotationSchListWithFilters started for companyPoid={}", companyPoid);
+                SalesQuotationSchListResponse response = quotationSchService.listSalesQuotationSchWithFilters(
+                                filterRequest, companyPoid, pageable);
+                log.info("getSalesQuotationSchListWithFilters completed for companyPoid={} totalElements={} totalPages={}",
+                                companyPoid, response.getTotalElements(), response.getTotalPages());
+                return success("Sales quotation sch list fetched successfully", response);
         }
 
         // ==================== VALIDATION APIs ====================

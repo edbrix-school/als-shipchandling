@@ -116,4 +116,12 @@ public interface SalesQuotationSchHdrRepository extends JpaRepository<SalesQuota
         List<Object[]> findSalesQuotationSchWithDetails(@Param("transactionPoid") Long transactionPoid,
                         @Param("companyPoid") Long companyPoid);
 
+        /**
+         * Find customer POIDs by customer name pattern
+         * Used for filtering quotations by customer name
+         */
+        @Query(value = "SELECT DISTINCT c.CUSTOMER_POID FROM SALES_CUSTOMER_MASTER c " +
+                "WHERE UPPER(c.CUSTOMER_NAME) LIKE :pattern", nativeQuery = true)
+        List<Long> findCustomerPoidsByName(@Param("pattern") String pattern);
+
 }
