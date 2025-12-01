@@ -25,6 +25,13 @@ import com.alsharif.shipchandling.salesinvoice.entity.*;
 import com.alsharif.shipchandling.exceptions.ResourceNotFoundException;
 import com.alsharif.shipchandling.exceptions.CustomException;
 import com.alsharif.shipchandling.salesinvoice.repository.*;
+import com.alsharif.shipchandling.StockMaster.repository.StockMasterRepository;
+import com.alsharif.shipchandling.StockMaster.entity.StockMasterEntity;
+import com.alsharif.shipchandling.deliverynote.repository.SalesDeliveryNoteHdrRepository;
+import com.alsharif.shipchandling.deliverynote.entity.SalesDeliveryNoteHdr;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -37,7 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -52,6 +59,11 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
     private final SalesDnDtlRepository dnDtlRepository;
     private final SalesInvCostbkdDtlRepository costbkdDtlRepository;
     private final SalesInvoiceStoredProcRepository salesInvoiceStoredProcRepository;
+    private final StockMasterRepository stockMasterRepository;
+    private final SalesDeliveryNoteHdrRepository deliveryNoteHdrRepository;
+    
+    @PersistenceContext
+    private EntityManager entityManager;
     // Add DataSource for stored procedure calls
     // private final DataSource dataSource;
 
@@ -102,6 +114,14 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             // Save detail tables
             if (request.getInvoiceDetails() != null && !request.getInvoiceDetails().isEmpty()) {
                 for (CreateSalesInvoiceDtlRequest createSalesInvoiceDtlRequest : request.getInvoiceDetails()) {
+                    // Skip if actionType is "isDeleted" or "delRowId" (should not create deleted items)
+                    String actionType = createSalesInvoiceDtlRequest.getActionType();
+                    if ("isDeleted".equalsIgnoreCase(actionType) || "delRowId".equalsIgnoreCase(actionType)) {
+                        log.debug("Skipping invoice detail with actionType: {}", actionType);
+                        continue;
+                    }
+                    
+                    // Create invoice detail (actionType is "isCreated" or null/empty)
                     // Get next DetRowId
                     Long maxDetRowId = invoiceDtlRepository
                             .findMaxDetRowIdByTransactionPoid(savedInvoice.getTransactionPoid());
@@ -143,7 +163,14 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
             if (request.getDeliveryNoteDetails() != null && !request.getDeliveryNoteDetails().isEmpty()) {
                 for (CreateSalesDnDtlRequest dnDtl : request.getDeliveryNoteDetails()) {
-
+                    // Skip if actionType is "isDeleted" or "delRowId" (should not create deleted items)
+                    String actionType = dnDtl.getActionType();
+                    if ("isDeleted".equalsIgnoreCase(actionType) || "delRowId".equalsIgnoreCase(actionType)) {
+                        log.debug("Skipping delivery note detail with actionType: {}", actionType);
+                        continue;
+                    }
+                    
+                    // Create delivery note detail (actionType is "isCreated" or null/empty)
                     // Get next DetRowId
                     Long maxDetRowId = dnDtlRepository
                             .findMaxDetRowIdByTransactionPoid(savedInvoice.getTransactionPoid());
@@ -223,22 +250,459 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
     private SalesInvCostbkdDtlDto convertCostbkdDtlToDto(SalesInvCostbkdDtl dtl) {
         SalesInvCostbkdDtlDto dto = new SalesInvCostbkdDtlDto();
         BeanUtils.copyProperties(dtl, dto);
+        // supplierName and bookType are already in the entity, so they'll be copied
+        return dto;
+    }
+    
+    /**
+     * Convert invoice to DTO with LOV details populated
+     */
+    private SalesInvoiceHdrDto convertToDtoWithLov(SalesInvoiceHdr invoice, boolean includeDetails) {
+        // Try to fetch with LOV details from repository
+        List<Object[]> queryResults = invoiceHdrRepository.findSalesInvoiceWithDetails(
+                invoice.getTransactionPoid(), invoice.getCompanyPoid());
+        
+        SalesInvoiceHdrDto dto = new SalesInvoiceHdrDto();
+        BeanUtils.copyProperties(invoice, dto);
+        
+        // Populate header LOV details from query result
+        if (!queryResults.isEmpty()) {
+            Object[] row = queryResults.get(0);
+            log.debug("Query result row length: {}, customerPoid from invoice: {}", 
+                    row.length, invoice.getCustomerPoid());
+            if (row.length > 58) {
+                log.debug("Customer details from join - poid: {}, code: {}, name: {}", 
+                        row[56], row[57], row[58]);
+            }
+            populateHeaderLovDetails(dto, row);
+        } else {
+            log.warn("No query results found for invoice transactionPoid: {}", invoice.getTransactionPoid());
+        }
+        
+        if (includeDetails) {
+            // Fetch invoice details with tax details in single query
+            List<Object[]> detailsWithTax = invoiceDtlRepositoryImpl
+                    .findByTransactionPoidWithTaxDetails(invoice.getTransactionPoid());
+            List<SalesInvoiceDtlDto> detailDtos = detailsWithTax.stream()
+                    .map(this::convertInvoiceDtlRowToDtoWithLov)
+                    .collect(Collectors.toList());
+            dto.setInvoiceDetails(detailDtos);
+            
+            // Fetch delivery note details
+            List<SalesDnDtl> dnDetails = dnDtlRepository.findByTransactionPoid(invoice.getTransactionPoid());
+            List<SalesDnDtlDto> dnDetailDtos = dnDetails.stream()
+                    .map(this::convertDnDtlToDtoWithLov)
+                    .collect(Collectors.toList());
+            dto.setDeliveryNoteDetails(dnDetailDtos);
+            
+            // Fetch cost booked details
+            List<SalesInvCostbkdDtl> costDetails = costbkdDtlRepository
+                    .findByTransactionPoid(invoice.getTransactionPoid());
+            List<SalesInvCostbkdDtlDto> costDetailDtos = costDetails.stream()
+                    .map(this::convertCostbkdDtlToDto)
+                    .collect(Collectors.toList());
+            dto.setCostBookedDetails(costDetailDtos);
+        }
+        
+        return dto;
+    }
+    
+    /**
+     * Populate header LOV details from query result
+     * Column order: invoice fields (56) + LOV details (6 objects * 3 fields = 18) = 74 columns
+     * Invoice fields: 0-55 (56 fields: transactionPoid through lastmodifiedDate)
+     * LOV order: Customer (indices 56-58), Principal (59-61), Quotation (62-64), 
+     *            Print Division (65-67), Delivery Note (68-70), FDA (71-73)
+     */
+    private void populateHeaderLovDetails(SalesInvoiceHdrDto dto, Object[] row) {
+        log.debug("Row length: {}, Expected: 74 (56 invoice + 18 LOV)", row.length);
+        
+        // Customer Details (indices 56-58: custPoid, custCode, custName)
+        // The CASE statement in query handles partyType logic
+        SalesInvoiceHdrDto.LovDetailDto customerDetail = createLovDetailFromRow(row, 56);
+        log.debug("Customer detail from join - poid: {}, code: {}, description: {}, partyType: {}", 
+                customerDetail.getPoid(), customerDetail.getCode(), customerDetail.getDescription(), dto.getPartyType());
+        
+        // Use customerPoid from invoice if join didn't return poid
+        if (customerDetail.getPoid() == null && dto.getCustomerPoid() != null) {
+            log.debug("Using fallback customerPoid from invoice: {}", dto.getCustomerPoid());
+            customerDetail.setPoid(dto.getCustomerPoid());
+        }
+        
+        // If we have poid but no code/description, the JOIN didn't find a match
+        // Query separately based on partyType
+        if (customerDetail.getPoid() != null && customerDetail.getCode() == null && customerDetail.getDescription() == null) {
+            log.debug("Customer poid {} found but code/description are null. Querying separately based on partyType: {}", 
+                    customerDetail.getPoid(), dto.getPartyType());
+            
+            if ("CUSTOMER".equalsIgnoreCase(dto.getPartyType())) {
+                // Query SALES_CUSTOMER_MASTER
+                SalesInvoiceHdrDto.LovDetailDto fallbackDetail = queryCustomerDetails(customerDetail.getPoid());
+                if (fallbackDetail != null && fallbackDetail.getCode() != null) {
+                    customerDetail = fallbackDetail;
+                }
+            } else if ("PRINCIPAL".equalsIgnoreCase(dto.getPartyType())) {
+                // Query SHIP_PRINCIPAL_MASTER using customerPoid as PRINCIPAL_POID
+                SalesInvoiceHdrDto.LovDetailDto fallbackDetail = queryPrincipalDetails(customerDetail.getPoid());
+                if (fallbackDetail != null && fallbackDetail.getCode() != null) {
+                    customerDetail = fallbackDetail;
+                }
+            }
+        }
+        
+        dto.setCustomerDetails(customerDetail);
+        
+        // Principal Details (indices 59-61: prPoid, prCode, prName)
+        SalesInvoiceHdrDto.LovDetailDto principalDetail = createLovDetailFromRow(row, 59);
+        // Use principalPoid from invoice if join didn't return poid
+        if (principalDetail.getPoid() == null && dto.getPrincipalPoid() != null) {
+            principalDetail.setPoid(dto.getPrincipalPoid());
+        }
+        dto.setPrincipalDetails(principalDetail);
+        
+        // Quotation Details (indices 62-64: qtnDetailPoid, qtnDetailCode, qtnDetailDescription)
+        SalesInvoiceHdrDto.LovDetailDto qtnDetail = new SalesInvoiceHdrDto.LovDetailDto();
+        // Use qtn.TRANSACTION_POID from join (index 62)
+        if (row.length > 62 && row[62] != null) {
+            if (row[62] instanceof Number) {
+                qtnDetail.setPoid(((Number) row[62]).longValue());
+            }
+        }
+        // Fallback: use inv.QTN_POID (string at index 14) and convert to Long
+        if (qtnDetail.getPoid() == null && row.length > 14 && row[14] != null) {
+            try {
+                String qtnPoidStr = row[14].toString();
+                if (qtnPoidStr != null && !qtnPoidStr.trim().isEmpty()) {
+                    qtnDetail.setPoid(Long.parseLong(qtnPoidStr));
+                }
+            } catch (NumberFormatException e) {
+                log.warn("Failed to parse qtnPoid as Long: {}", row[14]);
+            }
+        }
+        // Get code and description from join (indices 63-64)
+        if (row.length > 63 && row[63] != null) {
+            qtnDetail.setCode(row[63].toString());
+        }
+        if (row.length > 64 && row[64] != null) {
+            qtnDetail.setDescription(row[64].toString());
+        }
+        dto.setQtnDetails(qtnDetail);
+        
+        // Print Division Details (indices 65-67: divDetailPoid, divDetailCode, divDetailDescription)
+        SalesInvoiceHdrDto.LovDetailDto divDetail = createLovDetailFromRow(row, 65);
+        // Use printDivisionPoid from invoice if join didn't return poid
+        if (divDetail.getPoid() == null && dto.getPrintDivisionPoid() != null) {
+            divDetail.setPoid(dto.getPrintDivisionPoid());
+        }
+        dto.setPrintDivisionDetails(divDetail);
+        
+        // Delivery Note Details (indices 68-70: dnDetailPoid, dnDetailCode, dnDetailDescription)
+        SalesInvoiceHdrDto.LovDetailDto dnDetail = new SalesInvoiceHdrDto.LovDetailDto();
+        // Get poid from query (index 68) - this is the CASE statement result
+        if (row.length > 68 && row[68] != null) {
+            if (row[68] instanceof Number) {
+                dnDetail.setPoid(((Number) row[68]).longValue());
+            }
+        }
+        // Fallback: use inv.DN_POID (string at index 46) and convert to Long
+        if (dnDetail.getPoid() == null && row.length > 46 && row[46] != null) {
+            try {
+                String dnPoidStr = row[46].toString();
+                if (dnPoidStr != null && !dnPoidStr.trim().isEmpty()) {
+                    dnDetail.setPoid(Long.parseLong(dnPoidStr));
+                }
+            } catch (NumberFormatException e) {
+                log.warn("Failed to parse dnPoid as Long: {}", row[46]);
+            }
+        }
+        // Only populate code and description if we have a valid poid
+        if (dnDetail.getPoid() != null) {
+            // Get code from join (index 69: dn.DOC_REF)
+            if (row.length > 69 && row[69] != null) {
+                String code = row[69].toString();
+                if (code != null && !code.trim().isEmpty()) {
+                    dnDetail.setCode(code);
+                }
+            }
+            // Get description from join (index 70: the concatenated description)
+            if (row.length > 70 && row[70] != null) {
+                String description = row[70].toString();
+                // Only set if description is meaningful (not just "VOY:- CUST:N/A" or empty)
+                if (description != null && !description.trim().isEmpty() && 
+                    !description.trim().equals("VOY:- CUST:N/A") && 
+                    !description.trim().equals("VOY:- CUST:")) {
+                    dnDetail.setDescription(description);
+                }
+            }
+        }
+        dto.setDnDetails(dnDetail);
+        
+        // FDA Details (indices 71-73: fdaDetailPoid, fdaDetailCode, fdaDetailDescription)
+        SalesInvoiceHdrDto.LovDetailDto fdaDetail = new SalesInvoiceHdrDto.LovDetailDto();
+        // Get poid from query (index 71) - this is the CASE statement result
+        if (row.length > 71 && row[71] != null) {
+            if (row[71] instanceof Number) {
+                fdaDetail.setPoid(((Number) row[71]).longValue());
+            }
+        }
+        // Fallback: use inv.FDA_REF (string at index 44) and convert to Long
+        if (fdaDetail.getPoid() == null && row.length > 44 && row[44] != null) {
+            try {
+                String fdaRefStr = row[44].toString();
+                if (fdaRefStr != null && !fdaRefStr.trim().isEmpty()) {
+                    fdaDetail.setPoid(Long.parseLong(fdaRefStr));
+                }
+            } catch (NumberFormatException e) {
+                log.warn("Failed to parse fdaRef as Long: {}", row[44]);
+            }
+        }
+        // Only populate code and description if we have a valid poid
+        if (fdaDetail.getPoid() != null) {
+            // Get code from join (index 72: fda.DOC_REF)
+            if (row.length > 72 && row[72] != null) {
+                String code = row[72].toString();
+                if (code != null && !code.trim().isEmpty()) {
+                    fdaDetail.setCode(code);
+                }
+            }
+            // Get description from join (index 73: the concatenated description)
+            if (row.length > 73 && row[73] != null) {
+                String description = row[73].toString();
+                // Only set if description is meaningful (not just " /  / " or empty separators)
+                if (description != null && !description.trim().isEmpty() && 
+                    !description.trim().equals("/") && 
+                    !description.trim().matches("^\\s*/\\s*/\\s*$")) {
+                    fdaDetail.setDescription(description);
+                }
+            }
+        }
+        dto.setFdaDetails(fdaDetail);
+    }
+    
+    /**
+     * Create LOV detail from row array starting at given index
+     * Expects: [poid, code, description] at indices [index, index+1, index+2]
+     */
+    private SalesInvoiceHdrDto.LovDetailDto createLovDetailFromRow(Object[] row, int index) {
+        SalesInvoiceHdrDto.LovDetailDto detail = new SalesInvoiceHdrDto.LovDetailDto();
+        
+        if (row.length > index) {
+            // Poid (may be BigDecimal or Long)
+            if (row[index] != null) {
+                if (row[index] instanceof java.math.BigDecimal) {
+                    detail.setPoid(((java.math.BigDecimal) row[index]).longValue());
+                } else if (row[index] instanceof Number) {
+                    detail.setPoid(((Number) row[index]).longValue());
+                }
+            }
+            
+            // Code
+            if (row.length > index + 1 && row[index + 1] != null) {
+                detail.setCode(row[index + 1].toString());
+            }
+            
+            // Description
+            if (row.length > index + 2 && row[index + 2] != null) {
+                detail.setDescription(row[index + 2].toString());
+            }
+        }
+        
+        // If all fields are null, return empty detail
+        if (detail.getPoid() == null && detail.getCode() == null && detail.getDescription() == null) {
+            return createEmptyLovDetail();
+        }
+        
+        return detail;
+    }
+    
+    /**
+     * Create empty LOV detail object
+     */
+    private SalesInvoiceHdrDto.LovDetailDto createEmptyLovDetail() {
+        SalesInvoiceHdrDto.LovDetailDto detail = new SalesInvoiceHdrDto.LovDetailDto();
+        detail.setPoid(null);
+        detail.setCode(null);
+        detail.setDescription(null);
+        return detail;
+    }
+    
+    /**
+     * Convert invoice detail row (Object[]) to DTO with LOV details
+     * Row structure: [0-30] invoice detail fields, [31-33] tax details (POID, CODE, NAME)
+     */
+    private SalesInvoiceDtlDto convertInvoiceDtlRowToDtoWithLov(Object[] row) {
+        SalesInvoiceDtlDto dto = new SalesInvoiceDtlDto();
+        
+        // Map invoice detail fields (indices 0-30)
+        dto.setTransactionPoid(row[0] != null ? ((Number) row[0]).longValue() : null);
+        dto.setDetRowId(row[1] != null ? ((Number) row[1]).longValue() : null);
+        dto.setDnPoidLinkFk(row[2] != null ? ((Number) row[2]).longValue() : null);
+        dto.setDetRowIdChrgFk(row[3] != null ? ((Number) row[3]).longValue() : null);
+        dto.setStockPoid(row[4] != null ? ((Number) row[4]).longValue() : null);
+        dto.setQuantity(row[5] != null ? ((Number) row[5]).longValue() : null);
+        dto.setPrice(convertToBigDecimal(row[6]));
+        dto.setDiscount(row[7] != null ? ((Number) row[7]).longValue() : null);
+        dto.setAmount(row[8] != null ? ((Number) row[8]).longValue() : null);
+        dto.setRemarks(toStringSafe(row[9]));
+        dto.setStockUnitPoid(row[10] != null ? ((Number) row[10]).longValue() : null);
+        dto.setCreatedBy(toStringSafe(row[11]));
+        dto.setCreatedDate(row[12] != null ? (Timestamp) row[12] : null);
+        dto.setLastmodifiedBy(toStringSafe(row[13]));
+        dto.setLastmodifiedDate(row[14] != null ? (Timestamp) row[14] : null);
+        dto.setQuotationPoid(row[15] != null ? ((Number) row[15]).longValue() : null);
+        dto.setCostAmt(row[16] != null ? ((Number) row[16]).longValue() : null);
+        dto.setQuotationDetRowId(row[17] != null ? ((Number) row[17]).longValue() : null);
+        dto.setPurchasePrice(row[18] != null ? ((Number) row[18]).longValue() : null);
+        dto.setPurchaseQty(row[19] != null ? ((Number) row[19]).longValue() : null);
+        dto.setNetSales(row[20] != null ? ((Number) row[20]).longValue() : null);
+        dto.setNetDiscount(row[21] != null ? ((Number) row[21]).longValue() : null);
+        dto.setItemGp(row[22] != null ? ((Number) row[22]).longValue() : null);
+        dto.setItemGpPer(row[23] != null ? ((Number) row[23]).longValue() : null);
+        dto.setItemType(toStringSafe(row[24]));
+        dto.setTaxPercentage(row[25] != null ? ((Number) row[25]).longValue() : null);
+        dto.setTaxAmount(row[26] != null ? ((Number) row[26]).longValue() : null);
+        dto.setTaxPoid(row[27] != null ? ((Number) row[27]).longValue() : null);
+        dto.setBaseAmt(row[28] != null ? ((Number) row[28]).longValue() : null);
+        dto.setIncentive(row[29] != null ? ((Number) row[29]).longValue() : null);
+        String costPoidStr = toStringSafe(row[30]);
+        // costPoid is stored as String in entity but DTO expects Long for costCenterPoid
+        if (costPoidStr != null && !costPoidStr.isEmpty()) {
+            try {
+                dto.setCostCenterPoid(Long.parseLong(costPoidStr));
+            } catch (NumberFormatException e) {
+                log.warn("Failed to parse costPoid as Long: {}", costPoidStr);
+            }
+        }
+        
+        // Populate tax details from query result (indices 31-33)
+        if (row.length > 31 && row[31] != null) {
+            Long taxPoid = row[31] instanceof Number ? ((Number) row[31]).longValue() : null;
+            String taxCode = row.length > 32 ? toStringSafe(row[32]) : null;
+            String taxName = row.length > 33 ? toStringSafe(row[33]) : null;
+            if (taxPoid != null) {
+                dto.setTaxDetails(new SalesInvoiceDtlDto.LovDetailDto(
+                        taxPoid,
+                        taxCode,
+                        taxName));
+            }
+        }
+        
+        // Populate stock details
+        if (dto.getStockPoid() != null) {
+            Optional<StockMasterEntity> stock = stockMasterRepository.findByStockPoid(dto.getStockPoid());
+            if (stock.isPresent()) {
+                StockMasterEntity stockEntity = stock.get();
+                dto.setStockDetails(new SalesInvoiceDtlDto.LovDetailDto(
+                        stockEntity.getStockPoid(),
+                        stockEntity.getStockCode(),
+                        stockEntity.getStockName()));
+            }
+        }
+        
+        // Populate cost center details (from GL_COST_CENTER_MASTER.MIS_GROUP)
+        if (dto.getCostCenterPoid() != null) {
+            try {
+                String misGroup = getCostCenterMisGroup(dto.getCostCenterPoid());
+                if (misGroup != null) {
+                    dto.setCostCenterDetails(new SalesInvoiceDtlDto.LovDetailDto(
+                            dto.getCostCenterPoid(),
+                            misGroup, // MIS_GROUP is the code
+                            misGroup)); // MIS_GROUP is also the description
+            }
+            } catch (Exception e) {
+                log.warn("Failed to fetch cost center details for costCenterPoid={}: {}", 
+                        dto.getCostCenterPoid(), e.getMessage());
+            }
+        }
+        
+        return dto;
+    }
+    
+    /**
+     * Helper methods for conversion
+     */
+    private BigDecimal convertToBigDecimal(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof BigDecimal) {
+            return (BigDecimal) value;
+        }
+        if (value instanceof Number) {
+            return BigDecimal.valueOf(((Number) value).doubleValue());
+        }
+        if (value instanceof String) {
+            String str = ((String) value).trim();
+            if (str.isEmpty()) {
+                return null;
+            }
+            try {
+                return new BigDecimal(str);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        try {
+            return new BigDecimal(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+    
+    /**
+     * Convert delivery note detail to DTO with LOV details
+     */
+    private SalesDnDtlDto convertDnDtlToDtoWithLov(SalesDnDtl dtl) {
+        SalesDnDtlDto dto = new SalesDnDtlDto();
+        BeanUtils.copyProperties(dtl, dto);
+        
+        // Populate delivery note details (dnPoidFk)
+        if (dtl.getDnPoidFk() != null) {
+            Optional<SalesDeliveryNoteHdr> dn = deliveryNoteHdrRepository.findByTransactionPoid(dtl.getDnPoidFk());
+            if (dn.isPresent()) {
+                SalesDeliveryNoteHdr dnEntity = dn.get();
+                String description = "VOY:-" + (dnEntity.getVoyageRef() != null ? dnEntity.getVoyageRef() : "") + 
+                        " CUST:" + getCustomerName(dnEntity.getCustomerPoid());
+                dto.setDnDetails(new SalesDnDtlDto.LovDetailDto(
+                        dnEntity.getTransactionPoid(),
+                        dnEntity.getDocRef(), // DOC_REF is the code
+                        description));
+            }
+        }
+        
         return dto;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public SalesInvoiceHdrDto getSalesInvoiceByPoid(Long transactionPoid, Long groupPoid,
-            Long companyPoid, Boolean includeDetails) {
+    public SalesInvoiceHdrDto getSalesInvoiceByPoid(Long transactionPoid, Long companyPoid, Boolean includeDetails) {
+        log.info("getSalesInvoiceByPoid service started for transactionPoid={} companyPoid={}", transactionPoid, companyPoid);
+        
+        // First check if invoice exists with just transactionPoid
+        Optional<SalesInvoiceHdr> invoiceByPoid = invoiceHdrRepository.findByTransactionPoid(transactionPoid);
+        if (invoiceByPoid.isEmpty()) {
+            log.warn("Sales invoice not found with transactionPoid={}", transactionPoid);
+            throw new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid);
+        }
+        
+        // Then check companyPoid match
         SalesInvoiceHdr invoice = invoiceHdrRepository
-                .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
+                .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
+                .orElseThrow(() -> {
+                    SalesInvoiceHdr foundInvoice = invoiceByPoid.get();
+                    log.warn("Sales invoice found with transactionPoid={} but companyPoid mismatch. Expected: {}, Found: {}", 
+                            transactionPoid, companyPoid, foundInvoice.getCompanyPoid());
+                    return new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid);
+                });
 
         if ("Y".equals(invoice.getDeleted())) {
+            log.warn("Sales invoice found with transactionPoid={} but is deleted", transactionPoid);
             throw new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid);
         }
 
-        return convertToDto(invoice, includeDetails != null && includeDetails);
+        log.info("getSalesInvoiceByPoid completed for transactionPoid={} companyPoid={}", transactionPoid, companyPoid);
+        // Always include details regardless of includeDetails parameter
+        return convertToDtoWithLov(invoice, true);
     }
 
     @Override
@@ -280,58 +744,183 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 request.getCustomerPoid());
 
         // Update detail tables
-        for (UpdateSalesInvoiceDtlRequest invDetail : request.getInvoiceDetails()) {
-
-            // Find existing invoice detail
-            SalesInvoiceDtl dtl = invoiceDtlRepository
-                    .findById(new SalesInvoiceDtlId(transactionPoid, invDetail.getDetRowId()))
-                    .orElseThrow(
-                            () -> new ResourceNotFoundException("Invoice Detail", "detRowId", invDetail.getDetRowId()));
-
-            // Update fields (only editable fields)
-            dtl.setStockPoid(invDetail.getStockPoid());
-            dtl.setStockUnitPoid(invDetail.getStockUnitPoid());
-            dtl.setQuantity(invDetail.getQuantity());
-            dtl.setPrice(invDetail.getPrice());
-            dtl.setDiscount(invDetail.getDiscount());
-            dtl.setBaseAmt(invDetail.getBaseAmt());
-            dtl.setTaxPoid(invDetail.getTaxPoid());
-            dtl.setCostPoid(invDetail.getCostCenterPoid());
-            dtl.setRemarks(invDetail.getRemarks());
-            dtl.setLastmodifiedBy(userId);
-
-            // Recalculate amount
-            if (dtl.getQuantity() != null && dtl.getPrice() != null) {
-                BigDecimal quantity = BigDecimal.valueOf(dtl.getQuantity());
-                BigDecimal amount = quantity.multiply(dtl.getPrice());
-                if (dtl.getDiscount() != null) {
-                    amount = amount.subtract(BigDecimal.valueOf(dtl.getDiscount()));
+        if (request.getInvoiceDetails() != null && !request.getInvoiceDetails().isEmpty()) {
+            for (UpdateSalesInvoiceDtlRequest invDetail : request.getInvoiceDetails()) {
+                String actionType = invDetail.getActionType();
+                
+                // Handle deletion
+                if ("isDeleted".equalsIgnoreCase(actionType) || "delRowId".equalsIgnoreCase(actionType)) {
+                    // Delete the invoice detail
+                    if (invDetail.getDetRowId() != null) {
+                        try {
+                            invoiceDtlRepository.deleteById(new SalesInvoiceDtlId(transactionPoid, invDetail.getDetRowId()));
+                            log.debug("Deleted invoice detail with detRowId: {}", invDetail.getDetRowId());
+                        } catch (Exception e) {
+                            log.warn("Failed to delete invoice detail with detRowId: {}", invDetail.getDetRowId(), e);
+                        }
+                    }
+                    continue;
                 }
-                dtl.setAmount(amount.longValue());
+                
+                // Handle creation of new record
+                if ("isCreated".equalsIgnoreCase(actionType)) {
+                    // Get next DetRowId
+                    Long maxDetRowId = invoiceDtlRepository
+                            .findMaxDetRowIdByTransactionPoid(transactionPoid);
+                    Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
+                    
+                    // Create new invoice detail
+                    SalesInvoiceDtl newDtl = new SalesInvoiceDtl();
+                    newDtl.setTransactionPoid(transactionPoid);
+                    newDtl.setDetRowId(detRowId);
+                    newDtl.setStockPoid(invDetail.getStockPoid());
+                    newDtl.setStockUnitPoid(invDetail.getStockUnitPoid());
+                    newDtl.setQuantity(invDetail.getQuantity());
+                    newDtl.setPrice(invDetail.getPrice());
+                    newDtl.setDiscount(invDetail.getDiscount());
+                    newDtl.setBaseAmt(invDetail.getBaseAmt());
+                    newDtl.setTaxPoid(invDetail.getTaxPoid());
+                    newDtl.setCostPoid(invDetail.getCostCenterPoid());
+                    newDtl.setRemarks(invDetail.getRemarks());
+                    newDtl.setCreatedBy(userId);
+                    newDtl.setLastmodifiedBy(userId);
+                    
+                    // Calculate amount
+                    if (newDtl.getQuantity() != null && newDtl.getPrice() != null) {
+                        BigDecimal quantity = BigDecimal.valueOf(newDtl.getQuantity());
+                        BigDecimal amount = quantity.multiply(newDtl.getPrice());
+                        if (newDtl.getDiscount() != null) {
+                            amount = amount.subtract(BigDecimal.valueOf(newDtl.getDiscount()));
+                        }
+                        newDtl.setAmount(amount.longValue());
+                    }
+                    
+                    invoiceDtlRepository.save(newDtl);
+                    log.debug("Created new invoice detail with detRowId: {}", detRowId);
+                    continue;
+                }
+                
+                // Handle no changes - skip processing
+                if ("noChanges".equalsIgnoreCase(actionType)) {
+                    log.debug("Skipping invoice detail with actionType 'noChanges' for detRowId: {}", invDetail.getDetRowId());
+                    continue;
+                }
+                
+                // Handle update of existing record (actionType = "isUpdated" or null/empty)
+                if (invDetail.getDetRowId() == null) {
+                    log.warn("Skipping invoice detail update - detRowId is null and actionType is not 'isCreated'");
+                    continue;
+                }
+                
+                // Find existing invoice detail
+                SalesInvoiceDtl dtl = invoiceDtlRepository
+                        .findById(new SalesInvoiceDtlId(transactionPoid, invDetail.getDetRowId()))
+                        .orElseThrow(
+                                () -> new ResourceNotFoundException("Invoice Detail", "detRowId", invDetail.getDetRowId()));
+
+                // Update fields (only editable fields)
+                dtl.setStockPoid(invDetail.getStockPoid());
+                dtl.setStockUnitPoid(invDetail.getStockUnitPoid());
+                dtl.setQuantity(invDetail.getQuantity());
+                dtl.setPrice(invDetail.getPrice());
+                dtl.setDiscount(invDetail.getDiscount());
+                dtl.setBaseAmt(invDetail.getBaseAmt());
+                dtl.setTaxPoid(invDetail.getTaxPoid());
+                dtl.setCostPoid(invDetail.getCostCenterPoid());
+                dtl.setRemarks(invDetail.getRemarks());
+                dtl.setLastmodifiedBy(userId);
+
+                // Recalculate amount
+                if (dtl.getQuantity() != null && dtl.getPrice() != null) {
+                    BigDecimal quantity = BigDecimal.valueOf(dtl.getQuantity());
+                    BigDecimal amount = quantity.multiply(dtl.getPrice());
+                    if (dtl.getDiscount() != null) {
+                        amount = amount.subtract(BigDecimal.valueOf(dtl.getDiscount()));
+                    }
+                    dtl.setAmount(amount.longValue());
+                }
+
+                // Recalculate tax if tax is selected
+                // if (invDetail.getTaxPoid() != null) {
+
+                // }
+
+                invoiceDtlRepository.save(dtl);
+                log.debug("Updated invoice detail with detRowId: {}", invDetail.getDetRowId());
             }
-
-            // Recalculate tax if tax is selected
-            // if (invDetail.getTaxPoid() != null) {
-
-            // }
-
-            invoiceDtlRepository.save(dtl);
         }
 
-        for (UpdateSalesDnDtlRequest dnDtlRquest : request.getDeliveryNoteDetails()) {
-            // Find existing delivery note detail
-            SalesDnDtl dtl = dnDtlRepository
-                    .findById(new SalesDnDtlId(transactionPoid, dnDtlRquest.getDetRowId()))
-                    .orElseThrow(() -> new ResourceNotFoundException("Delivery Note Detail", "detRowId",
-                            dnDtlRquest.getDetRowId()));
+        if (request.getDeliveryNoteDetails() != null && !request.getDeliveryNoteDetails().isEmpty()) {
+            for (UpdateSalesDnDtlRequest dnDtlRequest : request.getDeliveryNoteDetails()) {
+                String actionType = dnDtlRequest.getActionType();
+                
+                // Handle deletion
+                if ("isDeleted".equalsIgnoreCase(actionType) || "delRowId".equalsIgnoreCase(actionType)) {
+                    // Delete the delivery note detail
+                    if (dnDtlRequest.getDetRowId() != null) {
+                        try {
+                            dnDtlRepository.deleteById(new SalesDnDtlId(transactionPoid, dnDtlRequest.getDetRowId()));
+                            log.debug("Deleted delivery note detail with detRowId: {}", dnDtlRequest.getDetRowId());
+                        } catch (Exception e) {
+                            log.warn("Failed to delete delivery note detail with detRowId: {}", dnDtlRequest.getDetRowId(), e);
+                        }
+                    } else {
+                        log.warn("Skipping delivery note detail deletion - detRowId is null for actionType: {}", actionType);
+                    }
+                    continue;
+                }
+                
+                // Handle creation of new record
+                if ("isCreated".equalsIgnoreCase(actionType)) {
+                    // Get next DetRowId
+                    Long maxDetRowId = dnDtlRepository
+                            .findMaxDetRowIdByTransactionPoid(transactionPoid);
+                    Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
+                    
+                    log.debug("Creating new delivery note detail with detRowId: {}, remarks: {}", detRowId, dnDtlRequest.getRemarks());
+                    
+                    // Create new delivery note detail
+                    SalesDnDtl newDtl = new SalesDnDtl();
+                    newDtl.setTransactionPoid(transactionPoid);
+                    newDtl.setDetRowId(detRowId);
+                    newDtl.setDnPoidFk(dnDtlRequest.getDnPoidFk());
+                    newDtl.setQuotationPoidFk(dnDtlRequest.getQuotationPoidFk());
+                    newDtl.setRemarks(dnDtlRequest.getRemarks());
+                    newDtl.setCreatedBy(userId);
+                    newDtl.setLastmodifiedBy(userId);
+                    
+                    dnDtlRepository.save(newDtl);
+                    log.debug("Successfully created new delivery note detail with detRowId: {}", detRowId);
+                    continue;
+                }
+                
+                // Handle no changes - skip processing
+                if ("noChanges".equalsIgnoreCase(actionType)) {
+                    log.debug("Skipping delivery note detail with actionType 'noChanges' for detRowId: {}", dnDtlRequest.getDetRowId());
+                    continue;
+                }
+                
+                // Handle update of existing record (actionType = "isUpdated" or null/empty)
+                if (dnDtlRequest.getDetRowId() == null) {
+                    log.warn("Skipping delivery note detail update - detRowId is null and actionType is not 'isCreated'");
+                    continue;
+                }
+                
+                // Find existing delivery note detail
+                SalesDnDtl dtl = dnDtlRepository
+                        .findById(new SalesDnDtlId(transactionPoid, dnDtlRequest.getDetRowId()))
+                        .orElseThrow(() -> new ResourceNotFoundException("Delivery Note Detail", "detRowId",
+                                dnDtlRequest.getDetRowId()));
 
-            // Update fields
-            dtl.setDnPoidFk(dnDtlRquest.getDnPoidFk());
-            dtl.setQuotationPoidFk(dnDtlRquest.getQuotationPoidFk());
-            dtl.setRemarks(dnDtlRquest.getRemarks());
-            dtl.setLastmodifiedBy(userId);
+                // Update fields
+                dtl.setDnPoidFk(dnDtlRequest.getDnPoidFk());
+                dtl.setQuotationPoidFk(dnDtlRequest.getQuotationPoidFk());
+                dtl.setRemarks(dnDtlRequest.getRemarks());
+                dtl.setLastmodifiedBy(userId);
 
-            dnDtlRepository.save(dtl);
+                dnDtlRepository.save(dtl);
+                log.debug("Updated delivery note detail with detRowId: {}", dnDtlRequest.getDetRowId());
+            }
         }
         // Save
         SalesInvoiceHdr savedInvoice = invoiceHdrRepository.save(invoice);
@@ -371,52 +960,119 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional(readOnly = true)
-    public PaginatedResponse<SalesInvoiceHdrDto> getAllSalesInvoices(Long groupPoid, Long companyPoid,
-            String invStatus, String verified,
-            Long customerPoid, Long principalPoid,
-            String qtnPoid, String search,
-            Timestamp fromDate, Timestamp toDate,
-            Integer page, Integer size) {
-        log.info("getAllSalesInvoices service started for groupPoid={} companyPoid={} page={} size={}", 
-                groupPoid, companyPoid, page, size);
+    public PaginatedResponse<SalesInvoiceListDto> getAllSalesInvoices(Long companyPoid,
+            FilterRequestDto filterRequest, Integer page, Integer size, String sortBy, String sortDir) {
+        log.info("getAllSalesInvoices service started for companyPoid={} page={} size={} sortBy={} sortDir={}", 
+                companyPoid, page, size, sortBy, sortDir);
         
         // Set default values for pagination
         int pageNumber = (page != null && page >= 0) ? page : 0;
         int pageSize = (size != null && size > 0) ? size : 10; // Default page size is 10
         
-        // Create Pageable with sorting by transaction date descending, then docRef ascending
-        Pageable pageable = PageRequest.of(pageNumber, pageSize, 
-                Sort.by("transactionDate").descending().and(Sort.by("docRef").ascending()));
+        // Handle sorting
+        Sort sort;
+        if (sortBy != null && !sortBy.trim().isEmpty()) {
+            Sort.Direction direction = "DESC".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
+            // Map frontend field names to database field names
+            String dbFieldName = mapSortFieldToDbField(sortBy);
+            sort = Sort.by(direction, dbFieldName);
+        } else {
+            // Default sorting by transaction date descending, then docRef ascending
+            sort = Sort.by("transactionDate").descending().and(Sort.by("docRef").ascending());
+        }
         
-        // Use the repository implementation method with filters and customer name
-        Page<Object[]> invoicesPage = invoiceHdrRepositoryImpl.findAllWithFiltersAndCustomerName(
-                groupPoid, companyPoid, invStatus, verified, customerPoid, principalPoid, 
-                qtnPoid, fromDate, toDate, search, pageable);
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, sort);
         
-        // Convert to DTOs - Object[] contains [SalesInvoiceHdr, customerName]
-        List<SalesInvoiceHdrDto> data = invoicesPage.getContent().stream()
-                .map(result -> {
-                    SalesInvoiceHdr entity = (SalesInvoiceHdr) result[0];
-                    String customerName = result[1] != null ? result[1].toString() : null;
-                    SalesInvoiceHdrDto dto = convertToDto(entity, false);
-                    dto.setCustomerName(customerName);
-                    return dto;
-                })
+        // Use the repository implementation method with filters
+        Page<Object[]> invoicesPage = invoiceHdrRepositoryImpl.findAllForList(
+                companyPoid, filterRequest, pageable);
+        
+        // Convert to List DTOs
+        List<SalesInvoiceListDto> content = invoicesPage.getContent().stream()
+                .map(this::convertToListDto)
                 .collect(Collectors.toList());
         
+        // Build display fields map (keys in uppercase)
+        Map<String, String> displayFields = new HashMap<>();
+        displayFields.put("DATE", "text");
+        displayFields.put("DOCREF", "text");
+        displayFields.put("QTNREF", "text");
+        displayFields.put("PARTYNAME", "text");
+        displayFields.put("VESSELNAME", "text");
+        
         // Create paginated response
-        PaginatedResponse<SalesInvoiceHdrDto> response = new PaginatedResponse<>();
-        response.setData(data);
-        response.setPage(invoicesPage.getNumber());
-        response.setSize(invoicesPage.getSize());
+        PaginatedResponse<SalesInvoiceListDto> response = new PaginatedResponse<>();
+        response.setContent(content);
+        response.setPageNumber(invoicesPage.getNumber());
+        response.setPageSize(invoicesPage.getSize());
         response.setTotalElements(invoicesPage.getTotalElements());
         response.setTotalPages(invoicesPage.getTotalPages());
         response.setFirst(invoicesPage.isFirst());
         response.setLast(invoicesPage.isLast());
+        response.setDisplayFields(displayFields);
         
-        log.info("getAllSalesInvoices completed for groupPoid={} companyPoid={} totalElements={}", 
-                groupPoid, companyPoid, response.getTotalElements());
+        log.info("getAllSalesInvoices completed for companyPoid={} totalElements={}", 
+                companyPoid, response.getTotalElements());
         return response;
+    }
+    
+    private String mapSortFieldToDbField(String sortBy) {
+        // Map frontend field names to database/entity field names
+        switch (sortBy.toUpperCase()) {
+            case "DATE":
+                return "transactionDate";
+            case "DOCREF":
+            case "DOC_REF":
+                return "docRef";
+            case "QTNREF":
+            case "QTN_REF":
+                return "qtnPoid";
+            case "PARTYNAME":
+            case "PARTY_NAME":
+                return "customerName"; // Will be sorted by customer name in query
+            case "VESSELNAME":
+            case "VESSEL_NAME":
+                return "vesselName";
+            case "CREATEDDATE":
+            case "CREATED_DATE":
+                return "createdDate";
+            case "UPDATEDDATE":
+            case "UPDATED_DATE":
+                return "lastmodifiedDate";
+            default:
+                return sortBy; // Use as-is if no mapping found
+        }
+    }
+    
+    private SalesInvoiceListDto convertToListDto(Object[] result) {
+        // Object[] contains: transactionPoid, date, docRef, qtnRef, partyName, vesselName, 
+        // deleted, createdBy, updatedBy, createdDate, updatedDate
+        SalesInvoiceListDto dto = new SalesInvoiceListDto();
+        dto.setTransactionPoid(((Number) result[0]).longValue());
+        dto.setDate((java.sql.Timestamp) result[1]);
+        dto.setDocRef(toStringSafe(result[2]));
+        dto.setQtnRef(toStringSafe(result[3]));
+        dto.setPartyName(toStringSafe(result[4]));
+        dto.setVesselName(toStringSafe(result[5]));
+        dto.setDeleted(toStringSafe(result[6]));
+        dto.setCreatedBy(toStringSafe(result[7]));
+        dto.setUpdatedBy(toStringSafe(result[8]));
+        dto.setCreatedDate((java.sql.Timestamp) result[9]);
+        dto.setUpdatedDate((java.sql.Timestamp) result[10]);
+        return dto;
+    }
+    
+    private String toStringSafe(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String) {
+            return (String) value;
+        }
+        if (value instanceof Character) {
+            return String.valueOf((Character) value);
+        }
+        return value.toString();
     }
 
     // Validation Methods
@@ -1091,6 +1747,103 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         }
 
         return dto;
+    }
+    
+    /**
+     * Helper method to get MIS_GROUP from GL_COST_CENTER_MASTER
+     * Note: costCenterPoid is ROWNUM, so we need to query by position
+     */
+    private String getCostCenterMisGroup(Long costCenterPoid) {
+        // Since costCenterPoid is ROWNUM, we need to use a subquery
+        // The LOV query shows: SELECT ROWNUM AS POID, MIS_GROUP AS CODE, '' AS DESCRIPTION
+        // So we need to get MIS_GROUP by ROWNUM position
+        try {
+            // Use native query to get MIS_GROUP by ROWNUM
+            String sql = "SELECT MIS_GROUP FROM (" +
+                    "SELECT ROWNUM AS RN, MIS_GROUP " +
+                    "FROM (SELECT MIS_GROUP FROM GL_COST_CENTER_MASTER GROUP BY MIS_GROUP)" +
+                    ") WHERE RN = ?";
+            // Note: This requires JdbcTemplate which we don't have injected
+            // For now, return null and log a warning
+            log.warn("Cost center MIS_GROUP lookup requires JdbcTemplate. costCenterPoid={}", costCenterPoid);
+            return null;
+        } catch (Exception e) {
+            log.warn("Failed to get cost center MIS_GROUP for costCenterPoid={}: {}", costCenterPoid, e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Helper method to get customer name
+     */
+    private String getCustomerName(Long customerPoid) {
+        if (customerPoid == null) {
+            return "";
+        }
+        try {
+            // Query SALES_CUSTOMER_MASTER for customer name
+            // This would require a repository method, for now return empty string
+            // In a real implementation, you'd inject SalesCustomerMasterRepository
+            log.debug("Customer name lookup for customerPoid={} requires repository", customerPoid);
+            return "";
+        } catch (Exception e) {
+            log.warn("Failed to get customer name for customerPoid={}: {}", customerPoid, e.getMessage());
+            return "";
+        }
+    }
+    
+    /**
+     * Query customer details from SALES_CUSTOMER_MASTER
+     */
+    private SalesInvoiceHdrDto.LovDetailDto queryCustomerDetails(Long customerPoid) {
+        if (customerPoid == null) {
+            return createEmptyLovDetail();
+        }
+        try {
+            String sql = "SELECT CUSTOMER_POID, CUSTOMER_CODE, CUSTOMER_NAME " +
+                        "FROM SALES_CUSTOMER_MASTER " +
+                        "WHERE CUSTOMER_POID = :customerPoid";
+            Query query = entityManager.createNativeQuery(sql);
+            query.setParameter("customerPoid", customerPoid);
+            
+            @SuppressWarnings("unchecked")
+            List<Object[]> results = query.getResultList();
+            
+            if (!results.isEmpty()) {
+                Object[] row = results.get(0);
+                return createLovDetailFromRow(row, 0);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to query customer details for customerPoid={}: {}", customerPoid, e.getMessage());
+        }
+        return createEmptyLovDetail();
+    }
+    
+    /**
+     * Query principal details from SHIP_PRINCIPAL_MASTER
+     */
+    private SalesInvoiceHdrDto.LovDetailDto queryPrincipalDetails(Long principalPoid) {
+        if (principalPoid == null) {
+            return createEmptyLovDetail();
+        }
+        try {
+            String sql = "SELECT PRINCIPAL_POID, PRINCIPAL_CODE, PRINCIPAL_NAME " +
+                        "FROM SHIP_PRINCIPAL_MASTER " +
+                        "WHERE PRINCIPAL_POID = :principalPoid";
+            Query query = entityManager.createNativeQuery(sql);
+            query.setParameter("principalPoid", principalPoid);
+            
+            @SuppressWarnings("unchecked")
+            List<Object[]> results = query.getResultList();
+            
+            if (!results.isEmpty()) {
+                Object[] row = results.get(0);
+                return createLovDetailFromRow(row, 0);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to query principal details for principalPoid={}: {}", principalPoid, e.getMessage());
+        }
+        return createEmptyLovDetail();
     }
 
 }

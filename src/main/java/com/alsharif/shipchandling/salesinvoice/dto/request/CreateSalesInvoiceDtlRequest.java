@@ -21,4 +21,7 @@ public class CreateSalesInvoiceDtlRequest {
     private Long taxPoid;
     private String costCenterPoid;
     private String remarks;
+    // Action type: "isCreated" to create new, "isDeleted" or "delRowId" to delete
+    // Note: This field is only used in create/update requests, not in response/view APIs
+    private String actionType;
 }

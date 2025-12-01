@@ -22,4 +22,7 @@ public class UpdateSalesInvoiceDtlRequest {
     private Long taxPoid;
     private String costCenterPoid;
     private String remarks;
+    // Action type: "isCreated" (create new), "isUpdated" (update existing), "noChanges" (no changes), 
+    // "isDeleted" or "delRowId" (delete). Note: This field is only used in create/update requests, not in response/view APIs
+    private String actionType;
 }

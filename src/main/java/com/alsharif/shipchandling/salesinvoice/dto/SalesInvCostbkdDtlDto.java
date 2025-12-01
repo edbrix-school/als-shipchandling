@@ -16,6 +16,8 @@ public class SalesInvCostbkdDtlDto {
     private Long bookingPoidFk;
     private String docRefFk;
     private Long supplierPoid;
+    private String supplierName; // From AR_SCH_SALES_INV_COSTBKD_DTL.SUPPLIER_NAME
+    private String bookType; // From AR_SCH_SALES_INV_COSTBKD_DTL.BOOK_TYPE
     private Long costAmt;
     private String remarks;
 }

@@ -50,4 +50,19 @@ public class SalesInvoiceDtlDto {
     private Timestamp createdDate;
     private String lastmodifiedBy;
     private Timestamp lastmodifiedDate;
+    
+    // LOV Details
+    private LovDetailDto stockDetails;
+    private LovDetailDto costCenterDetails;
+    private LovDetailDto taxDetails;
+    
+    // Inner class for LOV details
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LovDetailDto {
+        private Long poid;
+        private String code;
+        private String description;
+    }
 }

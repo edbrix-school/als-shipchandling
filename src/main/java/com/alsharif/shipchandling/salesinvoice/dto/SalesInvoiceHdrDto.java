@@ -75,4 +75,22 @@ public class SalesInvoiceHdrDto {
     private List<SalesInvoiceDtlDto> invoiceDetails;
     private List<SalesDnDtlDto> deliveryNoteDetails;
     private List<SalesInvCostbkdDtlDto> costBookedDetails;
+    
+    // LOV Details
+    private LovDetailDto customerDetails;
+    private LovDetailDto principalDetails;
+    private LovDetailDto qtnDetails;
+    private LovDetailDto printDivisionDetails;
+    private LovDetailDto dnDetails;
+    private LovDetailDto fdaDetails;
+    
+    // Inner class for LOV details
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LovDetailDto {
+        private Long poid;
+        private String code;
+        private String description;
+    }
 }

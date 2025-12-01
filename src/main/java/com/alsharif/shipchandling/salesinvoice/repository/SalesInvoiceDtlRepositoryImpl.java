@@ -18,15 +18,18 @@ public class SalesInvoiceDtlRepositoryImpl {
 
     public List<SalesInvoiceDtl> findByTransactionPoidNative(Long transactionPoid) {
         String sql = "SELECT " +
-                "TRANSACTION_POID, DET_ROW_ID, DN_POID_LINK_FK, DET_ROW_ID_CHRG_FK, " +
-                "STOCK_POID, QUANTITY, PRICE, DISCOUNT, AMOUNT, REMARKS, STOCK_UNIT_POID, " +
-                "CREATED_BY, CREATED_DATE, LASTMODIFIED_BY, LASTMODIFIED_DATE, " +
-                "QUOTATION_POID, COST_AMT, QTN_DET_ROW_ID, PURCHASE_PRICE, PURCHASE_QTY, " +
-                "NET_SALES, NET_DISCOUNT, ITEM_GP, ITEM_GP_PER, ITEM_TYPE, " +
-                "TAX_PERCENTAGE, TAX_AMOUNT, TAX_POID, BASE_AMT, INCENTIVE, COST_POID " +
-                "FROM AR_SCH_SALES_INVOICE_DTL " +
-                "WHERE TRANSACTION_POID = :transactionPoid " +
-                "ORDER BY DET_ROW_ID";
+                "dtl.TRANSACTION_POID, dtl.DET_ROW_ID, dtl.DN_POID_LINK_FK, dtl.DET_ROW_ID_CHRG_FK, " +
+                "dtl.STOCK_POID, dtl.QUANTITY, dtl.PRICE, dtl.DISCOUNT, dtl.AMOUNT, dtl.REMARKS, dtl.STOCK_UNIT_POID, " +
+                "dtl.CREATED_BY, dtl.CREATED_DATE, dtl.LASTMODIFIED_BY, dtl.LASTMODIFIED_DATE, " +
+                "dtl.QUOTATION_POID, dtl.COST_AMT, dtl.QTN_DET_ROW_ID, dtl.PURCHASE_PRICE, dtl.PURCHASE_QTY, " +
+                "dtl.NET_SALES, dtl.NET_DISCOUNT, dtl.ITEM_GP, dtl.ITEM_GP_PER, dtl.ITEM_TYPE, " +
+                "dtl.TAX_PERCENTAGE, dtl.TAX_AMOUNT, dtl.TAX_POID, dtl.BASE_AMT, dtl.INCENTIVE, dtl.COST_POID, " +
+                // Tax details from GLOBAL_TAX_MASTER
+                "tax.TAX_POID as TAX_DETAIL_POID, tax.TAX_CODE as TAX_DETAIL_CODE, tax.TAX_NAME as TAX_DETAIL_NAME " +
+                "FROM AR_SCH_SALES_INVOICE_DTL dtl " +
+                "LEFT JOIN GLOBAL_TAX_MASTER tax ON dtl.TAX_POID = tax.TAX_POID AND NVL(tax.ACTIVE, 'Y') = 'Y' " +
+                "WHERE dtl.TRANSACTION_POID = :transactionPoid " +
+                "ORDER BY dtl.DET_ROW_ID";
 
         Query query = entityManager.createNativeQuery(sql);
         query.setParameter("transactionPoid", transactionPoid);
@@ -37,6 +40,34 @@ public class SalesInvoiceDtlRepositoryImpl {
         return results.stream()
                 .map(this::mapRowToEntity)
                 .toList();
+    }
+    
+    /**
+     * Get invoice details with tax details in a single query
+     * Returns Object[] with invoice detail data and tax details (poid, code, name)
+     */
+    public List<Object[]> findByTransactionPoidWithTaxDetails(Long transactionPoid) {
+        String sql = "SELECT " +
+                "dtl.TRANSACTION_POID, dtl.DET_ROW_ID, dtl.DN_POID_LINK_FK, dtl.DET_ROW_ID_CHRG_FK, " +
+                "dtl.STOCK_POID, dtl.QUANTITY, dtl.PRICE, dtl.DISCOUNT, dtl.AMOUNT, dtl.REMARKS, dtl.STOCK_UNIT_POID, " +
+                "dtl.CREATED_BY, dtl.CREATED_DATE, dtl.LASTMODIFIED_BY, dtl.LASTMODIFIED_DATE, " +
+                "dtl.QUOTATION_POID, dtl.COST_AMT, dtl.QTN_DET_ROW_ID, dtl.PURCHASE_PRICE, dtl.PURCHASE_QTY, " +
+                "dtl.NET_SALES, dtl.NET_DISCOUNT, dtl.ITEM_GP, dtl.ITEM_GP_PER, dtl.ITEM_TYPE, " +
+                "dtl.TAX_PERCENTAGE, dtl.TAX_AMOUNT, dtl.TAX_POID, dtl.BASE_AMT, dtl.INCENTIVE, dtl.COST_POID, " +
+                // Tax details from GLOBAL_TAX_MASTER
+                "tax.TAX_POID as TAX_DETAIL_POID, tax.TAX_CODE as TAX_DETAIL_CODE, tax.TAX_NAME as TAX_DETAIL_NAME " +
+                "FROM AR_SCH_SALES_INVOICE_DTL dtl " +
+                "LEFT JOIN GLOBAL_TAX_MASTER tax ON dtl.TAX_POID = tax.TAX_POID AND NVL(tax.ACTIVE, 'Y') = 'Y' " +
+                "WHERE dtl.TRANSACTION_POID = :transactionPoid " +
+                "ORDER BY dtl.DET_ROW_ID";
+
+        Query query = entityManager.createNativeQuery(sql);
+        query.setParameter("transactionPoid", transactionPoid);
+
+        @SuppressWarnings("unchecked")
+        List<Object[]> results = query.getResultList();
+
+        return results;
     }
 
     private SalesInvoiceDtl mapRowToEntity(Object[] row) {
@@ -76,6 +107,8 @@ public class SalesInvoiceDtlRepositoryImpl {
         entity.setBaseAmt(row[28] != null ? ((Number) row[28]).longValue() : null);
         entity.setIncentive(row[29] != null ? ((Number) row[29]).longValue() : null);
         entity.setCostPoid(toStringSafe(row[30]));
+        // Note: row[31], row[32], row[33] are tax details (TAX_DETAIL_POID, TAX_DETAIL_CODE, TAX_DETAIL_NAME)
+        // but we don't store them in the entity, they're used in the service layer
         
         return entity;
     }

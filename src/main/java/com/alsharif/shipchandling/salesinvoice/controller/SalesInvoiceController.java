@@ -2,6 +2,7 @@ package com.alsharif.shipchandling.salesinvoice.controller;
 
 import com.alsharif.shipchandling.salesinvoice.dto.*;
 import com.alsharif.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
+import com.alsharif.shipchandling.salesinvoice.dto.FilterRequestDto;
 import com.alsharif.shipchandling.salesinvoice.dto.request.CreateSalesDnDtlRequest;
 import com.alsharif.shipchandling.salesinvoice.dto.request.CreateSalesInvoiceDtlRequest;
 import com.alsharif.shipchandling.salesinvoice.dto.request.CreateSalesInvoiceRequest;
@@ -29,12 +30,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.sql.Timestamp;
-import java.time.OffsetDateTime;
 import java.util.List;
 
 import com.alsharif.shipchandling.salesinvoice.dto.PaginatedResponse;
@@ -80,17 +79,16 @@ public class SalesInvoiceController {
         @GetMapping("/{transactionPoid}")
         public ResponseEntity<?> getSalesInvoiceByPoid(
                         @PathVariable Long transactionPoid,
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestHeader("companyPoid") Long companyPoid,
+                        @RequestHeader("UserPoid") Long userPoid,
                         @RequestParam(required = true) String documentId,
                         @RequestParam(required = true) String actionRequested,
                         @RequestParam(required = false, defaultValue = "false") Boolean includeDetails) {
-                log.info("Fetching sales invoice with transactionPoid: {} groupId: {} companyId: {}", transactionPoid,
-                                groupPoid, companyPoid);
+                log.info("Fetching sales invoice with transactionPoid: {} companyId: {} userPoid: {}", transactionPoid,
+                                companyPoid, userPoid);
                 SalesInvoiceHdrDto dto = invoiceService.getSalesInvoiceByPoid(
-                                transactionPoid, groupPoid, companyPoid, includeDetails);
-                log.info("Sales invoice fetched with transactionPoid: {} groupId: {} companyId: {}", transactionPoid,
-                                groupPoid, companyPoid);
+                                transactionPoid, companyPoid, includeDetails);
+                log.info("Sales invoice fetched with transactionPoid: {} companyId: {}", transactionPoid, companyPoid);
                 return success("Sales invoice fetched successfully", dto);
         }
 
@@ -139,39 +137,28 @@ public class SalesInvoiceController {
                 return success("Sales invoice deleted successfully", null);
         }
 
-        @Operation(summary = "Get All Sales Invoices", description = "Retrieves all sales invoices with optional filtering by status, customer, date range, etc. Supports pagination with page and size parameters.", responses = {
+        @Operation(summary = "Get All Sales Invoices", description = "Retrieves all sales invoices with filtering support. Uses POST method with filter request body. Supports pagination with page and size parameters.", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully retrieved sales invoices"),
                         @ApiResponse(responseCode = "401", description = "Unauthorized")
         }, security = @SecurityRequirement(name = "bearerAuth"))
-        @GetMapping
+        @PostMapping("/list")
         public ResponseEntity<?> getAllSalesInvoices(
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestHeader("companyPoid") Long companyPoid,
+                        @RequestHeader("UserPoid") Long userPoid,
                         @RequestParam(required = true) String documentId,
                         @RequestParam(required = true) String actionRequested,
-                        @RequestParam(required = false) String invStatus,
-                        @RequestParam(required = false) String verified,
-                        @RequestParam(required = false) Long customerPoid,
-                        @RequestParam(required = false) Long principalPoid,
-                        @RequestParam(required = false) String partyType,
+                        @Valid @RequestBody FilterRequestDto filterRequest,
                         @RequestParam(required = false, defaultValue = "0") Integer page,
                         @RequestParam(required = false, defaultValue = "10") Integer size,
-                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime fromDate,
-                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime toDate,
-                        @RequestParam(required = false) String search) {
+                        @RequestParam(required = false) String sortBy,
+                        @RequestParam(required = false) String sortDir) {
 
-                Timestamp fromTs = (fromDate == null) ? null : Timestamp.from(fromDate.toInstant());
-                Timestamp toTs = (toDate == null) ? null : Timestamp.from(toDate.toInstant());
-
-                log.info("Fetching all sales invoices with groupId: {} companyId: {} invStatus: {} verified: {} customerPoid: {} principalPoid: {} partyType: {} fromDate: {} toDate: {} search: {} page: {} size: {}",
-                                groupPoid, companyPoid, invStatus, verified, customerPoid, principalPoid, partyType,
-                                fromTs, toTs, search, page, size);
-                PaginatedResponse<SalesInvoiceHdrDto> invoices = invoiceService.getAllSalesInvoices(
-                                groupPoid, companyPoid, invStatus, verified, customerPoid, principalPoid,
-                                null, search, fromTs, toTs, page, size);
-                log.info("Fetched {} sales invoices (page {} of {}) with groupId: {} companyId: {}",
-                                invoices.getData().size(), invoices.getPage() + 1, invoices.getTotalPages(), groupPoid,
-                                companyPoid);
+                log.info("Fetching all sales invoices with companyId: {} userPoid: {} page: {} size: {} sortBy: {} sortDir: {}",
+                                companyPoid, userPoid, page, size, sortBy, sortDir);
+                PaginatedResponse<SalesInvoiceListDto> invoices = invoiceService.getAllSalesInvoices(
+                                companyPoid, filterRequest, page, size, sortBy, sortDir);
+                log.info("Fetched {} sales invoices (page {} of {}) with companyId: {}",
+                                invoices.getContent().size(), invoices.getPageNumber() + 1, invoices.getTotalPages(), companyPoid);
                 return success("Sales invoices fetched successfully", invoices);
         }
 
@@ -442,7 +429,7 @@ public class SalesInvoiceController {
                                 // request.getIncentiveAmt2(), request.getIncentiveAmt3(),
                                 groupPoid, companyPoid, userId);
                 SalesInvoiceHdrDto dto = invoiceService.getSalesInvoiceByPoid(
-                                transactionPoid, groupPoid, companyPoid, true);
+                                transactionPoid, companyPoid, true);
                 response.setInvoice(dto);
                 log.info("Quotation items loaded into sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, groupPoid, companyPoid, userId);
