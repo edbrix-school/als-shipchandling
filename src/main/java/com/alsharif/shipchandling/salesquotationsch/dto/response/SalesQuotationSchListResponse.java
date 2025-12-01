@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 import com.alsharif.shipchandling.salesquotationsch.dto.SalesQuotationSchSummaryDto;
 
@@ -13,9 +14,11 @@ import com.alsharif.shipchandling.salesquotationsch.dto.SalesQuotationSchSummary
 @AllArgsConstructor
 public class SalesQuotationSchListResponse {
     private List<SalesQuotationSchSummaryDto> content;
-    private long totalElements;
+    private boolean last;
     private int totalPages;
-    private int page;
-    private int size;
+    private long totalElements;
+    private int pageSize;
+    private Map<String, String> displayFields;
+    private int pageNumber;
 }
 

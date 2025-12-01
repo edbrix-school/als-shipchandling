@@ -21,4 +21,10 @@ public class CreateApRequestForQtnItemDtlRequest {
     private BigDecimal price;
     private Long taxPoid;
     private String remarks;
+    
+    // Action field for CRUD operations: "isCreated", "isUpdated", "isDeleted", "noChange"
+    private String action;
+    
+    // Optional detRowId for identifying existing items during updates/deletes
+    private Long detRowId;
 }

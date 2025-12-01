@@ -6,6 +6,8 @@ import com.alsharif.shipchandling.salesquotationsch.dto.response.SalesQuotationS
 import com.alsharif.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.ValidationResponse;
 
+import org.springframework.data.domain.Pageable;
+
 import java.util.List;
 
 public interface SalesQuotationSchService {
@@ -25,6 +27,9 @@ public interface SalesQuotationSchService {
 
         // Search method with advanced filtering
         SalesQuotationSchListResponse search(SalesQuotationSchFilter filter, String userId);
+        
+        // Filter method with dynamic filters (similar to stock unit)
+        SalesQuotationSchListResponse listSalesQuotationSchWithFilters(FilterRequestDto filterRequest, Long companyPoid, Pageable pageable);
 
         // Validation APIs
         ValidationResponse validateDocRef(String docRef, Long transactionPoid);
