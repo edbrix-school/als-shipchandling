@@ -1,6 +1,7 @@
 package com.alsharif.shipchandling.stockunitmaster.controller;
 
 import com.alsharif.shipchandling.stockunitmaster.dto.FilterRequestDto;
+import com.alsharif.shipchandling.stockunitmaster.dto.StockUnitListResponse;
 import com.alsharif.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
 import com.alsharif.shipchandling.stockunitmaster.dto.UnitDependenciesDto;
 import com.alsharif.shipchandling.stockunitmaster.dto.ValidationResponse;
@@ -16,14 +17,12 @@ import jakarta.validation.Valid;
 
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import static com.alsharif.shipchandling.common.ApiResponse.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("stockunitmaster")
@@ -96,7 +95,7 @@ public class StockUnitMasterController {
                         - ### Filters:
                           Use either:
                           1. A single `GLOBALSEARCH` filter, OR
-                          2. Any combination of specific fields (COUNTRY_NAME, COUNTRY_CODE, CREATED_BY, etc.).
+                          2. Any combination of specific fields (STOCK_UNIT_CODE, STOCK_UNIT_NAME, CLASSIFIED, ACTIVE, GROUP_POID, DELETED, etc.).
                           3. operator field will either have "AND" or "OR", if not given will be considered as "OR",
                              not required for GLOBALSEARCH, for non GLOBALSEARCH need to give only 1 time
                           4. isDeleted when 'Y' or null, will search and return non deleted records, 'Y' will check and return deleted records
@@ -106,32 +105,27 @@ public class StockUnitMasterController {
                             - **documentId:** Unique identifier for the document
                             - **actionRequested:** Action being performed (`VIEW`)
                         """, content = @Content(schema = @Schema(implementation = FilterRequestDto.class), examples = {
-                        @ExampleObject(name = "Country Filters", value = """
+                        @ExampleObject(name = "Stock Unit Filters", value = """
                                         {
-                                        "operator": "AND",
+                                        "operator": "OR",
                                         "isDeleted": "N",
                                         "filters": [
-                                           { "searchField": "GLOBALSEARCH", "searchValue": "United" },
-                                           { "searchField": "COUNTRY_NAME", "searchValue": "United Arab Emirates|United States" },
-                                           { "searchField": "COUNTRY_CODE", "searchValue": "AE"},
-                                           { "searchField": "CREATED_BY", "searchValue": "ADMIN"}
+                                           { "searchField": "STOCK_UNIT_CODE", "searchValue": "rs" },
+                                           { "searchField": "STOCK_UNIT_NAME", "searchValue": "r" }
                                         ]
                                         }
                                         """)
         }))
-        @GetMapping("/list")
+        @PostMapping("/list")
         public ResponseEntity<?> getStockUnitList(
-                        @RequestParam(required = false) String stockUnitCode,
-                        @RequestParam(required = false) String stockUnitName,
-                        @RequestParam(required = false) String classified,
-                        @RequestParam(required = false) String active,
-                        @RequestParam(required = false) String deleted,
-                        Pageable pageable) {
+                        @Parameter(description = "Document identifier", required = true, example = "200-001") @RequestParam String documentId,
+                        @Parameter(description = "Action requested", required = true) @RequestParam String actionRequested,
+                        @Valid @RequestBody FilterRequestDto filterRequest,
+                        @ParameterObject Pageable pageable) {
 
-                Page<StockUnitMasterDto> stockUnits = stockUnitService.listStockUnitsUsingParams(
-                                stockUnitCode, stockUnitName, classified, active, deleted, pageable);
+                StockUnitListResponse response = stockUnitService.listStockUnitsWithFilters(filterRequest, pageable);
 
-                return success("Stock units fetched successfully", stockUnits);
+                return success("Stock units fetched successfully", response);
         }
 
         @Operation(summary = "Soft delete a stock unit", description = "Marks a stock unit as deleted without permanently removing its data", responses = {
