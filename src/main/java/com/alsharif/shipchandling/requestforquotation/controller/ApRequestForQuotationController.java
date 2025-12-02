@@ -1,10 +1,11 @@
 package com.alsharif.shipchandling.requestforquotation.controller;
 
-// import com.alsharif.shipchandling.requestforquotation.dto.RfqDependenciesDto;
+import com.alsharif.shipchandling.requestforquotation.dto.RfqDependenciesDto;
 import com.alsharif.shipchandling.requestforquotation.dto.request.*;
 import com.alsharif.shipchandling.requestforquotation.dto.request.GetAllRfqFilterRequest;
 import com.alsharif.shipchandling.requestforquotation.dto.response.*;
 import com.alsharif.shipchandling.requestforquotation.service.ApRequestForQtnService;
+import com.asg.common.lib.security.util.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -24,7 +25,7 @@ import java.util.Map;
 import static com.alsharif.shipchandling.common.ApiResponse.success;
 
 @RestController
-@RequestMapping("api/ap/request-for-quotations")
+@RequestMapping("/v1/request-for-quotations")
 @RequiredArgsConstructor
 public class ApRequestForQuotationController {
 
@@ -95,12 +96,10 @@ public class ApRequestForQuotationController {
         @GetMapping("/{transactionPoid:\\d+}")
         public ResponseEntity<?> getRequestForQuotationByPoid(
                         @PathVariable Long transactionPoid,
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
                         @RequestParam(required = false, defaultValue = "false") Boolean includeDetails) {
 
                 ApRequestForQtnHdrDto dto = rfqService.getRequestForQuotationByPoid(
-                                transactionPoid, groupPoid, companyPoid, includeDetails);
+                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), includeDetails);
                 return success("RFQ fetched successfully", dto);
         }
 
@@ -120,18 +119,16 @@ public class ApRequestForQuotationController {
                 return success("RFQ updated successfully", dto);
         }
 
-        // @Operation(summary = "Delete RFQ", description = "Deletes an existing RFQ
-        // document by its Poid.", tags = "RFQ")
-        // @DeleteMapping("/{transactionPoid}")
-        // public ResponseEntity<?> deleteRequestForQuotation(
-        // @PathVariable Long transactionPoid,
-        // @RequestHeader("X-Group-Poid") Long groupPoid,
-        // @RequestHeader("X-Company-Poid") Long companyPoid) {
+        @Operation(summary = "Delete RFQ", description = "Deletes an existing RFQ document by its Poid.", tags = "RFQ")
+        @DeleteMapping("/{transactionPoid}")
+        public ResponseEntity<?> deleteRequestForQuotation(
+                        @PathVariable Long transactionPoid,
+                        @RequestHeader("X-Group-Poid") Long groupPoid,
+                        @RequestHeader("X-Company-Poid") Long companyPoid) {
 
-        // rfqService.deleteRequestForQuotation(transactionPoid, groupPoid,
-        // companyPoid);
-        // return success("RFQ deleted successfully", null);
-        // }
+                rfqService.deleteRequestForQuotation(transactionPoid, groupPoid, companyPoid);
+                return success("RFQ deleted successfully", null);
+        }
 
         // Detail Table APIs
         // @Operation(summary = "Add Item Detail", description = "Adds a new item detail
@@ -386,17 +383,15 @@ public class ApRequestForQuotationController {
                 return success("Tax percentage fetched successfully", response);
         }
 
-        // @Operation(summary = "Check RFQ Dependencies",
-        // description = "Checks if RFQ can be deleted by checking for dependencies
-        // (Purchase Orders, etc.)", tags = "RFQ's Business Logic")
-        // @GetMapping("/{transactionPoid}/dependencies")
-        // public ResponseEntity<?> checkRfqDependencies(
-        // @PathVariable Long transactionPoid,
-        // @RequestHeader("X-Group-Poid") Long groupPoid,
-        // @RequestHeader("X-Company-Poid") Long companyPoid) {
+        @Operation(summary = "Check RFQ Dependencies", description = "Checks if RFQ can be deleted by checking for dependencies (Purchase Orders, etc.)", tags = "RFQ's Business Logic")
+        @GetMapping("/{transactionPoid}/dependencies")
+        public ResponseEntity<?> checkRfqDependencies(
+                        @PathVariable Long transactionPoid,
+                        @RequestHeader("X-Group-Poid") Long groupPoid,
+                        @RequestHeader("X-Company-Poid") Long companyPoid) {
 
-        // RfqDependenciesDto dto = rfqService.checkRfqDependencies(
-        // transactionPoid, groupPoid, companyPoid);
-        // return success("Dependency check completed", dto);
-        // }
+                RfqDependenciesDto dto = rfqService.checkRfqDependencies(
+                                transactionPoid, groupPoid, companyPoid);
+                return success("Dependency check completed", dto);
+        }
 }

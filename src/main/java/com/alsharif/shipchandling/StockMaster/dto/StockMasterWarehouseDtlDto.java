@@ -26,4 +26,5 @@ public class StockMasterWarehouseDtlDto {
     private Timestamp createdDate;
     private String lastmodifiedBy;
     private Timestamp lastmodifiedDate;
+    private String actionType;
 }
