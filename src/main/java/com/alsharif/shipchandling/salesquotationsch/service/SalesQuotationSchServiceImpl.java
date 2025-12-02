@@ -2,6 +2,7 @@ package com.alsharif.shipchandling.salesquotationsch.service;
 
 import com.alsharif.shipchandling.salesquotationsch.dto.*;
 import com.alsharif.shipchandling.salesquotationsch.dto.request.*;
+import com.alsharif.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.CustomerDetailsResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.SalesQuotationSchListResponse;
@@ -17,6 +18,10 @@ import com.alsharif.shipchandling.salesquotationsch.spec.SalesQuotationSchSpecif
 import com.alsharif.shipchandling.stockunitmaster.dto.StockUnitListResponse;
 import com.alsharif.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
 import com.alsharif.shipchandling.stockunitmaster.service.StockUnitService;
+import com.alsharif.shipchandling.common.entity.GlobalAddressMaster;
+import com.alsharif.shipchandling.common.entity.GlobalAddressDetails;
+import com.alsharif.shipchandling.common.repository.GlobalAddressMasterRepository;
+import com.alsharif.shipchandling.common.repository.GlobalAddressDetailsRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,7 +58,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private final SalesQuotationSchItemDtlRepository itemDtlRepository;
     private final SalesQuotationSchStoredProcRepository quotationSchStoredProcRepository;
     private final StockMasterService stockMasterService;
-    private final  StockUnitService stockUnitMasterService;
+    private final StockUnitService stockUnitMasterService;
+    private final GlobalAddressMasterRepository globalAddressMasterRepository;
+    private final GlobalAddressDetailsRepository globalAddressDetailsRepository;
 
     @Override
     @Transactional
@@ -63,6 +70,13 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Validate required fields
         validateQuotationSchRequest(request);
 
+        // Handle new address creation if newAddressYN is true
+        Long addressPoid = request.getAddressPoid();
+        if (request.isNewAddressYN() && request.getAddressDetails() != null) {
+            addressPoid = createNewAddress(request.getCustomerPoid(), request.getAddressDetails(), groupPoid, userId);
+            log.info("createSalesQuotationSch created new address with addressPoid={}", addressPoid);
+        }
+
         // Create entity
         SalesQuotationSchHdr quotationSch = new SalesQuotationSchHdr();
         BeanUtils.copyProperties(request, quotationSch);
@@ -70,6 +84,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         quotationSch.setCreatedBy(userId);
         quotationSch.setLastmodifiedBy(userId);
         quotationSch.setDeleted("N");
+        // Set the addressPoid (either from request or newly created)
+        if (addressPoid != null) {
+            quotationSch.setAddressPoid(addressPoid);
+        }
 
         // Save to get transactionPoid
         SalesQuotationSchHdr savedQuotationSch = quotationSchHdrRepository.save(quotationSch);
@@ -101,24 +119,28 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Transactional(readOnly = true)
     public SalesQuotationSchHdrDto getSalesQuotationSchByPoid(Long transactionPoid, Long groupPoid,
             Long companyPoid, Boolean includeDetails) {
-        log.info("getSalesQuotationSchByPoid called for transactionPoid={} groupPoid={} companyPoid={} includeDetails={}",
+        log.info(
+                "getSalesQuotationSchByPoid called for transactionPoid={} groupPoid={} companyPoid={} includeDetails={}",
                 transactionPoid, groupPoid, companyPoid, includeDetails);
-        
+
         // First check if quotation exists and is not deleted
         SalesQuotationSchHdr quotationSch = quotationSchHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
 
         if ("Y".equals(quotationSch.getDeleted())) {
-            log.warn("getSalesQuotationSchByPoid found companyPoid={} transactionPoid={} marked as deleted", companyPoid,
+            log.warn("getSalesQuotationSchByPoid found companyPoid={} transactionPoid={} marked as deleted",
+                    companyPoid,
                     transactionPoid);
             throw new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid);
         }
-        
+
         // Fetch quotation with all LOV details in a single query
-        List<Object[]> results = quotationSchHdrRepository.findSalesQuotationSchWithDetails(transactionPoid, companyPoid);
+        List<Object[]> results = quotationSchHdrRepository.findSalesQuotationSchWithDetails(transactionPoid,
+                companyPoid);
         SalesQuotationSchHdrDto dto;
-        
+
         if (!results.isEmpty()) {
             Object[] row = results.get(0);
             dto = populateQuotationSchFromQueryResult(row, includeDetails != null && includeDetails);
@@ -127,7 +149,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             dto = convertToDto(quotationSch, includeDetails != null && includeDetails);
             setEmptyLovDetails(dto);
         }
-        
+
         log.info("getSalesQuotationSchByPoid completed for transactionPoid={} companyPoid={}",
                 transactionPoid, companyPoid);
         return dto;
@@ -138,10 +160,12 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     public SalesQuotationSchHdrDto updateSalesQuotationSch(Long groupPoid, Long transactionPoid,
             UpdateSalesQuotationSchRequest request,
             Long companyPoid, String userId) {
-        log.info("updateSalesQuotationSch service started for transactionPoid={} groupPoid={}", transactionPoid, groupPoid);
+        log.info("updateSalesQuotationSch service started for transactionPoid={} groupPoid={}", transactionPoid,
+                groupPoid);
         SalesQuotationSchHdr quotationSch = quotationSchHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
 
         if ("Y".equals(quotationSch.getDeleted())) {
             log.warn("updateSalesQuotationSch found companyPoid={} transactionPoid={} marked as deleted", companyPoid,
@@ -152,10 +176,23 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Validate required fields
         validateQuotationSchRequest(request);
 
+        // Handle new address creation if newAddressYN is true
+        Long addressPoid = request.getAddressPoid();
+        if (request.isNewAddressYN() && request.getAddressDetails() != null) {
+            // Get groupPoid from existing quotation or use a default
+            Long groupPoidForAddress = groupPoid != null ? groupPoid : quotationSch.getCompanyPoid();
+            addressPoid = createNewAddress(request.getCustomerPoid(), request.getAddressDetails(), groupPoidForAddress, userId);
+            log.info("updateSalesQuotationSch created new address with addressPoid={}", addressPoid);
+        }
+
         // Update fields (excluding read-only fields)
         BeanUtils.copyProperties(request, quotationSch, "transactionPoid", "docRef", "createdBy",
                 "createdDate");
         quotationSch.setLastmodifiedBy(userId);
+        // Set the addressPoid (either from request or newly created)
+        if (addressPoid != null) {
+            quotationSch.setAddressPoid(addressPoid);
+        }
 
         // Process item details based on actionType (UPDATE, DELETE, or CREATE)
         if (request.getItemDetails() != null && !request.getItemDetails().isEmpty()) {
@@ -179,7 +216,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     public void deleteSalesQuotationSch(Long groupPoid, Long transactionPoid, Long companyPoid) {
         SalesQuotationSchHdr quotationSch = quotationSchHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
 
         if ("Y".equals(quotationSch.getDeleted())) {
             log.warn("deleteSalesQuotationSch found companyPoid={} transactionPoid={} already deleted", companyPoid,
@@ -202,43 +240,50 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     public SalesQuotationSchListResponse search(SalesQuotationSchFilter filter, String userId) {
         Objects.requireNonNull(filter, "filter is required");
         Objects.requireNonNull(filter.getCompanyPoid(), "companyPoid is required in filter");
-        
-        log.info("search sales quotation sch started for companyPoid={} userId={} page={} size={}", 
+
+        log.info("search sales quotation sch started for companyPoid={} userId={} page={} size={}",
                 filter.getCompanyPoid(), userId, filter.getPage(), filter.getSize());
-        
+
         // Build specification
         Specification<SalesQuotationSchHdr> specification = SalesQuotationSchSpecifications.notDeleted();
-        
+
         // Company filtering (mandatory for data isolation)
         specification = andIfPresent(specification, SalesQuotationSchSpecifications.companyIs(filter.getCompanyPoid()));
-        
+
         // Apply filters
-        specification = andIfPresent(specification, SalesQuotationSchSpecifications.customerIs(filter.getCustomerPoid()));
-        specification = andIfPresent(specification, SalesQuotationSchSpecifications.salesmanIs(filter.getSalesmanPoid()));
+        specification = andIfPresent(specification,
+                SalesQuotationSchSpecifications.customerIs(filter.getCustomerPoid()));
+        specification = andIfPresent(specification,
+                SalesQuotationSchSpecifications.salesmanIs(filter.getSalesmanPoid()));
         specification = andIfPresent(specification, SalesQuotationSchSpecifications.lineIs(filter.getLinePoid()));
-        specification = andIfPresent(specification, SalesQuotationSchSpecifications.statusIs(filter.getQuotationStatus()));
+        specification = andIfPresent(specification,
+                SalesQuotationSchSpecifications.statusIs(filter.getQuotationStatus()));
         specification = andIfPresent(specification, SalesQuotationSchSpecifications.docRefLike(filter.getDocRef()));
         specification = andIfPresent(specification, SalesQuotationSchSpecifications.searchText(filter.getSearch()));
-        specification = andIfPresent(specification, SalesQuotationSchSpecifications.transactionDateFrom(filter.getFromDate()));
-        specification = andIfPresent(specification, SalesQuotationSchSpecifications.transactionDateTo(filter.getToDate()));
-        specification = andIfPresent(specification, SalesQuotationSchSpecifications.validityFromDate(filter.getValidityFromDate()));
-        specification = andIfPresent(specification, SalesQuotationSchSpecifications.validityToDate(filter.getValidityToDate()));
-        
+        specification = andIfPresent(specification,
+                SalesQuotationSchSpecifications.transactionDateFrom(filter.getFromDate()));
+        specification = andIfPresent(specification,
+                SalesQuotationSchSpecifications.transactionDateTo(filter.getToDate()));
+        specification = andIfPresent(specification,
+                SalesQuotationSchSpecifications.validityFromDate(filter.getValidityFromDate()));
+        specification = andIfPresent(specification,
+                SalesQuotationSchSpecifications.validityToDate(filter.getValidityToDate()));
+
         // Build sort
         Sort sort = buildSort(filter.getSortBy(), filter.getSortOrder());
-        
+
         // Pagination
         int page = filter.getPage() != null && filter.getPage() >= 0 ? filter.getPage() : 0;
         int size = filter.getSize() != null && filter.getSize() > 0 ? filter.getSize() : 20;
-        
+
         Pageable pageable = PageRequest.of(page, size, sort);
         Page<SalesQuotationSchHdr> pageResult = quotationSchHdrRepository.findAll(specification, pageable);
-        
+
         // Convert to DTOs
         List<SalesQuotationSchSummaryDto> content = pageResult.getContent().stream()
                 .map(this::toSummaryDto)
                 .collect(Collectors.toList());
-        
+
         // Build display fields map
         Map<String, String> displayFields = new HashMap<>();
         displayFields.put("docRef", "text");
@@ -246,7 +291,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         displayFields.put("transactionDate", "date");
         displayFields.put("customerRef", "text");
         displayFields.put("vesselName", "text");
-        
+
         // Build response
         SalesQuotationSchListResponse response = new SalesQuotationSchListResponse();
         response.setContent(content);
@@ -256,17 +301,18 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         response.setPageSize(size);
         response.setDisplayFields(displayFields);
         response.setPageNumber(page);
-        
-        log.info("search sales quotation sch completed for companyPoid={} totalElements={} totalPages={}", 
+
+        log.info("search sales quotation sch completed for companyPoid={} totalElements={} totalPages={}",
                 filter.getCompanyPoid(), response.getTotalElements(), response.getTotalPages());
         return response;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public SalesQuotationSchListResponse listSalesQuotationSchWithFilters(FilterRequestDto filterRequest, Long companyPoid, Pageable pageable) {
+    public SalesQuotationSchListResponse listSalesQuotationSchWithFilters(FilterRequestDto filterRequest,
+            Long companyPoid, Pageable pageable) {
         log.info("listSalesQuotationSchWithFilters started for companyPoid={}", companyPoid);
-        
+
         Specification<SalesQuotationSchHdr> spec = null;
 
         // Handle isDeleted filter
@@ -274,23 +320,18 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         if (isDeleted != null && !isDeleted.trim().isEmpty()) {
             if ("Y".equalsIgnoreCase(isDeleted)) {
                 // Show only deleted records
-                spec = (root, query, cb) -> 
-                    cb.equal(root.get("deleted"), "Y");
+                spec = (root, query, cb) -> cb.equal(root.get("deleted"), "Y");
             } else if ("N".equalsIgnoreCase(isDeleted)) {
                 // Show only non-deleted records
-                spec = (root, query, cb) -> 
-                    cb.or(
+                spec = (root, query, cb) -> cb.or(
                         cb.isNull(root.get("deleted")),
-                        cb.notEqual(root.get("deleted"), "Y")
-                    );
+                        cb.notEqual(root.get("deleted"), "Y"));
             }
         } else {
             // Default: Show only non-deleted records when isDeleted is not provided
-            spec = (root, query, cb) -> 
-                cb.or(
+            spec = (root, query, cb) -> cb.or(
                     cb.isNull(root.get("deleted")),
-                    cb.notEqual(root.get("deleted"), "Y")
-                );
+                    cb.notEqual(root.get("deleted"), "Y"));
         }
 
         // Company filtering (mandatory for data isolation)
@@ -308,22 +349,23 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         if (!filters.isEmpty()) {
             boolean isAndOperator = "AND".equals(operator);
             List<Specification<SalesQuotationSchHdr>> filterSpecs = new ArrayList<>();
-            
+
             for (FilterDto filter : filters) {
                 String searchField = filter.searchField();
                 String searchValue = filter.searchValue();
-                
+
                 if (searchField == null || searchValue == null || searchValue.trim().isEmpty()) {
                     continue;
                 }
 
-                Specification<SalesQuotationSchHdr> filterSpec = buildFilterSpecification(searchField, searchValue, companyPoid);
-                
+                Specification<SalesQuotationSchHdr> filterSpec = buildFilterSpecification(searchField, searchValue,
+                        companyPoid);
+
                 if (filterSpec != null) {
                     filterSpecs.add(filterSpec);
                 }
             }
-            
+
             // Combine filters based on operator
             if (!filterSpecs.isEmpty()) {
                 Specification<SalesQuotationSchHdr> combinedFilterSpec = filterSpecs.get(0);
@@ -352,8 +394,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
         // Convert to DTOs
         List<SalesQuotationSchSummaryDto> dtoList = page.getContent().stream()
-            .map(this::toSummaryDto)
-            .collect(Collectors.toList());
+                .map(this::toSummaryDto)
+                .collect(Collectors.toList());
 
         // Build display fields map
         Map<String, String> displayFields = new HashMap<>();
@@ -373,12 +415,13 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         response.setDisplayFields(displayFields);
         response.setPageNumber(page.getNumber());
 
-        log.info("listSalesQuotationSchWithFilters completed for companyPoid={} totalElements={} totalPages={}", 
+        log.info("listSalesQuotationSchWithFilters completed for companyPoid={} totalElements={} totalPages={}",
                 companyPoid, response.getTotalElements(), response.getTotalPages());
         return response;
     }
 
-    private Specification<SalesQuotationSchHdr> buildFilterSpecification(String searchField, String searchValue, Long companyPoid) {
+    private Specification<SalesQuotationSchHdr> buildFilterSpecification(String searchField, String searchValue,
+            Long companyPoid) {
         String upperField = searchField.toUpperCase();
         String searchPattern = "%" + searchValue.trim().toUpperCase() + "%";
 
@@ -386,27 +429,29 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         if ("DOC_REF".equals(upperField) || "DOCREF".equals(upperField)) {
             return (root, query, cb) -> cb.like(cb.upper(root.get("docRef")), searchPattern);
         }
-        
+
         // QUOTATION_STATUS filter
-        if ("QUOTATION_STATUS".equals(upperField) || "STATUS".equals(upperField) || "QUOTATIONSTATUS".equals(upperField)) {
-            return (root, query, cb) -> cb.equal(cb.upper(root.get("quotationStatus")), searchValue.trim().toUpperCase());
+        if ("QUOTATION_STATUS".equals(upperField) || "STATUS".equals(upperField)
+                || "QUOTATIONSTATUS".equals(upperField)) {
+            return (root, query, cb) -> cb.equal(cb.upper(root.get("quotationStatus")),
+                    searchValue.trim().toUpperCase());
         }
-        
+
         // CUSTOMER_NAME filter - fetch customer POIDs and filter by them
         // Note: This is called within a transaction, so it uses the same connection
         if ("CUSTOMER_NAME".equals(upperField) || "CUSTOMERNAME".equals(upperField)) {
             String customerNamePattern = "%" + searchValue.trim().toUpperCase() + "%";
             List<Long> customerPoids = quotationSchHdrRepository.findCustomerPoidsByName(customerNamePattern);
-            
+
             if (customerPoids == null || customerPoids.isEmpty()) {
                 // No matching customers, return specification that matches nothing
                 return (root, query, cb) -> cb.disjunction();
             }
-            
+
             // Filter by customer POIDs
             return (root, query, cb) -> root.get("customerPoid").in(customerPoids);
         }
-        
+
         // TRANSACTION_DATE filter - supports date range or exact date
         if ("TRANSACTION_DATE".equals(upperField) || "TRANSACTIONDATE".equals(upperField)) {
             try {
@@ -414,27 +459,24 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 Timestamp dateValue = Timestamp.valueOf(searchValue.trim() + " 00:00:00");
                 Timestamp nextDay = new Timestamp(dateValue.getTime() + 24 * 60 * 60 * 1000);
                 return (root, query, cb) -> cb.and(
-                    cb.greaterThanOrEqualTo(root.get("transactionDate"), dateValue),
-                    cb.lessThan(root.get("transactionDate"), nextDay)
-                );
+                        cb.greaterThanOrEqualTo(root.get("transactionDate"), dateValue),
+                        cb.lessThan(root.get("transactionDate"), nextDay));
             } catch (Exception e) {
                 // If parsing fails, try to use as pattern
                 return (root, query, cb) -> cb.like(
-                    cb.function("TO_CHAR", String.class, root.get("transactionDate"), cb.literal("YYYY-MM-DD")), 
-                    searchPattern
-                );
+                        cb.function("TO_CHAR", String.class, root.get("transactionDate"), cb.literal("YYYY-MM-DD")),
+                        searchPattern);
             }
         }
-        
+
         // GLOBALSEARCH - search across multiple fields
         if ("GLOBALSEARCH".equals(upperField)) {
             return (root, query, cb) -> cb.or(
-                cb.like(cb.upper(cb.coalesce(root.get("docRef"), "")), searchPattern),
-                cb.like(cb.upper(cb.coalesce(root.get("customerRef"), "")), searchPattern),
-                cb.like(cb.upper(cb.coalesce(root.get("details"), "")), searchPattern)
-            );
+                    cb.like(cb.upper(cb.coalesce(root.get("docRef"), "")), searchPattern),
+                    cb.like(cb.upper(cb.coalesce(root.get("customerRef"), "")), searchPattern),
+                    cb.like(cb.upper(cb.coalesce(root.get("details"), "")), searchPattern));
         }
-        
+
         return null;
     }
 
@@ -451,13 +493,15 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         }
 
         boolean exists;
-        // Note: companyPoid should be passed from controller, but for now we'll check without it
+        // Note: companyPoid should be passed from controller, but for now we'll check
+        // without it
         if (transactionPoid != null) {
             Long count = quotationSchHdrRepository.countByCompanyPoidAndDocRefExcluding(
                     null, docRef, transactionPoid);
             exists = count != null && count > 0;
         } else {
-            // For validation without transactionPoid, we need companyPoid - this should be passed from controller
+            // For validation without transactionPoid, we need companyPoid - this should be
+            // passed from controller
             // For now, we'll use a simple check
             exists = false; // This should be enhanced to check with companyPoid
         }
@@ -477,13 +521,15 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
     @Override
     @Transactional
-    public SalesQuotationSchItemDtlDto addItemDetail(Long transactionPoid, CreateSalesQuotationSchItemDtlRequest request,
+    public SalesQuotationSchItemDtlDto addItemDetail(Long transactionPoid,
+            CreateSalesQuotationSchItemDtlRequest request,
             Long companyPoid, String userId) {
         log.info("addItemDetail called for transactionPoid={} companyPoid={}", transactionPoid, companyPoid);
         // Validate quotation exists
         SalesQuotationSchHdr quotationSch = quotationSchHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
 
         if ("Y".equals(quotationSch.getDeleted())) {
             throw new CustomException("Cannot add item details. Sales quotation sch is deleted");
@@ -545,7 +591,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Validate quotation exists
         SalesQuotationSchHdr quotationSch = quotationSchHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
 
         if ("Y".equals(quotationSch.getDeleted())) {
             throw new CustomException("Cannot update item details. Sales quotation sch is deleted");
@@ -602,7 +649,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Validate quotation exists
         SalesQuotationSchHdr quotationSch = quotationSchHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
 
         if ("Y".equals(quotationSch.getDeleted())) {
             throw new CustomException("Cannot delete item details. Sales quotation sch is deleted");
@@ -623,7 +671,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Validate quotation exists
         quotationSchHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
 
         List<SalesQuotationSchItemDtl> itemDetails = itemDtlRepository.findByTransactionPoid(transactionPoid);
         return itemDetails.stream()
@@ -661,7 +710,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         if (maxDetRowId != null && maxDetRowId > 0) {
             detRowId = maxDetRowId + 1;
         }
-        
+
         for (CreateSalesQuotationSchItemDtlRequest detail : details) {
             SalesQuotationSchItemDtl itemDtl = new SalesQuotationSchItemDtl();
             itemDtl.setTransactionPoid(transactionPoid);
@@ -697,24 +746,26 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         }
     }
 
-    private void processItemDetailsByActionType(Long transactionPoid, 
+    private void processItemDetailsByActionType(Long transactionPoid,
             List<CreateSalesQuotationSchItemDtlRequest> details, String userId) {
         if (details == null || details.isEmpty()) {
             return;
         }
 
         List<CreateSalesQuotationSchItemDtlRequest> itemsToCreate = new ArrayList<>();
-        
+
         for (CreateSalesQuotationSchItemDtlRequest item : details) {
             String actionType = item.getActionType();
-            
+
             if ("DELETE".equalsIgnoreCase(actionType)) {
                 if (item.getDetRowId() != null) {
                     try {
-                        itemDtlRepository.deleteById(new SalesQuotationSchItemDtlId(transactionPoid, item.getDetRowId()));
-                        log.debug("Deleted item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
+                        itemDtlRepository
+                                .deleteById(new SalesQuotationSchItemDtlId(transactionPoid, item.getDetRowId()));
+                        log.debug("Deleted item detail transactionPoid={} detRowId={}", transactionPoid,
+                                item.getDetRowId());
                     } catch (Exception ex) {
-                        log.warn("Failed to delete item detail transactionPoid={} detRowId={}: {}", 
+                        log.warn("Failed to delete item detail transactionPoid={} detRowId={}: {}",
                                 transactionPoid, item.getDetRowId(), ex.getMessage());
                     }
                 }
@@ -724,7 +775,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                         SalesQuotationSchItemDtl existingItem = itemDtlRepository
                                 .findById(new SalesQuotationSchItemDtlId(transactionPoid, item.getDetRowId()))
                                 .orElse(null);
-                        
+
                         if (existingItem != null) {
                             existingItem.setStockPoid(item.getStockPoid());
                             existingItem.setQuantity(item.getQuantity());
@@ -752,14 +803,15 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                             existingItem.setTaxPercentage(item.getTaxPercentage());
                             existingItem.setVatModified(item.getVatModified());
                             existingItem.setLastmodifiedBy(userId);
-                            
+
                             itemDtlRepository.save(existingItem);
-                            log.debug("Updated item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
+                            log.debug("Updated item detail transactionPoid={} detRowId={}", transactionPoid,
+                                    item.getDetRowId());
                         } else {
                             itemsToCreate.add(item);
                         }
                     } catch (Exception ex) {
-                        log.warn("Failed to update item detail transactionPoid={} detRowId={}: {}", 
+                        log.warn("Failed to update item detail transactionPoid={} detRowId={}: {}",
                                 transactionPoid, item.getDetRowId(), ex.getMessage());
                     }
                 } else {
@@ -769,7 +821,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 itemsToCreate.add(item);
             }
         }
-        
+
         if (!itemsToCreate.isEmpty()) {
             saveItemDetails(transactionPoid, itemsToCreate, userId);
         }
@@ -777,19 +829,19 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
     private void calculateTotals(Long transactionPoid) {
         List<SalesQuotationSchItemDtl> itemDetails = itemDtlRepository.findByTransactionPoid(transactionPoid);
-        
+
         Long totalAmount = itemDetails.stream()
                 .map(SalesQuotationSchItemDtl::getAmount)
                 .filter(java.util.Objects::nonNull)
                 .mapToLong(Long::longValue)
                 .sum();
-        
+
         Long totalTax = itemDetails.stream()
                 .map(SalesQuotationSchItemDtl::getTaxAmount)
                 .filter(java.util.Objects::nonNull)
                 .mapToLong(Long::longValue)
                 .sum();
-        
+
         Long grossProfitAmount = itemDetails.stream()
                 .map(SalesQuotationSchItemDtl::getGpAmount)
                 .filter(java.util.Objects::nonNull)
@@ -798,18 +850,91 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
         // Update quotation header
         SalesQuotationSchHdr quotationSch = quotationSchHdrRepository.findByTransactionPoid(transactionPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
         quotationSch.setTotalAmount(totalAmount);
         quotationSch.setTotalTax(totalTax);
         quotationSch.setTotalGpAmt(grossProfitAmount);
-        
+
         // Calculate gross profit percentage
         if (totalAmount != null && totalAmount > 0 && grossProfitAmount != null) {
             Long grossProfitPercent = (grossProfitAmount * 100) / totalAmount;
             quotationSch.setTotalGpPercentage(grossProfitPercent);
         }
-        
+
         quotationSchHdrRepository.save(quotationSch);
+    }
+
+    /**
+     * Creates a new address in GlobalAddressMaster and GlobalAddressDetails
+     * when newAddressYN is true
+     * 
+     * @param customerPoid Customer POID to get customer name
+     * @param addressDetails Address details from request
+     * @param groupPoid Group POID for address master
+     * @param userId User ID for audit fields
+     * @return The created addressPoid
+     */
+    private Long createNewAddress(Long customerPoid, AddressDetailsResponse addressDetails, Long groupPoid, String userId) {
+        log.info("createNewAddress started for customerPoid={} groupPoid={}", customerPoid, groupPoid);
+        
+        // Get customer name from SALES_CUSTOMER_MASTER
+        String customerName = getCustomerName(customerPoid);
+        
+        // Create GlobalAddressMaster
+        GlobalAddressMaster addressMaster = new GlobalAddressMaster();
+        addressMaster.setAddressName(customerName != null ? customerName : "Customer Address");
+        addressMaster.setGroupPoid(groupPoid);
+        addressMaster.setCreatedBy(userId);
+        addressMaster.setLastmodifiedBy(userId);
+        addressMaster.setDeleted("N");
+        addressMaster.setActive("Y");
+        
+        // Save address master to get addressMasterPoid
+        GlobalAddressMaster savedAddressMaster = globalAddressMasterRepository.save(addressMaster);
+        globalAddressMasterRepository.flush();
+        log.info("createNewAddress created address master with addressMasterPoid={}", savedAddressMaster.getAddressMasterPoid());
+        
+        // Create GlobalAddressDetails with addressType "SALES"
+        GlobalAddressDetails addressDetailsEntity = new GlobalAddressDetails();
+        addressDetailsEntity.setAddressMasterPoid(savedAddressMaster.getAddressMasterPoid());
+        addressDetailsEntity.setAddressType("SALES");
+        
+        // Map fields from AddressDetailsResponse
+        if (addressDetails != null) {
+            addressDetailsEntity.setContactPerson(addressDetails.getContactPerson());
+            addressDetailsEntity.setEmail1(addressDetails.getEmail1());
+            addressDetailsEntity.setMobile(addressDetails.getMobile());
+        }
+        
+        addressDetailsEntity.setCreatedBy(userId);
+        addressDetailsEntity.setLastmodifiedBy(userId);
+        
+        // Save address details to get addressPoid
+        GlobalAddressDetails savedAddressDetails = globalAddressDetailsRepository.save(addressDetailsEntity);
+        globalAddressDetailsRepository.flush();
+        log.info("createNewAddress created address details with addressPoid={}", savedAddressDetails.getAddressPoid());
+        
+        return savedAddressDetails.getAddressPoid();
+    }
+
+    /**
+     * Gets customer name from SALES_CUSTOMER_MASTER table
+     * 
+     * @param customerPoid Customer POID
+     * @return Customer name or null if not found
+     */
+    private String getCustomerName(Long customerPoid) {
+        if (customerPoid == null) {
+            return null;
+        }
+        try {
+            String customerName = quotationSchHdrRepository.findCustomerNameByPoid(customerPoid);
+            return customerName;
+        } catch (Exception e) {
+            log.warn("Failed to get customer name for customerPoid={}: {}", customerPoid, e.getMessage());
+        }
+        return null;
     }
 
     private SalesQuotationSchHdrDto convertToDto(SalesQuotationSchHdr quotationSch, boolean includeDetails) {
@@ -838,7 +963,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
      */
     private SalesQuotationSchHdrDto populateQuotationSchFromQueryResult(Object[] row, boolean includeDetails) {
         SalesQuotationSchHdrDto dto = new SalesQuotationSchHdrDto();
-        
+
         // Quotation Header fields (indices 0-53)
         int index = 0;
         dto.setTransactionPoid(getLongValue(row[index++]));
@@ -894,24 +1019,24 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setCreatedDate(getTimestampValue(row[index++]));
         dto.setLastmodifiedBy(getStringValue(row[index++]));
         dto.setLastmodifiedDate(getTimestampValue(row[index++]));
-        
+
         // LOV Details start at index 54
         // Customer Details (cust: index 54-56)
         dto.setCustomerDetails(createLovDetailFromRow(row, index));
         index += 3;
-        
+
         // Salesman Details (sm: index 57-59)
         dto.setSalesmanDetails(createLovDetailFromRow(row, index));
         index += 3;
-        
+
         // Line Details (lm: index 60-62)
         dto.setLineDetails(createLovDetailFromRow(row, index));
         index += 3;
-        
+
         // Port Details (pm: index 63-65)
         dto.setPortDetails(createLovDetailFromRow(row, index));
         index += 3;
-        
+
         // Vessel Details (vm: index 66-68)
         dto.setVesselDetails(createLovDetailFromRow(row, index));
         index += 3;
@@ -922,7 +1047,28 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
         // Principal Details (pr: index 72-74)
         dto.setPrincipalDetails(createLovDetailFromRow(row, index));
-        
+        index += 3;
+
+        // Address Details (addr: index 75-78)
+        // ADDRESS_POID, CONTACT_PERSON, EMAIL1, MOBILE
+        AddressDetailsResponse addressDetails = new AddressDetailsResponse();
+        if (row.length > index && row[index] != null) {
+            addressDetails.setAddressPoid(getLongValue(row[index]));
+        }
+        if (row.length > index + 1 && row[index + 1] != null) {
+            addressDetails.setContactPerson(getStringValue(row[index + 1]));
+        }
+        if (row.length > index + 2 && row[index + 2] != null) {
+            addressDetails.setEmail1(getStringValue(row[index + 2]));
+        }
+        if (row.length > index + 3 && row[index + 3] != null) {
+            addressDetails.setMobile(getStringValue(row[index + 3]));
+        }
+        // Only set addressDetails if at least addressPoid is present
+        if (addressDetails.getAddressPoid() != null) {
+            dto.setAddressDetails(addressDetails);
+        }
+
         // Fetch item details if requested
         if (includeDetails) {
             List<SalesQuotationSchItemDtl> itemDetails = itemDtlRepository
@@ -931,7 +1077,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                     .map(this::convertItemDtlToDto)
                     .collect(Collectors.toList()));
         }
-        
+
         return dto;
     }
 
@@ -941,7 +1087,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
      */
     private SalesQuotationSchHdrDto.LovDetailDto createLovDetailFromRow(Object[] row, int index) {
         SalesQuotationSchHdrDto.LovDetailDto detail = new SalesQuotationSchHdrDto.LovDetailDto();
-        
+
         if (row.length > index) {
             // Poid (may be BigDecimal or Long)
             if (row[index] != null) {
@@ -951,23 +1097,23 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                     detail.setPoid(((Number) row[index]).longValue());
                 }
             }
-            
+
             // Code
             if (row.length > index + 1 && row[index + 1] != null) {
                 detail.setCode(row[index + 1].toString());
             }
-            
+
             // Description
             if (row.length > index + 2 && row[index + 2] != null) {
                 detail.setDescription(row[index + 2].toString());
             }
         }
-        
+
         // If all fields are null, return empty detail
         if (detail.getPoid() == null && detail.getCode() == null && detail.getDescription() == null) {
             return createEmptyLovDetail();
         }
-        
+
         return detail;
     }
 
@@ -999,7 +1145,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
      * Helper methods to safely extract values from Object[]
      */
     private Long getLongValue(Object obj) {
-        if (obj == null) return null;
+        if (obj == null)
+            return null;
         if (obj instanceof Number) {
             return ((Number) obj).longValue();
         }
@@ -1011,7 +1158,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     }
 
     private Timestamp getTimestampValue(Object obj) {
-        if (obj == null) return null;
+        if (obj == null)
+            return null;
         if (obj instanceof Timestamp) {
             return (Timestamp) obj;
         }
@@ -1022,7 +1170,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
      * Helper method to combine specifications safely
      */
     private Specification<SalesQuotationSchHdr> andIfPresent(Specification<SalesQuotationSchHdr> base,
-                                                              Specification<SalesQuotationSchHdr> addition) {
+            Specification<SalesQuotationSchHdr> addition) {
         if (addition == null) {
             return base;
         }
@@ -1036,19 +1184,19 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         if (sortBy == null || sortBy.isBlank()) {
             sortBy = "transactionDate";
         }
-        
+
         Sort.Direction direction = Sort.Direction.DESC;
         if (sortOrder != null && "ASC".equalsIgnoreCase(sortOrder.trim())) {
             direction = Sort.Direction.ASC;
         }
-        
+
         // Validate sort field to prevent SQL injection
         // Only allow sorting by known fields
         String[] allowedSortFields = {
-            "transactionDate", "transactionPoid", "docRef", "quotationStatus",
-            "validityToDate", "totalAmount", "customerRef"
+                "transactionDate", "transactionPoid", "docRef", "quotationStatus",
+                "validityToDate", "totalAmount", "customerRef"
         };
-        
+
         boolean isValidField = false;
         for (String allowedField : allowedSortFields) {
             if (allowedField.equalsIgnoreCase(sortBy.trim())) {
@@ -1056,14 +1204,14 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 break;
             }
         }
-        
+
         if (!isValidField) {
             log.warn("Invalid sort field: {}, using default: transactionDate", sortBy);
             sortBy = "transactionDate";
         }
-        
+
         // Always add transactionPoid as secondary sort for consistent ordering
-        Sort.Order primaryOrder = direction == Sort.Direction.ASC 
+        Sort.Order primaryOrder = direction == Sort.Direction.ASC
                 ? Sort.Order.asc(sortBy.trim())
                 : Sort.Order.desc(sortBy.trim());
         Sort.Order secondaryOrder = Sort.Order.desc("transactionPoid");
@@ -1098,7 +1246,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Validate invoice exists
         SalesQuotationSchHdr quotationSchHdr = quotationSchHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
 
         if ("Y".equals(quotationSchHdr.getDeleted())) {
             throw new CustomException("Cannot load quotation. Sales Quotation SCH is deleted");
@@ -1116,7 +1265,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Override
     @Transactional
     public StoredProcedureResponse importItems(ImportItemsRequest request) {
-        log.info("importItems called for transactionPoid={} companyPoid={}", 
+        log.info("importItems called for transactionPoid={} companyPoid={}",
                 request.getTransactionPoid(), request.getCompanyPoid());
         return quotationSchStoredProcRepository.callImportItemsProc(request);
     }
@@ -1124,7 +1273,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Override
     @Transactional
     public StoredProcedureResponse clearItems(ClearItemsRequest request) {
-        log.info("clearItems called for transactionPoid={} companyPoid={}", 
+        log.info("clearItems called for transactionPoid={} companyPoid={}",
                 request.getTransactionPoid(), request.getCompanyPoid());
         return quotationSchStoredProcRepository.callClearItemsProc(request);
     }
@@ -1132,7 +1281,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Override
     @Transactional
     public StoredProcedureResponse refreshDetail(RefreshDetailRequest request) {
-        log.info("refreshDetail called for transactionPoid={} companyPoid={} quotedRate={}", 
+        log.info("refreshDetail called for transactionPoid={} companyPoid={} quotedRate={}",
                 request.getTransactionPoid(), request.getCompanyPoid(), request.getQuotedRate());
         return quotationSchStoredProcRepository.callRefreshDetailProc(request);
     }
@@ -1140,7 +1289,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Override
     @Transactional
     public StoredProcedureResponse createRfq(CreateRfqRequest request) {
-        log.info("createRfq called for transactionPoid={} companyPoid={} user={}", 
+        log.info("createRfq called for transactionPoid={} companyPoid={} user={}",
                 request.getTransactionPoid(), request.getCompanyPoid(), request.getLoginUser());
         return quotationSchStoredProcRepository.callCreateRfqProc(request);
     }
@@ -1148,7 +1297,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Override
     @Transactional
     public StoredProcedureResponse createDeliveryNote(CreateDeliveryNoteRequest request) {
-        log.info("createDeliveryNote called for transactionPoid={} companyPoid={} user={}", 
+        log.info("createDeliveryNote called for transactionPoid={} companyPoid={} user={}",
                 request.getTransactionPoid(), request.getCompanyPoid(), request.getLoginUser());
         return quotationSchStoredProcRepository.callCreateDeliveryNoteProc(request);
     }
@@ -1156,7 +1305,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Override
     @Transactional
     public StoredProcedureResponse selectAll(SelectAllRequest request) {
-        log.info("selectAll called for transactionPoid={} companyPoid={}", 
+        log.info("selectAll called for transactionPoid={} companyPoid={}",
                 request.getTransactionPoid(), request.getCompanyPoid());
         return quotationSchStoredProcRepository.callSelectAllProc(request);
     }
@@ -1164,7 +1313,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Override
     @Transactional(readOnly = true)
     public ValidationResponse validateCustomer(ValidateCustomerRequest request) {
-        log.info("validateCustomer called for customerPoid={} principalPoid={} companyPoid={}", 
+        log.info("validateCustomer called for customerPoid={} principalPoid={} companyPoid={}",
                 request.getCustomerPoid(), request.getPrincipalPoid(), request.getCompanyPoid());
         return quotationSchStoredProcRepository.callValidateCustomerProc(request);
     }
@@ -1172,7 +1321,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Override
     @Transactional
     public StoredProcedureResponse updateQuantity(UpdateQuantityRequest request) {
-        log.info("updateQuantity called for transactionPoid={} companyPoid={} user={}", 
+        log.info("updateQuantity called for transactionPoid={} companyPoid={} user={}",
                 request.getTransactionPoid(), request.getCompanyPoid(), request.getLoginUser());
         return quotationSchStoredProcRepository.callUpdateQuantityProc(request);
     }
@@ -1180,7 +1329,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Override
     @Transactional(readOnly = true)
     public ValidationResponse validateCheckbox(ValidateCheckboxRequest request) {
-        log.info("validateCheckbox called for transactionPoid={} detRowId={} companyPoid={}", 
+        log.info("validateCheckbox called for transactionPoid={} detRowId={} companyPoid={}",
                 request.getTransactionPoid(), request.getDetRowId(), request.getCompanyPoid());
         return quotationSchStoredProcRepository.callValidateCheckboxProc(request);
     }
@@ -1188,23 +1337,23 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Override
     @Transactional
     public StoredProcedureResponse calculate(CalculateRequest request) {
-        log.info("calculate called for transactionPoid={} companyPoid={} user={}", 
+        log.info("calculate called for transactionPoid={} companyPoid={} user={}",
                 request.getTransactionPoid(), request.getCompanyPoid(), request.getLoginUser());
         return quotationSchStoredProcRepository.callCalculateProc(request);
     }
 
     @Override
     @Transactional
-    public ExcelImportResponse importItemsFromExcel(Long transactionPoid, Long companyPoid, String userId, 
+    public ExcelImportResponse importItemsFromExcel(Long transactionPoid, Long companyPoid, String userId,
             MultipartFile file) {
-        log.info("importItemsFromExcel started for transactionPoid={} companyPoid={} fileName={}", 
+        log.info("importItemsFromExcel started for transactionPoid={} companyPoid={} fileName={}",
                 transactionPoid, companyPoid, file != null ? file.getOriginalFilename() : "null");
-        
+
         ExcelImportResponse response = new ExcelImportResponse();
         List<String> errors = new ArrayList<>();
         int successfulRows = 0;
         int failedRows = 0;
-        
+
         // Validate file
         if (file == null || file.isEmpty()) {
             response.setSuccess(false);
@@ -1215,24 +1364,25 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             response.setErrors(List.of("Excel file is required"));
             return response;
         }
-        
+
         // Validate quotation exists
         SalesQuotationSchHdr quotationSch = quotationSchHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
 
         if ("Y".equals(quotationSch.getDeleted())) {
             throw new CustomException("Cannot import items. Sales quotation sch is deleted");
         }
-        
+
         // Get next detRowId starting point
         Long maxDetRowId = itemDtlRepository.getMaxDetRowIdByTransactionPoid(transactionPoid);
         Long nextDetRowId = (maxDetRowId == null) ? 1L : maxDetRowId + 1L;
-        
+
         try (InputStream inputStream = file.getInputStream()) {
             Workbook workbook;
             String fileName = file.getOriginalFilename();
-            
+
             // Determine workbook type based on file extension
             if (fileName != null && fileName.endsWith(".xlsx")) {
                 workbook = new XSSFWorkbook(inputStream);
@@ -1244,31 +1394,32 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 response.setErrors(List.of("Invalid file format. Only .xls and .xlsx files are supported"));
                 return response;
             }
-            
+
             Sheet sheet = workbook.getSheetAt(0); // Get first sheet
             int totalRows = sheet.getLastRowNum(); // 0-based index
-            
-            // Skip header row (row 0) and process data rows
-            for (int rowIndex = 1; rowIndex <= totalRows; rowIndex++) {
+
+            // Skip header rows (row 0, 1) and process data rows
+            for (int rowIndex = 2; rowIndex <= totalRows; rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 if (row == null) {
                     continue; // Skip empty rows
                 }
-                
+
                 try {
-                    SalesQuotationSchItemDtl itemDtl = parseExcelRowToItemDtl(row, transactionPoid, nextDetRowId++, userId, companyPoid);
-                    
+                    SalesQuotationSchItemDtl itemDtl = parseExcelRowToItemDtl(row, transactionPoid, nextDetRowId++,
+                            userId, companyPoid);
+
                     // Validate required fields
                     if (itemDtl.getStockPoid() == null) {
                         errors.add("Row " + (rowIndex + 1) + ": Stock POID is required");
                         failedRows++;
                         continue;
                     }
-                    
+
                     // Save item detail
                     itemDtlRepository.save(itemDtl);
                     successfulRows++;
-                    
+
                 } catch (Exception e) {
                     String errorMsg = "Row " + (rowIndex + 1) + ": " + e.getMessage();
                     errors.add(errorMsg);
@@ -1276,86 +1427,113 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                     failedRows++;
                 }
             }
-            
+
             workbook.close();
-            
+
             // Calculate totals after import
             if (successfulRows > 0) {
                 calculateTotals(transactionPoid);
             }
-            
+
             response.setSuccess(successfulRows > 0);
-            response.setMessage(String.format("Import completed. %d rows succeeded, %d rows failed", 
+            response.setMessage(String.format("Import completed. %d rows succeeded, %d rows failed",
                     successfulRows, failedRows));
             response.setTotalRows(totalRows);
             response.setSuccessfulRows(successfulRows);
             response.setFailedRows(failedRows);
-            response.setErrors(errors);
-            
-            log.info("importItemsFromExcel completed for transactionPoid={} successfulRows={} failedRows={}", 
-                    transactionPoid, successfulRows, failedRows);
-            
+
+            // Limit errors list to prevent serialization issues with very large lists
+            // Keep first 100 errors and add a summary if there are more
+            if (errors.size() > 100) {
+                List<String> limitedErrors = new ArrayList<>(errors.subList(0, 100));
+                limitedErrors.add(String.format("... and %d more errors (showing first 100)", errors.size() - 100));
+                response.setErrors(limitedErrors);
+            } else {
+                response.setErrors(errors);
+            }
+
+            log.info(
+                    "importItemsFromExcel completed for transactionPoid={} successfulRows={} failedRows={} totalErrors={}",
+                    transactionPoid, successfulRows, failedRows, errors.size());
+
         } catch (Exception e) {
             log.error("Error importing Excel file for transactionPoid={}", transactionPoid, e);
             response.setSuccess(false);
-            response.setMessage("Error processing Excel file: " + e.getMessage());
-            response.setErrors(List.of("Error processing Excel file: " + e.getMessage()));
+            String errorMessage = e.getMessage() != null ? e.getMessage() : "Unknown error occurred";
+            response.setMessage("Error processing Excel file: " + errorMessage);
+            response.setTotalRows(0);
+            response.setSuccessfulRows(0);
+            response.setFailedRows(0);
+            response.setErrors(List.of("Error processing Excel file: " + errorMessage));
         }
-        
+
         return response;
     }
-    
+
     /**
      * Parse Excel row to SalesQuotationSchItemDtl entity
      * Expected columns (0-based index):
-     * 0: Stock POID
-     * 1: Quantity
-     * 2: Price
-     * 3: Discount
-     * 4: Stock Unit POID
-     * 5: Remarks
-     * 6: Item Type
-     * 7: Cost
-     * 8: Delivery Select
+     * Column 5 (F): Stock Code (required)
+     * Column 6 (G): Stock Remarks (optional)
+     * Column 8 (I): Quantity (required)
      */
-    private SalesQuotationSchItemDtl parseExcelRowToItemDtl(Row row, Long transactionPoid, Long detRowId, String userId, Long companyPoid) {
+    private SalesQuotationSchItemDtl parseExcelRowToItemDtl(Row row, Long transactionPoid, Long detRowId, String userId,
+            Long companyPoid) {
         SalesQuotationSchItemDtl itemDtl = new SalesQuotationSchItemDtl();
         itemDtl.setTransactionPoid(transactionPoid);
         itemDtl.setDetRowId(detRowId);
         itemDtl.setCreatedBy(userId);
         itemDtl.setLastmodifiedBy(userId);
-        
-        // Stock Code (required) - Column 5
-        Cell stockCodeCell = row.getCell(5);
-        if (stockCodeCell != null) {
-            StockDetailsResponse stockDetails = stockMasterService.getStockDetailsByCode(getStringValueFromCell(stockCodeCell), companyPoid);
-            BeanUtils.copyProperties(stockDetails, itemDtl);
-        }
-        
-        // Stock Remarks - Column 6
-        Cell stockRemarksCell = row.getCell(6);
-        if (stockRemarksCell != null) {
-            itemDtl.setRemarks(getStringValueFromCell(stockRemarksCell));
-        }
-        
-        // // Stock Unit POID - Column 7
-        // Cell stockUnitCell = row.getCell(7);
-        // if (stockUnitCell != null) {
-        //     List<StockUnitMasterDto> stockUnitDetails = stockUnitMasterService.getStockUnitsByCode(getStringValueFromCell(stockUnitCell));
-        //     if (stockUnitDetails != null && !stockUnitDetails.isEmpty()) {
-        //         BeanUtils.copyProperties(stockUnitDetails.get(0), itemDtl);
-        //     }
-        // }
 
-        // Quantity - Column 8
+        // Stock Code (required) - Column 4 (F)
+        Cell stockCodeCell = row.getCell(4);
+        if (stockCodeCell != null) {
+            String stockCode = getStringValueFromCell(stockCodeCell);
+            if (stockCode != null && !stockCode.trim().isEmpty()) {
+                try {
+                    StockDetailsResponse stockDetails = stockMasterService.getStockDetailsByCode(stockCode.trim(),
+                            companyPoid);
+                    // Check if stock was found (stockPoid is not null)
+                    if (stockDetails != null && stockDetails.getStockPoid() != null) {
+                        BeanUtils.copyProperties(stockDetails, itemDtl);
+                    } else {
+                        // Stock not found - return empty itemDtl
+                        log.warn("Stock not found for stockCode={}, returning empty itemDtl", stockCode);
+                        return itemDtl; // Return empty itemDtl with only basic fields set
+                    }
+                } catch (ResourceNotFoundException e) {
+                    // Stock not found - return empty itemDtl instead of throwing exception
+                    log.warn("Stock not found for stockCode={}, returning empty itemDtl: {}", stockCode,
+                            e.getMessage());
+                    return itemDtl; // Return empty itemDtl with only basic fields set
+                } catch (Exception e) {
+                    log.warn("Error fetching stock details for stockCode=" + stockCode + ": " + e.getMessage());
+                    return itemDtl; // Return empty itemDtl with only basic fields set
+                }
+            }
+        }
+
+        // Stock Remarks - Column 5(G)
+        Cell stockRemarksCell = row.getCell(5);
+        if (stockRemarksCell != null) {
+            String remarks = getStringValueFromCell(stockRemarksCell);
+            if (remarks != null && !remarks.trim().isEmpty()) {
+                itemDtl.setRemarks(remarks.trim());
+            }
+        }
+
+        // Quantity - Column 8 (I)
         Cell quantityCell = row.getCell(8);
         if (quantityCell != null) {
-            itemDtl.setQuantity(getLongValueFromCell(quantityCell));
+            Long quantity = getLongValueFromCell(quantityCell);
+            if (quantity != null && quantity > 0) {
+                itemDtl.setQuantity(quantity);
+            }
         }
-        
+
         return itemDtl;
     }
-    
+
     /**
      * Extract Long value from Excel cell
      */
@@ -1363,7 +1541,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         if (cell == null) {
             return null;
         }
-        
+
         switch (cell.getCellType()) {
             case NUMERIC:
                 if (DateUtil.isCellDateFormatted(cell)) {
@@ -1392,7 +1570,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 return null;
         }
     }
-    
+
     /**
      * Extract String value from Excel cell
      */
@@ -1400,7 +1578,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         if (cell == null) {
             return null;
         }
-        
+
         switch (cell.getCellType()) {
             case STRING:
                 return cell.getStringCellValue().trim();
@@ -1431,5 +1609,18 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         }
     }
 
-}
+    @Override
+    @Transactional(readOnly = true)
+    public List<AddressDetailsResponse> getCustomerAddress(Long userPoid, Long customerPoid, String addressType) {
+        log.info("getCustomerAddress called for userPoid={} customerPoid={} addressType={}", userPoid, customerPoid,
+                addressType);
+        CustomerDetailsResponse response = quotationSchStoredProcRepository.callGetCustomerAddressProc(userPoid,
+                customerPoid, addressType);
+        if (response.isSuccess()) {
+            return response.getAddressDetails();
+        } else {
+            return new ArrayList<>();
+        }
 
+    }
+}

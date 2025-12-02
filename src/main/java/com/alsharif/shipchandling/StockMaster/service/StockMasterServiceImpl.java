@@ -1531,13 +1531,13 @@ public class StockMasterServiceImpl implements StockMasterService {
     
     /**
      * Populate StockDetailsResponse from query result
-     * Column order: stock fields (0-15), category fields (16-18), tax fields (19-22), unit fields (23-25)
+     * Column order: stock fields (0-16), category fields (17-19), tax fields (20-23), unit fields (24-26)
      */
     private StockDetailsResponse populateStockDetailsFromQueryResult(Object[] row) {
         StockDetailsResponse response = new StockDetailsResponse();
         int index = 0;
         
-        // Stock Master fields (indices 0-15)
+        // Stock Master fields (indices 0-16)
         response.setStockPoid(getLongValueFromRow(row[index++]));
         response.setStockCode(getStringValueFromRow(row[index++]));
         response.setStockName(getStringValueFromRow(row[index++]));
@@ -1556,14 +1556,14 @@ public class StockMasterServiceImpl implements StockMasterService {
         response.setActive(getStringValueFromRow(row[index++]));
         response.setDeleted(getStringValueFromRow(row[index++]));
         
-        // Category Details (indices 16-18)
+        // Category Details (indices 17-19)
         StockDetailsResponse.CategoryDetailDto categoryDetails = new StockDetailsResponse.CategoryDetailDto();
         categoryDetails.setCategoryPoid(getLongValueFromRow(row[index++]));
         categoryDetails.setCategoryCode(getStringValueFromRow(row[index++]));
         categoryDetails.setCategoryName(getStringValueFromRow(row[index++]));
         response.setCategoryDetails(categoryDetails);
         
-        // Tax Details (indices 19-22)
+        // Tax Details (indices 20-23)
         StockDetailsResponse.TaxDetailDto taxDetails = new StockDetailsResponse.TaxDetailDto();
         taxDetails.setTaxPoid(getLongValueFromRow(row[index++]));
         taxDetails.setTaxCode(getStringValueFromRow(row[index++]));
@@ -1571,7 +1571,7 @@ public class StockMasterServiceImpl implements StockMasterService {
         taxDetails.setTaxPercentage(getBigDecimalValueFromRow(row[index++]));
         response.setTaxDetails(taxDetails);
         
-        // Unit Details (indices 23-25)
+        // Unit Details (indices 24-26)
         StockDetailsResponse.UnitDetailDto unitDetails = new StockDetailsResponse.UnitDetailDto();
         unitDetails.setUnitPoid(getLongValueFromRow(row[index++]));
         unitDetails.setUnitCode(getStringValueFromRow(row[index++]));
@@ -1630,8 +1630,8 @@ public class StockMasterServiceImpl implements StockMasterService {
         List<Object[]> results = stockMasterRepository.findStockDetailsWithCategoryAndTaxByCode(stockCode.trim());
 
         if (results.isEmpty()) {
-            logger.warn("Stock not found for stockCode={}", stockCode);
-            throw new ResourceNotFoundException("Stock", "stockCode", stockCode);
+            logger.warn("Stock not found for stockCode={}, returning empty response", stockCode);
+            return new StockDetailsResponse();
         }
 
         Object[] row  = results.get(0);

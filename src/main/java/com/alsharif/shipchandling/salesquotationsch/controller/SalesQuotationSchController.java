@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.alsharif.shipchandling.salesquotationsch.dto.*;
 import com.alsharif.shipchandling.salesquotationsch.dto.request.*;
+import com.alsharif.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.SalesQuotationSchListResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
@@ -26,6 +28,7 @@ import com.alsharif.shipchandling.salesquotationsch.service.SalesQuotationSchSer
 import java.sql.Timestamp;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static com.alsharif.shipchandling.common.ApiResponse.success;
 import static com.alsharif.shipchandling.common.ApiResponse.badRequest;
@@ -306,6 +309,39 @@ public class SalesQuotationSchController {
                 return success("Customer details fetched successfully", customerDetails);
         }
 
+        @Operation(summary = "Get Customer Address Details", description = "Retrieves customer address details including contact person, email, and mobile for a given customer. Calls PROC_GET_QTN_CUST_ADDRESS_V2.", responses = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved customer address details"),
+                        @ApiResponse(responseCode = "400", description = "Invalid input parameters"),
+                        @ApiResponse(responseCode = "401", description = "Unauthorized")
+        }, security = @SecurityRequirement(name = "bearerAuth"))
+        @GetMapping("/customer/{customerPoid}/address-details")
+        public ResponseEntity<?> getCustomerAddressDetails(
+                        @PathVariable Long customerPoid,
+                        @RequestHeader("X-User-Id") String userId,
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested,
+                        @RequestParam(required = false, defaultValue = "SALES") String addressType) {
+                log.info("getCustomerAddressDetails started for customerPoid={} addressType={} companyPoid={}", 
+                                customerPoid, addressType, companyPoid);
+                
+                // Convert userId string to Long (assuming userId is numeric)
+                Long userPoid;
+                try {
+                        userPoid = Long.parseLong(userId);
+                } catch (NumberFormatException e) {
+                        log.error("Invalid userId format: {}", userId);
+                        return badRequest("Invalid userId format. Expected numeric value.");
+                }
+                
+                List<AddressDetailsResponse> addressDetails = quotationSchService.getCustomerAddress(
+                                userPoid, customerPoid, addressType);
+                
+                log.info("getCustomerAddressDetails completed for customerPoid={} found {} address details", 
+                                customerPoid, addressDetails != null ? addressDetails.size() : 0);
+                return success("Customer address details fetched successfully", addressDetails);
+        }
+
         // ==================== Stored Procedure Endpoints ====================
 
         @Operation(summary = "Import Items from Excel", description = "Import stock details to SALES_QUOTATION_ITEM_DTL through Excel file. Calls PROC_SALES_SCQTN_IMPORT_ITEMS.")
@@ -344,14 +380,37 @@ public class SalesQuotationSchController {
                         @RequestParam("file") MultipartFile file) {
                 log.info("importItemsFromExcel started for transactionPoid={} companyPoid={} fileName={}", 
                         transactionPoid, companyPoid, file != null ? file.getOriginalFilename() : "null");
-                ExcelImportResponse response = quotationSchService.importItemsFromExcel(
-                        transactionPoid, companyPoid, userId, file);
-                log.info("importItemsFromExcel completed for transactionPoid={} successfulRows={} failedRows={}", 
-                        transactionPoid, response.getSuccessfulRows(), response.getFailedRows());
-                if (response.isSuccess()) {
-                        return success(response.getMessage(), response);
-                } else {
-                        return badRequest(response.getMessage());
+                try {
+                        ExcelImportResponse response = quotationSchService.importItemsFromExcel(
+                                transactionPoid, companyPoid, userId, file);
+                        log.info("importItemsFromExcel completed for transactionPoid={} successfulRows={} failedRows={}", 
+                                transactionPoid, response.getSuccessfulRows(), response.getFailedRows());
+                        if (response.isSuccess()) {
+                                return success(response.getMessage(), response);
+                        } else {
+                                // Return response data even for failed imports so client can see error details
+                                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                                        "statusCode", HttpStatus.BAD_REQUEST.value(),
+                                        "success", false,
+                                        "message", response.getMessage(),
+                                        "result", Map.of("data", response)
+                                ));
+                        }
+                } catch (Exception e) {
+                        log.error("Unexpected error in importItemsFromExcel for transactionPoid={}", transactionPoid, e);
+                        ExcelImportResponse errorResponse = new ExcelImportResponse();
+                        errorResponse.setSuccess(false);
+                        errorResponse.setMessage("Error processing import: " + (e.getMessage() != null ? e.getMessage() : "Unknown error"));
+                        errorResponse.setTotalRows(0);
+                        errorResponse.setSuccessfulRows(0);
+                        errorResponse.setFailedRows(0);
+                        errorResponse.setErrors(List.of("Error processing import: " + (e.getMessage() != null ? e.getMessage() : "Unknown error")));
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                                "statusCode", HttpStatus.BAD_REQUEST.value(),
+                                "success", false,
+                                "message", errorResponse.getMessage(),
+                                "result", Map.of("data", errorResponse)
+                        ));
                 }
         }
 

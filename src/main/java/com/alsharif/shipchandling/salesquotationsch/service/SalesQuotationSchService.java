@@ -2,6 +2,7 @@ package com.alsharif.shipchandling.salesquotationsch.service;
 
 import com.alsharif.shipchandling.salesquotationsch.dto.*;
 import com.alsharif.shipchandling.salesquotationsch.dto.request.*;
+import com.alsharif.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.SalesQuotationSchListResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
@@ -65,4 +66,6 @@ public interface SalesQuotationSchService {
         // Excel Import
         ExcelImportResponse importItemsFromExcel(Long transactionPoid, Long companyPoid, String userId, 
                 MultipartFile file);
+        
+        List<AddressDetailsResponse> getCustomerAddress(Long userPoid, Long customerPoid, String addressType);
 }

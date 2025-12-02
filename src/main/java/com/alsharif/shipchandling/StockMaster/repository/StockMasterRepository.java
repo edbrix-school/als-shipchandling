@@ -134,34 +134,33 @@ public interface StockMasterRepository
                         "AND (sm.DELETED IS NULL OR sm.DELETED <> 'Y')", nativeQuery = true)
         List<Object[]> findStockDetailsWithCategoryAndTax(@Param("stockPoid") Long stockPoid);
 
-       /**
-         * Get Stock Master details with Category, Tax, and Unit information
-         * Returns Object[] with stock data, category details, tax details, and unit
-         * details
+        /**
+         * Get Stock Master details with Category, Tax, and Unit information by Stock Code
+         * Returns Object[] with stock data, category details, tax details, and unit details
          */
-       @Query(value = "SELECT " +
-       "sm.STOCK_POID as stockPoid, sm.STOCK_CODE as stockCode, sm.STOCK_NAME as stockName, " +
-       "sm.STOCK_NAME2 as stockName2, sm.STOCK_DESCRIPTION as stockDescription, " +
-       "sm.STOCK_UNIT_POID as stockUnitPoid, sm.STOCK_COST as stockCost, " +
-       "sm.TAG_PRICE as tagPrice, sm.RETAIL_PRICE as retailPrice, sm.WHOLESALE_PRICE as wholesalePrice, "
-       +
-       "sm.PRICE1 as price1, sm.PRICE2 as price2, sm.PRICE3 as price3, " +
-       "sm.CURRENCY_CODE as currencyCode, sm.BARCODE as barcode, " +
-       "sm.ACTIVE as active, sm.DELETED as deleted, " +
-       // Category Details
-       "cat.CATEGORY_POID as catPoid, cat.CATEGORY_CODE as catCode, cat.CATEGORY_NAME as catName, " +
-       // Tax Details
-       "tax.TAX_POID as taxPoid, tax.TAX_CODE as taxCode, tax.TAX_NAME as taxName, tax.PERCENTAGE as taxPercentage, "
-       +
-       // Unit Details
-       "su.STOCK_UNIT_POID as unitPoid, su.STOCK_UNIT_CODE as unitCode, su.STOCK_UNIT_NAME as unitName "
-       +
-       "FROM STOCK_MASTER sm " +
-       "LEFT JOIN STOCK_CATEGORY_MASTER cat ON sm.CATEGORY_POID = cat.CATEGORY_POID " +
-       "LEFT JOIN GLOBAL_TAX_MASTER tax ON sm.TAX_POID = tax.TAX_POID " +
-       "LEFT JOIN STOCK_UNIT_MASTER su ON sm.STOCK_UNIT_POID = su.STOCK_UNIT_POID " +
-       "WHERE sm.STOCK_CODE = :stockCode " +
-       "AND (sm.DELETED IS NULL OR sm.DELETED <> 'Y')", nativeQuery = true)
+        @Query(value = "SELECT " +
+                        "sm.STOCK_POID as stockPoid, sm.STOCK_CODE as stockCode, sm.STOCK_NAME as stockName, " +
+                        "sm.STOCK_NAME2 as stockName2, sm.STOCK_DESCRIPTION as stockDescription, " +
+                        "sm.STOCK_UNIT_POID as stockUnitPoid, sm.STOCK_COST as stockCost, " +
+                        "sm.TAG_PRICE as tagPrice, sm.RETAIL_PRICE as retailPrice, sm.WHOLESALE_PRICE as wholesalePrice, "
+                        +
+                        "sm.PRICE1 as price1, sm.PRICE2 as price2, sm.PRICE3 as price3, " +
+                        "sm.CURRENCY_CODE as currencyCode, sm.BARCODE as barcode, " +
+                        "sm.ACTIVE as active, sm.DELETED as deleted, " +
+                        // Category Details
+                        "cat.CATEGORY_POID as catPoid, cat.CATEGORY_CODE as catCode, cat.CATEGORY_NAME as catName, " +
+                        // Tax Details
+                        "tax.TAX_POID as taxPoid, tax.TAX_CODE as taxCode, tax.TAX_NAME as taxName, tax.PERCENTAGE as taxPercentage, "
+                        +
+                        // Unit Details
+                        "su.STOCK_UNIT_POID as unitPoid, su.STOCK_UNIT_CODE as unitCode, su.STOCK_UNIT_NAME as unitName "
+                        +
+                        "FROM STOCK_MASTER sm " +
+                        "LEFT JOIN STOCK_CATEGORY_MASTER cat ON sm.CATEGORY_POID = cat.CATEGORY_POID " +
+                        "LEFT JOIN GLOBAL_TAX_MASTER tax ON sm.TAX_POID = tax.TAX_POID " +
+                        "LEFT JOIN STOCK_UNIT_MASTER su ON sm.STOCK_UNIT_POID = su.STOCK_UNIT_POID " +
+                        "WHERE UPPER(sm.STOCK_CODE) = UPPER(:stockCode) " +
+                        "AND (sm.DELETED IS NULL OR sm.DELETED <> 'Y')", nativeQuery = true)
         List<Object[]> findStockDetailsWithCategoryAndTaxByCode(@Param("stockCode") String stockCode);
 
 }
