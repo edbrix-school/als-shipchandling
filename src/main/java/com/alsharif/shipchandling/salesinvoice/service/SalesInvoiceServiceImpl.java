@@ -186,7 +186,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             // Use native query to avoid Hibernate type mapping issues with PRICE column
             List<SalesInvoiceDtl> details = invoiceDtlRepositoryImpl
                     .findByTransactionPoidNative(invoice.getTransactionPoid());
-                    List<SalesInvoiceDtlDto> detailDtos = details.stream()
+            List<SalesInvoiceDtlDto> detailDtos = details.stream()
                     .map(this::convertInvoiceDtlToDto)
                     .collect(Collectors.toList());
             dto.setInvoiceDetails(detailDtos);
@@ -266,12 +266,12 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // }
 
         // Update fields
-        BeanUtils.copyProperties(request, invoice, "transactionPoid", "docRef", "createdBy", 
-        "createdDate", "invStatus", "verified", "invAmount", "totalGpAmt", "totalGpPercent",
-        "totalCost", "discountAmt", "discountPercent", "invDiscount", "costRefNumber",
-        "contractRefNumber", "lpoDetails", "creditDays","fdaRef", "authorizedId", "vesselName", "portName",
-        "deliveryToAddress", "incentiveAmt", "incentivePercent", "incentiveAmt2", "incentivePercent2",
-        "incentiveAmt3", "incentivePercent3", "paymentMode", "dueDate");
+        BeanUtils.copyProperties(request, invoice, "transactionPoid", "docRef", "createdBy",
+                "createdDate", "invStatus", "verified", "invAmount", "totalGpAmt", "totalGpPercent",
+                "totalCost", "discountAmt", "discountPercent", "invDiscount", "costRefNumber",
+                "contractRefNumber", "lpoDetails", "creditDays", "fdaRef", "authorizedId", "vesselName", "portName",
+                "deliveryToAddress", "incentiveAmt", "incentivePercent", "incentiveAmt2", "incentivePercent2",
+                "incentiveAmt3", "incentivePercent3", "paymentMode", "dueDate");
         invoice.setLastmodifiedBy(userId);
 
         // Call stored procedure BEFORE SAVE for validation
@@ -377,22 +377,23 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             String qtnPoid, String search,
             Timestamp fromDate, Timestamp toDate,
             Integer page, Integer size) {
-        log.info("getAllSalesInvoices service started for groupPoid={} companyPoid={} page={} size={}", 
+        log.info("getAllSalesInvoices service started for groupPoid={} companyPoid={} page={} size={}",
                 groupPoid, companyPoid, page, size);
-        
+
         // Set default values for pagination
         int pageNumber = (page != null && page >= 0) ? page : 0;
         int pageSize = (size != null && size > 0) ? size : 10; // Default page size is 10
-        
-        // Create Pageable with sorting by transaction date descending, then docRef ascending
-        Pageable pageable = PageRequest.of(pageNumber, pageSize, 
+
+        // Create Pageable with sorting by transaction date descending, then docRef
+        // ascending
+        Pageable pageable = PageRequest.of(pageNumber, pageSize,
                 Sort.by("transactionDate").descending().and(Sort.by("docRef").ascending()));
-        
+
         // Use the repository implementation method with filters and customer name
         Page<Object[]> invoicesPage = invoiceHdrRepositoryImpl.findAllWithFiltersAndCustomerName(
-                groupPoid, companyPoid, invStatus, verified, customerPoid, principalPoid, 
+                groupPoid, companyPoid, invStatus, verified, customerPoid, principalPoid,
                 qtnPoid, fromDate, toDate, search, pageable);
-        
+
         // Convert to DTOs - Object[] contains [SalesInvoiceHdr, customerName]
         List<SalesInvoiceHdrDto> data = invoicesPage.getContent().stream()
                 .map(result -> {
@@ -403,7 +404,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     return dto;
                 })
                 .collect(Collectors.toList());
-        
+
         // Create paginated response
         PaginatedResponse<SalesInvoiceHdrDto> response = new PaginatedResponse<>();
         response.setData(data);
@@ -413,8 +414,8 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         response.setTotalPages(invoicesPage.getTotalPages());
         response.setFirst(invoicesPage.isFirst());
         response.setLast(invoicesPage.isLast());
-        
-        log.info("getAllSalesInvoices completed for groupPoid={} companyPoid={} totalElements={}", 
+
+        log.info("getAllSalesInvoices completed for groupPoid={} companyPoid={} totalElements={}",
                 groupPoid, companyPoid, response.getTotalElements());
         return response;
     }
