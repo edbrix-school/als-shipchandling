@@ -6,6 +6,8 @@ import com.asg.shipchandling.requestforquotation.dto.request.*;
 import com.asg.shipchandling.requestforquotation.dto.response.*;
 import com.asg.shipchandling.requestforquotation.dto.response.*;
 import com.asg.shipchandling.requestforquotation.service.ApRequestForQtnService;
+import com.asg.common.lib.annotation.AllowedAction;
+import com.asg.common.lib.enums.UserRolesRightsEnum;
 import com.asg.common.lib.security.util.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -35,6 +37,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Get all RFQs", description = "Returns paginated list of RFQs with optional filters. Supports pagination with page and size parameters.", tags = "RFQ", responses = {
                         @ApiResponse(responseCode = "200", description = "Task list fetched successfully", content = @Content(schema = @Schema(implementation = Page.class)))
         })
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         @PostMapping("/search")
         public ResponseEntity<?> getAllRequestForQuotations(
                         @RequestBody(required = false) GetAllRfqFilterRequest filterRequest,
@@ -77,6 +80,7 @@ public class ApRequestForQuotationController {
                         @ApiResponse(responseCode = "400", description = "Invalid input or validation error"),
                         @ApiResponse(responseCode = "401", description = "Unauthorized")
         }, security = @SecurityRequirement(name = "bearerAuth"), tags = "RFQ")
+        @AllowedAction(UserRolesRightsEnum.CREATE)
         @PostMapping
         public ResponseEntity<?> createRequestForQuotation(
                         @Valid @RequestBody CreateApRequestForQtnRequest request,
@@ -90,6 +94,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Get RFQ by ID", description = "Returns a specific RFQ document by its Poid.", tags = "RFQ", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully fetched RFQ", content = @Content(schema = @Schema(implementation = ApRequestForQtnHdrDto.class)))
         })
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         @GetMapping("/{transactionPoid:\\d+}")
         public ResponseEntity<?> getRequestForQuotationByPoid(
                         @PathVariable Long transactionPoid,
@@ -103,6 +108,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Update RFQ", description = "Updates an existing RFQ document by its Poid.", tags = "RFQ", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully updated RFQ", content = @Content(schema = @Schema(implementation = ApRequestForQtnHdrDto.class)))
         })
+        @AllowedAction(UserRolesRightsEnum.EDIT)
         @PutMapping("/{transactionPoid:\\d+}")
         public ResponseEntity<?> updateRequestForQuotation(
                         @PathVariable Long transactionPoid,
@@ -115,6 +121,7 @@ public class ApRequestForQuotationController {
         }
 
         @Operation(summary = "Delete RFQ", description = "Deletes an existing RFQ document by its Poid.", tags = "RFQ")
+        @AllowedAction(UserRolesRightsEnum.DELETE)
         @DeleteMapping("/{transactionPoid}")
         public ResponseEntity<?> deleteRequestForQuotation(
                         @PathVariable Long transactionPoid) {
@@ -175,6 +182,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Get Item Details", description = "Returns a list of item details for a specific RFQ.", tags = "RFQ's Item Details", responses = {
                         @ApiResponse(responseCode = "200", description = "Item details fetched successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnItemDtlDto.class)))
         })
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         @GetMapping("/{transactionPoid}/item-details")
         public ResponseEntity<?> getItemDetails(
                         @PathVariable Long transactionPoid) {
@@ -237,6 +245,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Get Supplier Details", description = "Returns a list of supplier details for a specific RFQ.", tags = "RFQ's Supplier Details", responses = {
                         @ApiResponse(responseCode = "200", description = "Supplier details fetched successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnSupDtlDto.class)))
         })
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         @GetMapping("/{transactionPoid}/supplier-details")
         public ResponseEntity<?> getSupplierDetails(
                         @PathVariable Long transactionPoid) {
@@ -250,6 +259,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Add Related Suppliers", description = "Automatically adds suppliers to RFQ based on item details. Calls PROC_AP_RFQ_ADD_SUPPLIERS.", tags = "RFQ's Business Logic", responses = {
                         @ApiResponse(responseCode = "200", description = "Suppliers added successfully", content = @Content(schema = @Schema(implementation = AddSuppliersResponse.class)))
         })
+        @AllowedAction(UserRolesRightsEnum.EDIT)
         @PostMapping("/{transactionPoid}/add-suppliers")
         public ResponseEntity<?> addRelatedSuppliers(
                         @PathVariable Long transactionPoid,
@@ -263,6 +273,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Send Mail to Suppliers", description = "Sends RFQ document via email to all suppliers. Calls PROC_AP_RFQ_CREATE_SEND_MAIL.", tags = "RFQ's Business Logic", responses = {
                         @ApiResponse(responseCode = "200", description = "Mail sent successfully", content = @Content(schema = @Schema(implementation = SendMailResponse.class)))
         })
+        @AllowedAction(UserRolesRightsEnum.EMAIL)
         @PostMapping("/{transactionPoid}/send-mail-to-suppliers")
         public ResponseEntity<?> sendMailToSuppliers(
                         @PathVariable Long transactionPoid,
@@ -276,6 +287,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Create Purchase Order", description = "Creates a Purchase Order from RFQ for selected supplier. Calls PROC_AP_RFQ_CREATE_PO_NEW.", tags = "RFQ's Business Logic", responses = {
                         @ApiResponse(responseCode = "200", description = "Purchase Order created successfully", content = @Content(schema = @Schema(implementation = CreatePurchaseOrderResponse.class)))
         })
+        @AllowedAction(UserRolesRightsEnum.CREATE)
         @PostMapping("/{transactionPoid}/create-purchase-order")
         public ResponseEntity<?> createPurchaseOrder(
                         @PathVariable Long transactionPoid,
@@ -290,6 +302,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Update Cost", description = "Updates cost in Purchase Orders, Quotations, Delivery Notes, and Sales Invoices. Calls PROC_AP_RFQ_PRICE_UPDATE.", tags = "RFQ's Business Logic", responses = {
                         @ApiResponse(responseCode = "200", description = "Cost updated successfully", content = @Content(schema = @Schema(implementation = UpdateCostResponse.class)))
         })
+        @AllowedAction(UserRolesRightsEnum.EDIT)
         @PostMapping("/{transactionPoid}/update-cost")
         public ResponseEntity<?> updateCost(
                         @PathVariable Long transactionPoid,
@@ -304,6 +317,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Get Last Price", description = "Retrieves last purchase price for stock, unit, and supplier. Calls PROC_AP_RFQ_CREATE_LAST_PRICE.", tags = "RFQ's Business Logic", responses = {
                         @ApiResponse(responseCode = "200", description = "Last price fetched successfully", content = @Content(schema = @Schema(implementation = LastPriceResponse.class)))
         })
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         @GetMapping("/{transactionPoid}/item-details/{detRowId}/last-price")
         public ResponseEntity<?> getLastPrice(
                         @PathVariable Long transactionPoid,
@@ -321,6 +335,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Get Default Stock Unit", description = "Retrieves default stock unit for a stock item. Calls PROC_AP_RFQ_SET_DFLT_DTL.", tags = "RFQ's Business Logic", responses = {
                         @ApiResponse(responseCode = "200", description = "Default unit fetched successfully", content = @Content(schema = @Schema(implementation = DefaultUnitResponse.class)))
         })
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         @GetMapping("/{transactionPoid}/item-details/{detRowId}/default-unit")
         public ResponseEntity<?> getDefaultStockUnit(
                         @PathVariable Long transactionPoid,
@@ -334,6 +349,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Get Items Without Suppliers", description = "Identifies items in RFQ that don't have suppliers assigned. Calls PROC_AP_RFQ_ITEMS_WITHOUT_SUP.", tags = "RFQ's Business Logic", responses = {
                         @ApiResponse(responseCode = "200", description = "Items without suppliers fetched successfully", content = @Content(schema = @Schema(implementation = ItemsWithoutSuppliersResponse.class)))
         })
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         @GetMapping("/{transactionPoid}/items-without-suppliers")
         public ResponseEntity<?> getItemsWithoutSuppliers(
                         @PathVariable Long transactionPoid,
@@ -347,6 +363,7 @@ public class ApRequestForQuotationController {
         @Operation(summary = "Get Tax Percentage", description = "Retrieves tax percentage for the provided Tax POID using active tax configuration.", tags = "RFQ's Business Logic", responses = {
                         @ApiResponse(responseCode = "200", description = "Tax percentage fetched successfully")
         })
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         @GetMapping("/tax-percentage")
         public ResponseEntity<?> getTaxPercentage(
                         @RequestParam Long taxPoid) {
@@ -359,6 +376,7 @@ public class ApRequestForQuotationController {
         }
 
         @Operation(summary = "Check RFQ Dependencies", description = "Checks if RFQ can be deleted by checking for dependencies (Purchase Orders, etc.)", tags = "RFQ's Business Logic")
+        @AllowedAction(UserRolesRightsEnum.DELETE)
         @GetMapping("/{transactionPoid}/dependencies")
         public ResponseEntity<?> checkRfqDependencies(
                         @PathVariable Long transactionPoid) {
