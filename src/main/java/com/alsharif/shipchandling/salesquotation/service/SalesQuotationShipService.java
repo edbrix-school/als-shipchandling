@@ -2514,35 +2514,35 @@ public class SalesQuotationShipService {
         // For shipping quotations (not GENERAL), validate shipping-specific fields
         if (!isGeneral) {
             // LinePoid is required for shipping quotations
-            if (command.getLinePoid() == null) {
-                throw new IllegalArgumentException("linePoid is required for shipping quotations");
-            }
+            // if (command.getLinePoid() == null) {
+            //     throw new IllegalArgumentException("linePoid is required for shipping quotations");
+            // }
             
             // CommodityType is required for shipping quotations
-            if (command.getCommodityType() == null || command.getCommodityType().isBlank()) {
-                throw new IllegalArgumentException("commodityType is required for shipping quotations");
-            }
+            // if (command.getCommodityType() == null || command.getCommodityType().isBlank()) {
+            //     throw new IllegalArgumentException("commodityType is required for shipping quotations");
+            // }
             
             // TermsOfFreight is required for shipping quotations
-            if (command.getTermsOfFreight() == null || command.getTermsOfFreight().isBlank()) {
-                throw new IllegalArgumentException("termsOfFreight is required for shipping quotations");
-            }
+            // if (command.getTermsOfFreight() == null || command.getTermsOfFreight().isBlank()) {
+            //     throw new IllegalArgumentException("termsOfFreight is required for shipping quotations");
+            // }
             
             // CargoType is required for shipping quotations
-            if (command.getCargoType() == null || command.getCargoType().isBlank()) {
-                throw new IllegalArgumentException("cargoType is required for shipping quotations");
-            }
+            // if (command.getCargoType() == null || command.getCargoType().isBlank()) {
+            //     throw new IllegalArgumentException("cargoType is required for shipping quotations");
+            // }
             
             // LoadingPortPoid and DischargePortPoid are required if MultiPort = 'N' or null
-            String multiPort = command.getMultiPort();
-            if (multiPort == null || "N".equalsIgnoreCase(multiPort)) {
-                if (command.getLoadingPortPoid() == null) {
-                    throw new IllegalArgumentException("loadingPortPoid is required when multiPort = 'N'");
-                }
-                if (command.getDischargePortPoid() == null) {
-                    throw new IllegalArgumentException("dischargePortPoid is required when multiPort = 'N'");
-                }
-            }
+            // String multiPort = command.getMultiPort();
+            // if (multiPort == null || "N".equalsIgnoreCase(multiPort)) {
+            //     if (command.getLoadingPortPoid() == null) {
+            //         throw new IllegalArgumentException("loadingPortPoid is required when multiPort = 'N'");
+            //     }
+            //     if (command.getDischargePortPoid() == null) {
+            //         throw new IllegalArgumentException("dischargePortPoid is required when multiPort = 'N'");
+            //     }
+            // }
         }
     }
     

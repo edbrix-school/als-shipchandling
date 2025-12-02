@@ -19,4 +19,5 @@ public class StockMasterDtlDto {
     private Timestamp createdDate;
     private String lastmodifiedBy;
     private Timestamp lastmodifiedDate;
+    private String actionType;
 }
