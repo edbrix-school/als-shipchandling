@@ -3,14 +3,21 @@ package com.alsharif.shipchandling.salesquotationsch.service;
 import com.alsharif.shipchandling.salesquotationsch.dto.*;
 import com.alsharif.shipchandling.salesquotationsch.dto.request.*;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.CustomerDetailsResponse;
+import com.alsharif.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.SalesQuotationSchListResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.ValidationResponse;
 import com.alsharif.shipchandling.salesquotationsch.entity.*;
 import com.alsharif.shipchandling.exceptions.ResourceNotFoundException;
+import com.alsharif.shipchandling.StockMaster.dto.StockDetailsResponse;
+import com.alsharif.shipchandling.StockMaster.service.StockMasterService;
 import com.alsharif.shipchandling.exceptions.CustomException;
 import com.alsharif.shipchandling.salesquotationsch.repository.*;
 import com.alsharif.shipchandling.salesquotationsch.spec.SalesQuotationSchSpecifications;
+import com.alsharif.shipchandling.stockunitmaster.dto.StockUnitListResponse;
+import com.alsharif.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
+import com.alsharif.shipchandling.stockunitmaster.service.StockUnitService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -23,6 +30,12 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.InputStream;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,6 +52,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private final SalesQuotationSchHdrRepository quotationSchHdrRepository;
     private final SalesQuotationSchItemDtlRepository itemDtlRepository;
     private final SalesQuotationSchStoredProcRepository quotationSchStoredProcRepository;
+    private final StockMasterService stockMasterService;
+    private final  StockUnitService stockUnitMasterService;
 
     @Override
     @Transactional
@@ -1177,5 +1192,244 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 request.getTransactionPoid(), request.getCompanyPoid(), request.getLoginUser());
         return quotationSchStoredProcRepository.callCalculateProc(request);
     }
+
+    @Override
+    @Transactional
+    public ExcelImportResponse importItemsFromExcel(Long transactionPoid, Long companyPoid, String userId, 
+            MultipartFile file) {
+        log.info("importItemsFromExcel started for transactionPoid={} companyPoid={} fileName={}", 
+                transactionPoid, companyPoid, file != null ? file.getOriginalFilename() : "null");
+        
+        ExcelImportResponse response = new ExcelImportResponse();
+        List<String> errors = new ArrayList<>();
+        int successfulRows = 0;
+        int failedRows = 0;
+        
+        // Validate file
+        if (file == null || file.isEmpty()) {
+            response.setSuccess(false);
+            response.setMessage("Excel file is required");
+            response.setTotalRows(0);
+            response.setSuccessfulRows(0);
+            response.setFailedRows(0);
+            response.setErrors(List.of("Excel file is required"));
+            return response;
+        }
+        
+        // Validate quotation exists
+        SalesQuotationSchHdr quotationSch = quotationSchHdrRepository
+                .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
+                .orElseThrow(() -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
+
+        if ("Y".equals(quotationSch.getDeleted())) {
+            throw new CustomException("Cannot import items. Sales quotation sch is deleted");
+        }
+        
+        // Get next detRowId starting point
+        Long maxDetRowId = itemDtlRepository.getMaxDetRowIdByTransactionPoid(transactionPoid);
+        Long nextDetRowId = (maxDetRowId == null) ? 1L : maxDetRowId + 1L;
+        
+        try (InputStream inputStream = file.getInputStream()) {
+            Workbook workbook;
+            String fileName = file.getOriginalFilename();
+            
+            // Determine workbook type based on file extension
+            if (fileName != null && fileName.endsWith(".xlsx")) {
+                workbook = new XSSFWorkbook(inputStream);
+            } else if (fileName != null && fileName.endsWith(".xls")) {
+                workbook = new HSSFWorkbook(inputStream);
+            } else {
+                response.setSuccess(false);
+                response.setMessage("Invalid file format. Only .xls and .xlsx files are supported");
+                response.setErrors(List.of("Invalid file format. Only .xls and .xlsx files are supported"));
+                return response;
+            }
+            
+            Sheet sheet = workbook.getSheetAt(0); // Get first sheet
+            int totalRows = sheet.getLastRowNum(); // 0-based index
+            
+            // Skip header row (row 0) and process data rows
+            for (int rowIndex = 1; rowIndex <= totalRows; rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) {
+                    continue; // Skip empty rows
+                }
+                
+                try {
+                    SalesQuotationSchItemDtl itemDtl = parseExcelRowToItemDtl(row, transactionPoid, nextDetRowId++, userId, companyPoid);
+                    
+                    // Validate required fields
+                    if (itemDtl.getStockPoid() == null) {
+                        errors.add("Row " + (rowIndex + 1) + ": Stock POID is required");
+                        failedRows++;
+                        continue;
+                    }
+                    
+                    // Save item detail
+                    itemDtlRepository.save(itemDtl);
+                    successfulRows++;
+                    
+                } catch (Exception e) {
+                    String errorMsg = "Row " + (rowIndex + 1) + ": " + e.getMessage();
+                    errors.add(errorMsg);
+                    log.warn("Error processing row {}: {}", rowIndex + 1, e.getMessage());
+                    failedRows++;
+                }
+            }
+            
+            workbook.close();
+            
+            // Calculate totals after import
+            if (successfulRows > 0) {
+                calculateTotals(transactionPoid);
+            }
+            
+            response.setSuccess(successfulRows > 0);
+            response.setMessage(String.format("Import completed. %d rows succeeded, %d rows failed", 
+                    successfulRows, failedRows));
+            response.setTotalRows(totalRows);
+            response.setSuccessfulRows(successfulRows);
+            response.setFailedRows(failedRows);
+            response.setErrors(errors);
+            
+            log.info("importItemsFromExcel completed for transactionPoid={} successfulRows={} failedRows={}", 
+                    transactionPoid, successfulRows, failedRows);
+            
+        } catch (Exception e) {
+            log.error("Error importing Excel file for transactionPoid={}", transactionPoid, e);
+            response.setSuccess(false);
+            response.setMessage("Error processing Excel file: " + e.getMessage());
+            response.setErrors(List.of("Error processing Excel file: " + e.getMessage()));
+        }
+        
+        return response;
+    }
+    
+    /**
+     * Parse Excel row to SalesQuotationSchItemDtl entity
+     * Expected columns (0-based index):
+     * 0: Stock POID
+     * 1: Quantity
+     * 2: Price
+     * 3: Discount
+     * 4: Stock Unit POID
+     * 5: Remarks
+     * 6: Item Type
+     * 7: Cost
+     * 8: Delivery Select
+     */
+    private SalesQuotationSchItemDtl parseExcelRowToItemDtl(Row row, Long transactionPoid, Long detRowId, String userId, Long companyPoid) {
+        SalesQuotationSchItemDtl itemDtl = new SalesQuotationSchItemDtl();
+        itemDtl.setTransactionPoid(transactionPoid);
+        itemDtl.setDetRowId(detRowId);
+        itemDtl.setCreatedBy(userId);
+        itemDtl.setLastmodifiedBy(userId);
+        
+        // Stock Code (required) - Column 5
+        Cell stockCodeCell = row.getCell(5);
+        if (stockCodeCell != null) {
+            StockDetailsResponse stockDetails = stockMasterService.getStockDetailsByCode(getStringValueFromCell(stockCodeCell), companyPoid);
+            BeanUtils.copyProperties(stockDetails, itemDtl);
+        }
+        
+        // Stock Remarks - Column 6
+        Cell stockRemarksCell = row.getCell(6);
+        if (stockRemarksCell != null) {
+            itemDtl.setRemarks(getStringValueFromCell(stockRemarksCell));
+        }
+        
+        // // Stock Unit POID - Column 7
+        // Cell stockUnitCell = row.getCell(7);
+        // if (stockUnitCell != null) {
+        //     List<StockUnitMasterDto> stockUnitDetails = stockUnitMasterService.getStockUnitsByCode(getStringValueFromCell(stockUnitCell));
+        //     if (stockUnitDetails != null && !stockUnitDetails.isEmpty()) {
+        //         BeanUtils.copyProperties(stockUnitDetails.get(0), itemDtl);
+        //     }
+        // }
+
+        // Quantity - Column 8
+        Cell quantityCell = row.getCell(8);
+        if (quantityCell != null) {
+            itemDtl.setQuantity(getLongValueFromCell(quantityCell));
+        }
+        
+        return itemDtl;
+    }
+    
+    /**
+     * Extract Long value from Excel cell
+     */
+    private Long getLongValueFromCell(Cell cell) {
+        if (cell == null) {
+            return null;
+        }
+        
+        switch (cell.getCellType()) {
+            case NUMERIC:
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return null; // Date cells are not converted to Long
+                }
+                return (long) cell.getNumericCellValue();
+            case STRING:
+                String stringValue = cell.getStringCellValue().trim();
+                if (stringValue.isEmpty()) {
+                    return null;
+                }
+                try {
+                    // Try to parse as double first, then convert to long
+                    double doubleValue = Double.parseDouble(stringValue);
+                    return (long) doubleValue;
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            case FORMULA:
+                try {
+                    return (long) cell.getNumericCellValue();
+                } catch (Exception e) {
+                    return null;
+                }
+            default:
+                return null;
+        }
+    }
+    
+    /**
+     * Extract String value from Excel cell
+     */
+    private String getStringValueFromCell(Cell cell) {
+        if (cell == null) {
+            return null;
+        }
+        
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue().trim();
+            case NUMERIC:
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getDateCellValue().toString();
+                }
+                // Convert numeric to string without decimal if it's a whole number
+                double numericValue = cell.getNumericCellValue();
+                if (numericValue == (long) numericValue) {
+                    return String.valueOf((long) numericValue);
+                }
+                return String.valueOf(numericValue);
+            case FORMULA:
+                try {
+                    return cell.getStringCellValue();
+                } catch (Exception e) {
+                    try {
+                        return String.valueOf((long) cell.getNumericCellValue());
+                    } catch (Exception ex) {
+                        return null;
+                    }
+                }
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            default:
+                return null;
+        }
+    }
+
 }
 

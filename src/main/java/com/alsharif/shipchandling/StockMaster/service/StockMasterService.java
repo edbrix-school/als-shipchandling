@@ -3,6 +3,7 @@ package com.alsharif.shipchandling.StockMaster.service;
 import com.alsharif.shipchandling.StockMaster.dto.CreateStockMasterDtlRequest;
 import com.alsharif.shipchandling.StockMaster.dto.CreateStockMasterRequest;
 import com.alsharif.shipchandling.StockMaster.dto.CreateStockMasterWarehouseDtlRequest;
+import com.alsharif.shipchandling.StockMaster.dto.StockDetailsResponse;
 import com.alsharif.shipchandling.StockMaster.dto.StockMasterDependenciesDto;
 import com.alsharif.shipchandling.StockMaster.dto.StockMasterDtlDto;
 import com.alsharif.shipchandling.StockMaster.dto.StockMasterDto;
@@ -65,5 +66,9 @@ public interface StockMasterService {
     List<Map<String, Object>> getStockMastersHierarchical(Long groupPoid, Long parentPoid, String filterValue, boolean includeDeleted, Long companyPoid, Long userPoid);
 
     List<Map<String, Object>> getStockMastersTreeStructure(Long groupPoid, String filterValue, boolean includeDeleted, Long companyPoid, Long userPoid);
+
+    StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid);
+    
+    StockDetailsResponse getStockDetailsByCode(String stockCode, Long companyPoid);
 
 }

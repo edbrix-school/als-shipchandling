@@ -2,11 +2,13 @@ package com.alsharif.shipchandling.salesquotationsch.service;
 
 import com.alsharif.shipchandling.salesquotationsch.dto.*;
 import com.alsharif.shipchandling.salesquotationsch.dto.request.*;
+import com.alsharif.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.SalesQuotationSchListResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.ValidationResponse;
 
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -59,4 +61,8 @@ public interface SalesQuotationSchService {
         StoredProcedureResponse updateQuantity(UpdateQuantityRequest request);
         ValidationResponse validateCheckbox(ValidateCheckboxRequest request);
         StoredProcedureResponse calculate(CalculateRequest request);
+        
+        // Excel Import
+        ExcelImportResponse importItemsFromExcel(Long transactionPoid, Long companyPoid, String userId, 
+                MultipartFile file);
 }

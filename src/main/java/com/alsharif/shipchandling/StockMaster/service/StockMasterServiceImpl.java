@@ -14,6 +14,7 @@ import com.alsharif.shipchandling.StockMaster.dto.CreateStockMasterWarehouseDtlR
 import com.alsharif.shipchandling.StockMaster.dto.StockMasterDependenciesDto;
 import com.alsharif.shipchandling.StockMaster.dto.StockMasterDtlDto;
 import com.alsharif.shipchandling.StockMaster.dto.StockMasterDto;
+import com.alsharif.shipchandling.StockMaster.dto.StockDetailsResponse;
 import com.alsharif.shipchandling.StockMaster.dto.StockMasterViewResponse;
 import com.alsharif.shipchandling.StockMaster.dto.StockMasterWarehouseDtlDto;
 import com.alsharif.shipchandling.StockMaster.dto.UpdateStockMasterRequest;
@@ -33,16 +34,11 @@ import com.alsharif.shipchandling.StockMaster.dto.StockMasterViewResponse.LovDet
 
 import org.springframework.transaction.annotation.Transactional;
 
-import oracle.jdbc.OracleTypes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
-import java.sql.CallableStatement;
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.*;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -1431,6 +1427,138 @@ public class StockMasterServiceImpl implements StockMasterService {
         }
         
         return false;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid) {
+        logger.info("getStockDetails started for stockPoid={} companyPoid={}", stockPoid, companyPoid);
+        
+        // Fetch stock details with category, tax, and unit in a single query
+        List<Object[]> results = stockMasterRepository.findStockDetailsWithCategoryAndTax(stockPoid);
+        
+        if (results.isEmpty()) {
+            logger.warn("Stock not found for stockPoid={}", stockPoid);
+            throw new ResourceNotFoundException("Stock", "stockPoid", stockPoid);
+        }
+        
+        Object[] row = results.get(0);
+        StockDetailsResponse response = populateStockDetailsFromQueryResult(row);
+        
+        logger.info("getStockDetails completed for stockPoid={}", stockPoid);
+        return response;
+    }
+    
+    /**
+     * Populate StockDetailsResponse from query result
+     * Column order: stock fields (0-15), category fields (16-18), tax fields (19-22), unit fields (23-25)
+     */
+    private StockDetailsResponse populateStockDetailsFromQueryResult(Object[] row) {
+        StockDetailsResponse response = new StockDetailsResponse();
+        int index = 0;
+        
+        // Stock Master fields (indices 0-15)
+        response.setStockPoid(getLongValueFromRow(row[index++]));
+        response.setStockCode(getStringValueFromRow(row[index++]));
+        response.setStockName(getStringValueFromRow(row[index++]));
+        response.setStockName2(getStringValueFromRow(row[index++]));
+        response.setStockDescription(getStringValueFromRow(row[index++]));
+        response.setStockUnitPoid(getLongValueFromRow(row[index++]));
+        response.setStockCost(getBigDecimalValueFromRow(row[index++]));
+        response.setTagPrice(getBigDecimalValueFromRow(row[index++]));
+        response.setRetailPrice(getBigDecimalValueFromRow(row[index++]));
+        response.setWholesalePrice(getBigDecimalValueFromRow(row[index++]));
+        response.setPrice1(getBigDecimalValueFromRow(row[index++]));
+        response.setPrice2(getBigDecimalValueFromRow(row[index++]));
+        response.setPrice3(getBigDecimalValueFromRow(row[index++]));
+        response.setCurrencyCode(getStringValueFromRow(row[index++]));
+        response.setBarcode(getStringValueFromRow(row[index++]));
+        response.setActive(getStringValueFromRow(row[index++]));
+        response.setDeleted(getStringValueFromRow(row[index++]));
+        
+        // Category Details (indices 16-18)
+        StockDetailsResponse.CategoryDetailDto categoryDetails = new StockDetailsResponse.CategoryDetailDto();
+        categoryDetails.setCategoryPoid(getLongValueFromRow(row[index++]));
+        categoryDetails.setCategoryCode(getStringValueFromRow(row[index++]));
+        categoryDetails.setCategoryName(getStringValueFromRow(row[index++]));
+        response.setCategoryDetails(categoryDetails);
+        
+        // Tax Details (indices 19-22)
+        StockDetailsResponse.TaxDetailDto taxDetails = new StockDetailsResponse.TaxDetailDto();
+        taxDetails.setTaxPoid(getLongValueFromRow(row[index++]));
+        taxDetails.setTaxCode(getStringValueFromRow(row[index++]));
+        taxDetails.setTaxName(getStringValueFromRow(row[index++]));
+        taxDetails.setTaxPercentage(getBigDecimalValueFromRow(row[index++]));
+        response.setTaxDetails(taxDetails);
+        
+        // Unit Details (indices 23-25)
+        StockDetailsResponse.UnitDetailDto unitDetails = new StockDetailsResponse.UnitDetailDto();
+        unitDetails.setUnitPoid(getLongValueFromRow(row[index++]));
+        unitDetails.setUnitCode(getStringValueFromRow(row[index++]));
+        unitDetails.setUnitName(getStringValueFromRow(row[index++]));
+        response.setUnitDetails(unitDetails);
+        
+        return response;
+    }
+    
+    /**
+     * Helper method to safely extract Long value from Object[]
+     */
+    private Long getLongValueFromRow(Object obj) {
+        if (obj == null) {
+            return null;
+        }
+        if (obj instanceof Number) {
+            return ((Number) obj).longValue();
+        }
+        return null;
+    }
+    
+    /**
+     * Helper method to safely extract String value from Object[]
+     */
+    private String getStringValueFromRow(Object obj) {
+        return obj != null ? obj.toString() : null;
+    }
+    
+    /**
+     * Helper method to safely extract BigDecimal value from Object[]
+     */
+    private BigDecimal getBigDecimalValueFromRow(Object obj) {
+        if (obj == null) {
+            return null;
+        }
+        if (obj instanceof BigDecimal) {
+            return (BigDecimal) obj;
+        }
+        if (obj instanceof Number) {
+            return BigDecimal.valueOf(((Number) obj).doubleValue());
+        }
+        return null;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StockDetailsResponse getStockDetailsByCode(String stockCode, Long companyPoid) {
+        logger.info("getStockDetailsByCode started for stockCode={} companyPoid={}", stockCode, companyPoid);
+
+        if (stockCode == null || stockCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("stockCode is required");
+        }
+
+        // Fetch stock details with category, tax, and unit in a single query by stock code
+        List<Object[]> results = stockMasterRepository.findStockDetailsWithCategoryAndTaxByCode(stockCode.trim());
+
+        if (results.isEmpty()) {
+            logger.warn("Stock not found for stockCode={}", stockCode);
+            throw new ResourceNotFoundException("Stock", "stockCode", stockCode);
+        }
+
+        Object[] row  = results.get(0);
+        StockDetailsResponse response = populateStockDetailsFromQueryResult(row);
+
+        logger.info("getStockDetailsByCode completed for stockCode={}", stockCode);
+        return response;
     }
 
 }

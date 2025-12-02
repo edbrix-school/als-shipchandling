@@ -10,11 +10,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.alsharif.shipchandling.salesquotationsch.dto.*;
 import com.alsharif.shipchandling.salesquotationsch.dto.request.*;
+import com.alsharif.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.SalesQuotationSchListResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
 import com.alsharif.shipchandling.salesquotationsch.dto.response.ValidationResponse;
@@ -326,6 +329,32 @@ public class SalesQuotationSchController {
                 }
         }
 
+        @Operation(summary = "Import Items from Excel File", description = "Upload and process Excel file to import stock details into SALES_QUOTATION_ITEM_DTL. Excel format: Stock POID, Quantity, Price, Discount, Stock Unit POID, Remarks, Item Type, Cost, Delivery Select.", responses = {
+                        @ApiResponse(responseCode = "200", description = "Successfully imported items from Excel"),
+                        @ApiResponse(responseCode = "400", description = "Invalid file or processing error"),
+                        @ApiResponse(responseCode = "401", description = "Unauthorized")
+        }, security = @SecurityRequirement(name = "bearerAuth"))
+        @PostMapping(value = "/{transactionPoid}/import-items-excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        public ResponseEntity<?> importItemsFromExcel(
+                        @PathVariable Long transactionPoid,
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestHeader("X-User-Id") String userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested,
+                        @RequestParam("file") MultipartFile file) {
+                log.info("importItemsFromExcel started for transactionPoid={} companyPoid={} fileName={}", 
+                        transactionPoid, companyPoid, file != null ? file.getOriginalFilename() : "null");
+                ExcelImportResponse response = quotationSchService.importItemsFromExcel(
+                        transactionPoid, companyPoid, userId, file);
+                log.info("importItemsFromExcel completed for transactionPoid={} successfulRows={} failedRows={}", 
+                        transactionPoid, response.getSuccessfulRows(), response.getFailedRows());
+                if (response.isSuccess()) {
+                        return success(response.getMessage(), response);
+                } else {
+                        return badRequest(response.getMessage());
+                }
+        }
+
         @Operation(summary = "Clear Items", description = "Clear stock detail table if quotation status is not in 'processing'. Calls PROC_SALES_SCQTN_ITEMS_CLEAR.")
         @PostMapping("/{transactionPoid}/clear-items")
         public ResponseEntity<?> clearItems(
@@ -513,4 +542,5 @@ public class SalesQuotationSchController {
                         return badRequest(response.getErrorMessage());
                 }
         }
+
 }

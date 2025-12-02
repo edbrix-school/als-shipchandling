@@ -1,6 +1,5 @@
 package com.alsharif.shipchandling.stockunitmaster.service;
 
-import com.alsharif.shipchandling.exceptions.GlobalExceptionHandler;
 import com.alsharif.shipchandling.exceptions.ResourceAlreadyExistsException;
 import com.alsharif.shipchandling.exceptions.ResourceNotFoundException;
 import com.alsharif.shipchandling.group.repository.GroupRepository;
@@ -17,19 +16,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cglib.core.Local;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -502,6 +495,31 @@ public Page<StockUnitMasterDto> listStockUnitsUsingParams(
         }
         
         return null;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StockUnitMasterDto> getStockUnitsByCode(String stockUnitCode) {
+        log.info("getStockUnitsByCode started for stockUnitCode={}", stockUnitCode);
+
+        if (stockUnitCode == null || stockUnitCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("stockUnitCode is required");
+        }
+
+        // Create pattern for contains search (case-insensitive)
+        String codePattern = "%" + stockUnitCode.trim() + "%";
+        List<StockUnitMaster> units = stockUnitRepository.findByStockUnitCodeContains(codePattern);
+
+        List<StockUnitMasterDto> dtoList = units.stream()
+                .map(entity -> {
+                    StockUnitMasterDto dto = new StockUnitMasterDto();
+                    BeanUtils.copyProperties(entity, dto);
+                    return dto;
+                })
+                .collect(Collectors.toList());
+
+        log.info("getStockUnitsByCode completed for stockUnitCode={}, found {} units", stockUnitCode, dtoList.size());
+        return dtoList;
     }
 
 }

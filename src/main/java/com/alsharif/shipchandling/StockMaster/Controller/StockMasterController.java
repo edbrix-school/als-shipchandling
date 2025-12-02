@@ -28,6 +28,7 @@ import com.alsharif.shipchandling.StockMaster.dto.CreateStockMasterWarehouseDtlR
 import com.alsharif.shipchandling.StockMaster.dto.StockMasterDependenciesDto;
 import com.alsharif.shipchandling.StockMaster.dto.StockMasterDtlDto;
 import com.alsharif.shipchandling.StockMaster.dto.StockMasterDto;
+import com.alsharif.shipchandling.StockMaster.dto.StockDetailsResponse;
 import com.alsharif.shipchandling.StockMaster.dto.StockMasterViewResponse;
 import com.alsharif.shipchandling.StockMaster.dto.StockMasterWarehouseDtlDto;
 import com.alsharif.shipchandling.StockMaster.dto.UpdateStockMasterRequest;
@@ -338,6 +339,21 @@ public ResponseEntity<StockMasterDto> updateStockMaster(
 
         StockMasterDto stock = stockMasterService.getStockMasterByBarcode(barcode, groupPoid);
         return ResponseEntity.ok(stock);
+    }
+
+    @Operation(summary = "Get Stock Details", description = "Retrieves stock details including category, tax, and unit information for a given stock POID.", responses = {
+                    @ApiResponse(responseCode = "200", description = "Successfully retrieved stock details"),
+                    @ApiResponse(responseCode = "404", description = "Stock not found"),
+                    @ApiResponse(responseCode = "401", description = "Unauthorized")
+    }, security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/{stockPoid}/details")
+    public ResponseEntity<?> getStockDetails(
+                    @PathVariable Long stockPoid,
+                    @RequestHeader("X-Company-Poid") Long companyPoid,
+                    @RequestParam(required = true) String documentId,
+                    @RequestParam(required = true) String actionRequested) {
+            StockDetailsResponse response = stockMasterService.getStockDetails(stockPoid, companyPoid);
+            return success("Stock details fetched successfully", response);
     }
 
 }
