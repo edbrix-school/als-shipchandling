@@ -24,7 +24,7 @@ import java.util.Map;
 import static com.alsharif.shipchandling.common.ApiResponse.success;
 
 @RestController
-@RequestMapping("request-for-quotations")
+@RequestMapping("/v1/request-for-quotations")
 @RequiredArgsConstructor
 public class ApRequestForQuotationController {
 
