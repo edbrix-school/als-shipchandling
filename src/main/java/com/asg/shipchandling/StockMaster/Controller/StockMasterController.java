@@ -55,7 +55,8 @@ public class StockMasterController {
             @RequestParam(required = false, defaultValue = "false") boolean includeDetails,
             @RequestParam(required = false) Long groupPoid) {
 
-        StockMasterViewResponse response = stockMasterService.getStockMasterById(stockPoid, includeDetails, groupPoid);
+        Long finalGroupPoid = (groupPoid != null) ? groupPoid : UserContext.getGroupPoid();
+        StockMasterViewResponse response = stockMasterService.getStockMasterById(stockPoid, includeDetails, finalGroupPoid);
 
         if (response == null) {
             return ResponseEntity.notFound().build();
@@ -80,8 +81,8 @@ public class StockMasterController {
 
         // Check if this is a tree structure request with documentId and actionRequested
         if (tree && documentId != null && "VIEW".equalsIgnoreCase(actionRequested)) {
-            Long groupPoid = Long.parseLong(filters.get("groupPoid"));
-            Long companyPoid = filters.containsKey("companyPoid") ? Long.parseLong(filters.get("companyPoid")) : null;
+            Long groupPoid = UserContext.getGroupPoid();
+            Long companyPoid = UserContext.getCompanyPoid();
             Long userPoid = filters.containsKey("userPoid") ? Long.parseLong(filters.get("userPoid")) : null;
             
             List<Map<String, Object>> treeStructure = stockMasterService.getStockMastersTreeStructure(
@@ -92,8 +93,8 @@ public class StockMasterController {
 
         // Check if this is a hierarchical view request (flat list)
         if (documentId != null && "VIEW".equalsIgnoreCase(actionRequested)) {
-            Long groupPoid = Long.parseLong(filters.get("groupPoid"));
-            Long companyPoid = filters.containsKey("companyPoid") ? Long.parseLong(filters.get("companyPoid")) : null;
+            Long groupPoid = UserContext.getGroupPoid();
+            Long companyPoid = UserContext.getCompanyPoid();
             Long userPoid = filters.containsKey("userPoid") ? Long.parseLong(filters.get("userPoid")) : null;
             
             List<Map<String, Object>> hierarchicalList = stockMasterService.getStockMastersHierarchical(
@@ -112,7 +113,7 @@ public class StockMasterController {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         if (tree) {
-            Long groupPoid = Long.parseLong(filters.get("groupPoid"));
+            Long groupPoid = UserContext.getGroupPoid();
             List<Map<String, Object>> categories = stockMasterService.getStockMastersTree(groupPoid);
             Map<String, Object> data = Map.of("categories", categories);
             return success("Stock masters tree fetched successfully", data);
