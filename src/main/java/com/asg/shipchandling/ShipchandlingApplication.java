@@ -1,0 +1,15 @@
+package com.asg.shipchandling;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.ComponentScan;
+
+@SpringBootApplication
+@ComponentScan(basePackages = {"com.asg"})
+public class ShipchandlingApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(ShipchandlingApplication.class, args);
+	}
+
+}
