@@ -1,11 +1,11 @@
 package com.alsharif.shipchandling.stockunitmaster.service;
 
 import com.alsharif.shipchandling.stockunitmaster.dto.FilterRequestDto;
+import com.alsharif.shipchandling.stockunitmaster.dto.StockUnitListResponse;
 import com.alsharif.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
 import com.alsharif.shipchandling.stockunitmaster.dto.UnitDependenciesDto;
 
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,5 +37,6 @@ public interface StockUnitService {
 
      List<StockUnitMasterDto> getActiveStockUnits(Long groupPoid, String classified, String search);
 
+     StockUnitListResponse listStockUnitsWithFilters(FilterRequestDto filterRequest, Pageable pageable);
 
 }

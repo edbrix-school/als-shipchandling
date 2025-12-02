@@ -6,6 +6,11 @@ import com.alsharif.shipchandling.exceptions.ResourceNotFoundException;
 import com.alsharif.shipchandling.exceptions.CustomException;
 import com.alsharif.shipchandling.deliverynote.repository.*;
 import com.alsharif.shipchandling.deliverynote.repository.SalesDeliveryNoteHdrRepositoryImpl;
+import com.alsharif.shipchandling.salesinvoice.repository.SalesDnDtlRepository;
+import com.alsharif.shipchandling.StockMaster.entity.StockMasterEntity;
+import com.alsharif.shipchandling.StockMaster.repository.StockMasterRepository;
+import com.alsharif.shipchandling.stockunitmaster.entity.StockUnitMaster;
+import com.alsharif.shipchandling.stockunitmaster.repository.StockUnitRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -14,7 +19,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +32,11 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -40,6 +48,9 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     private final SalesDeliveryNoteItemDtlRepository itemDtlRepository;
     private final SalesDeliveryNoteRepository salesDeliveryNoteRepository;
     private final SalesDeliveryNoteHdrRepositoryImpl deliveryNoteHdrRepositoryImpl;
+    private final SalesDnDtlRepository salesDnDtlRepository;
+    private final StockMasterRepository stockMasterRepository;
+    private final StockUnitRepository stockUnitRepository;
 
     // Add OracleDataSource or DataSource injection for stored procedure calls
     private final DataSource dataSource;
@@ -99,6 +110,8 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
             Long companyPoid, Boolean includeDetails) {
         log.info("getDeliveryNoteByPoid service started for transactionPoid={} groupPoid={}", transactionPoid,
                 groupPoid);
+        
+        // Validate delivery note exists
         SalesDeliveryNoteHdr deliveryNote = deliveryNoteHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Delivery Note", "transactionPoid", transactionPoid));
@@ -108,9 +121,22 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
                     transactionPoid);
             throw new ResourceNotFoundException("Delivery Note", "transactionPoid", transactionPoid);
         }
-        SalesDeliveryNoteHdrDto dto = convertToDto(deliveryNote, includeDetails != null && includeDetails);
+        
+        // Fetch delivery note with all LOV details in a single query
+        List<Object[]> results = deliveryNoteHdrRepository.findDeliveryNoteWithDetails(transactionPoid, companyPoid);
+        SalesDeliveryNoteHdrDto dto;
+        
+        if (!results.isEmpty()) {
+            Object[] row = results.get(0);
+            dto = populateDeliveryNoteFromQueryResult(row, includeDetails != null && includeDetails);
+        } else {
+            // Fallback: use entity if query fails
+            dto = convertToDto(deliveryNote, includeDetails != null && includeDetails);
+            setEmptyLovDetails(dto);
+        }
+        
         log.info("getDeliveryNoteByPoid completed for transactionPoid={} companyPoid={}",
-                deliveryNote.getTransactionPoid(), deliveryNote.getCompanyPoid());
+                transactionPoid, companyPoid);
         return dto;
     }
 
@@ -155,14 +181,18 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         deliveryNote.setLastmodifiedBy(userId);
 
         // Remove items with CheckAll = "N" before updating
-        itemDtlRepository.deleteByTransactionPoidAndCheckAllN(transactionPoid);
+        // itemDtlRepository.deleteByTransactionPoidAndCheckAllN(transactionPoid);
 
-        // Update item details (only items with CheckAll = "Y")
-        updateItemDetails(transactionPoid,
-                request.getItemDetails() != null ? request.getItemDetails().stream()
-                        .filter(item -> "Y".equals(item.getCheckAll()))
-                        .collect(Collectors.toList()) : List.of(),
-                userId);
+        // Process item details based on actionType (UPDATE, DELETE, or CREATE)
+        if (request.getItemDetails() != null && !request.getItemDetails().isEmpty()) {
+            processItemDetailsByActionType(transactionPoid, 
+                    request.getItemDetails(),
+                    // .stream()
+                    // .filter(item -> item.getActionType() != null)
+                    //         .filter(item -> "Y".equals(item.getCheckAll()))
+                    //         .collect(Collectors.toList()),
+                    userId);
+        }
 
         // Save
         SalesDeliveryNoteHdr savedDeliveryNote = deliveryNoteHdrRepository.save(deliveryNote);
@@ -497,6 +527,104 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         }
     }
 
+    /**
+     * Process item details based on actionType:
+     * - DELETE: Delete the item by detRowId
+     * - UPDATE: Update the existing item by detRowId
+     * - CREATE/null: Add as new item
+     */
+    private void processItemDetailsByActionType(Long transactionPoid, 
+            List<CreateSalesDeliveryNoteItemDtlRequest> details, String userId) {
+        if (details == null || details.isEmpty()) {
+            return;
+        }
+
+        List<CreateSalesDeliveryNoteItemDtlRequest> itemsToCreate = new ArrayList<>();
+        
+        for (CreateSalesDeliveryNoteItemDtlRequest item : details) {
+            String actionType = item.getActionType();
+            
+            if ("DELETE".equalsIgnoreCase(actionType)) {
+                // Delete item by detRowId
+                if (item.getDetRowId() != null) {
+                    try {
+                        itemDtlRepository.deleteById(new SalesDeliveryNoteItemDtlId(transactionPoid, item.getDetRowId()));
+                        log.debug("Deleted item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
+                    } catch (Exception ex) {
+                        log.warn("Failed to delete item detail transactionPoid={} detRowId={}: {}", 
+                                transactionPoid, item.getDetRowId(), ex.getMessage());
+                    }
+                } else {
+                    log.warn("DELETE action requires detRowId, skipping item transactionPoid={}", transactionPoid);
+                }
+            } else if ("UPDATE".equalsIgnoreCase(actionType)) {
+                // Update existing item by detRowId
+                if (item.getDetRowId() != null) {
+                    try {
+                        SalesDeliveryNoteItemDtl existingItem = itemDtlRepository
+                                .findById(new SalesDeliveryNoteItemDtlId(transactionPoid, item.getDetRowId()))
+                                .orElse(null);
+                        
+                        if (existingItem != null) {
+                            // Check if item is from quotation (read-only fields)
+                           /*  if (existingItem.getQtnDetRowId() != null && existingItem.getQtnDetRowId() > 0) {
+                                // StockPoid and Quantity are read-only if loaded from quotation
+                                if (item.getStockPoid() != null && !item.getStockPoid().equals(existingItem.getStockPoid())) {
+                                    log.warn("Attempt to change stockPoid for item loaded from quotation. transactionPoid={} detRowId={}",
+                                            transactionPoid, item.getDetRowId());
+                                    throw new CustomException("Cannot change stock. Item is loaded from quotation.");
+                                }
+                                if (item.getQuantity() != null && !item.getQuantity().equals(existingItem.getQuantity())) {
+                                    log.warn("Attempt to change quantity for item loaded from quotation. transactionPoid={} detRowId={}",
+                                            transactionPoid, item.getDetRowId());
+                                    throw new CustomException("Cannot change quantity. Item is loaded from quotation.");
+                                }
+                            }
+                             */
+                            // Update fields
+                            if (existingItem.getQtnDetRowId() == null || existingItem.getQtnDetRowId() == 0) {
+                                existingItem.setStockPoid(item.getStockPoid());
+                                existingItem.setQuantity(item.getQuantity());
+                            }
+                            existingItem.setStockUnitPoid(item.getStockUnitPoid());
+                            existingItem.setPrice(item.getPrice());
+                            existingItem.setDiscount(item.getDiscount() != null ? item.getDiscount() : 0L);
+                            existingItem.setAmount(item.getAmount());
+                            existingItem.setRemarks(item.getRemarks());
+                            existingItem.setCheckAll(item.getCheckAll() != null ? item.getCheckAll() : "Y");
+                            existingItem.setTotCost(item.getTotCost());
+                            existingItem.setItemType(item.getItemType());
+                            existingItem.setLastmodifiedBy(userId);
+                            
+                            itemDtlRepository.save(existingItem);
+                            log.debug("Updated item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
+                        } else {
+                            log.warn("Item not found for UPDATE action transactionPoid={} detRowId={}, treating as CREATE",
+                                    transactionPoid, item.getDetRowId());
+                            itemsToCreate.add(item);
+                        }
+                    } catch (CustomException ex) {
+                        throw ex; // Re-throw custom exceptions
+                    } catch (Exception ex) {
+                        log.warn("Failed to update item detail transactionPoid={} detRowId={}: {}", 
+                                transactionPoid, item.getDetRowId(), ex.getMessage());
+                    }
+                } else {
+                    log.warn("UPDATE action requires detRowId, treating as CREATE transactionPoid={}", transactionPoid);
+                    itemsToCreate.add(item);
+                }
+            } else {
+                // CREATE or null actionType - add as new item
+                itemsToCreate.add(item);
+            }
+        }
+        
+        // Save new items
+        if (!itemsToCreate.isEmpty()) {
+            saveItemDetails(transactionPoid, itemsToCreate, userId);
+        }
+    }
+
     private void calculateTotals(Long transactionPoid) {
         // Calculate total amount from item details (only items with CheckAll = "Y")
         Long totalAmount = itemDtlRepository.sumAmountByTransactionPoid(transactionPoid);
@@ -525,9 +653,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         if (includeDetails) {
             List<SalesDeliveryNoteItemDtl> itemDetails = itemDtlRepository
                     .findByTransactionPoid(deliveryNote.getTransactionPoid());
-            dto.setItemDetails(itemDetails.stream()
-                    .map(this::convertItemDtlToDto)
-                    .collect(Collectors.toList()));
+            dto.setItemDetails(convertItemDetailsWithLov(itemDetails));
         }
 
         return dto;
@@ -537,6 +663,232 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         SalesDeliveryNoteItemDtlDto dto = new SalesDeliveryNoteItemDtlDto();
         BeanUtils.copyProperties(itemDtl, dto);
         return dto;
+    }
+
+    /**
+     * Convert item details and enrich with stock & stock unit LOV details
+     */
+    private List<SalesDeliveryNoteItemDtlDto> convertItemDetailsWithLov(List<SalesDeliveryNoteItemDtl> itemDetails) {
+        if (itemDetails == null || itemDetails.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        List<SalesDeliveryNoteItemDtlDto> dtos = itemDetails.stream()
+                .map(this::convertItemDtlToDto)
+                .collect(Collectors.toList());
+
+        Set<Long> stockPoids = itemDetails.stream()
+                .map(SalesDeliveryNoteItemDtl::getStockPoid)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Map<Long, StockMasterEntity> stockMap = stockPoids.isEmpty()
+                ? Collections.emptyMap()
+                : stockMasterRepository.findAllById(stockPoids).stream()
+                        .collect(Collectors.toMap(StockMasterEntity::getStockPoid, entity -> entity));
+
+        Set<Long> stockUnitPoids = itemDetails.stream()
+                .map(SalesDeliveryNoteItemDtl::getStockUnitPoid)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Map<Long, StockUnitMaster> stockUnitMap = stockUnitPoids.isEmpty()
+                ? Collections.emptyMap()
+                : stockUnitRepository.findAllById(stockUnitPoids).stream()
+                        .collect(Collectors.toMap(StockUnitMaster::getStockUnitPoid, entity -> entity));
+
+        for (int i = 0; i < itemDetails.size(); i++) {
+            SalesDeliveryNoteItemDtl entity = itemDetails.get(i);
+            SalesDeliveryNoteItemDtlDto dto = dtos.get(i);
+
+            StockMasterEntity stock = stockMap.get(entity.getStockPoid());
+            if (stock != null) {
+                dto.setStockDetails(new SalesDeliveryNoteItemDtlDto.LovDetailDto(
+                        stock.getStockPoid(),
+                        stock.getStockCode(),
+                        stock.getStockName()));
+            }
+
+            StockUnitMaster stockUnit = stockUnitMap.get(entity.getStockUnitPoid());
+            if (stockUnit != null) {
+                dto.setStockUnitDetails(new SalesDeliveryNoteItemDtlDto.LovDetailDto(
+                        stockUnit.getStockUnitPoid(),
+                        stockUnit.getStockUnitCode(),
+                        stockUnit.getStockUnitName()));
+            }
+        }
+
+        return dtos;
+    }
+
+    /**
+     * Populate delivery note DTO from native query result with LOV details
+     * Column order: delivery note fields (28) + LOV details (7 objects * 3 fields = 21) = 49 columns
+     * LOV order: Customer, Salesman, Line, Port, Vessel, Print Division, Principal
+     */
+    private SalesDeliveryNoteHdrDto populateDeliveryNoteFromQueryResult(Object[] row, boolean includeDetails) {
+        SalesDeliveryNoteHdrDto dto = new SalesDeliveryNoteHdrDto();
+        
+        // Delivery Note Header fields (indices 0-27)
+        int index = 0;
+        dto.setTransactionPoid(getLongValue(row[index++]));
+        dto.setDocRef(getStringValue(row[index++]));
+        dto.setTransactionDate(getTimestampValue(row[index++]));
+        dto.setCompanyPoid(getLongValue(row[index++]));
+        dto.setCustomerPoid(getLongValue(row[index++]));
+        dto.setCurrencyCode(getStringValue(row[index++]));
+        dto.setCurrencyRate(getLongValue(row[index++]));
+        dto.setDeliveryStatus(getStringValue(row[index++]));
+        dto.setSalesmanPoid(getLongValue(row[index++]));
+        dto.setPaymentMode(getStringValue(row[index++]));
+        dto.setDeliveryTerms(getStringValue(row[index++]));
+        dto.setLinePoid(getLongValue(row[index++]));
+        dto.setVesselPoid(getStringValue(row[index++]));
+        dto.setVesselName(getStringValue(row[index++]));
+        dto.setVoyageRef(getStringValue(row[index++]));
+        dto.setPortPoid(getLongValue(row[index++]));
+        dto.setPortDescription(getStringValue(row[index++]));
+        dto.setQtnRefNo(getStringValue(row[index++]));
+        dto.setVesselAgent(getStringValue(row[index++]));
+        dto.setDeliveryToAddress(getStringValue(row[index++]));
+        dto.setDescriptionPrintYn(getStringValue(row[index++]));
+        dto.setPartyAddressDetails(getStringValue(row[index++]));
+        dto.setPrintDivisionPoid(getLongValue(row[index++]));
+        dto.setPartyType(getStringValue(row[index++]));
+        dto.setPrincipalPoid(getLongValue(row[index++]));
+        dto.setTotalDiscount(getLongValue(row[index++]));
+        dto.setTotalAmount(getLongValue(row[index++]));
+        dto.setRemarks(getStringValue(row[index++]));
+        dto.setDeleted(getStringValue(row[index++]));
+        dto.setCreatedBy(getStringValue(row[index++]));
+        dto.setCreatedDate(getTimestampValue(row[index++]));
+        dto.setLastmodifiedBy(getStringValue(row[index++]));
+        dto.setLastmodifiedDate(getTimestampValue(row[index++]));
+        
+        // LOV Details start at index 28
+        // Customer Details (cust: index 28-30)
+        dto.setCustomerDetails(createLovDetailFromRow(row, index));
+        index += 3;
+        
+        // Salesman Details (sm: index 31-33)
+        dto.setSalesmanDetails(createLovDetailFromRow(row, index));
+        index += 3;
+        
+        // Line Details (lm: index 34-36)
+        dto.setLineDetails(createLovDetailFromRow(row, index));
+        index += 3;
+        
+        // Port Details (pm: index 37-39)
+        dto.setPortDetails(createLovDetailFromRow(row, index));
+        index += 3;
+        
+        // Vessel Details (vm: index 40-42)
+        dto.setVesselDetails(createLovDetailFromRow(row, index));
+        index += 3;
+
+        // Print Division Details (div: index 43-45)
+        dto.setPrintDivisionDetails(createLovDetailFromRow(row, index));
+        index += 3;
+
+        // Principal Details (pr: index 46-48)
+        dto.setPrincipalDetails(createLovDetailFromRow(row, index));
+        
+        // Set customerName from customerDetails if available
+        if (dto.getCustomerDetails() != null && dto.getCustomerDetails().getDescription() != null) {
+            dto.setCustomerName(dto.getCustomerDetails().getDescription());
+        }
+        
+        // Fetch item details if requested
+        if (includeDetails) {
+            List<SalesDeliveryNoteItemDtl> itemDetails = itemDtlRepository
+                    .findByTransactionPoid(dto.getTransactionPoid());
+            dto.setItemDetails(convertItemDetailsWithLov(itemDetails));
+        }
+        
+        return dto;
+    }
+
+    /**
+     * Create LOV detail from row array starting at given index
+     * Expects: [poid, code, description] at indices [index, index+1, index+2]
+     */
+    private SalesDeliveryNoteHdrDto.LovDetailDto createLovDetailFromRow(Object[] row, int index) {
+        SalesDeliveryNoteHdrDto.LovDetailDto detail = new SalesDeliveryNoteHdrDto.LovDetailDto();
+        
+        if (row.length > index) {
+            // Poid (may be BigDecimal or Long)
+            if (row[index] != null) {
+                if (row[index] instanceof java.math.BigDecimal) {
+                    detail.setPoid(((java.math.BigDecimal) row[index]).longValue());
+                } else if (row[index] instanceof Number) {
+                    detail.setPoid(((Number) row[index]).longValue());
+                }
+            }
+            
+            // Code
+            if (row.length > index + 1 && row[index + 1] != null) {
+                detail.setCode(row[index + 1].toString());
+            }
+            
+            // Description
+            if (row.length > index + 2 && row[index + 2] != null) {
+                detail.setDescription(row[index + 2].toString());
+            }
+        }
+        
+        // If all fields are null, return empty detail
+        if (detail.getPoid() == null && detail.getCode() == null && detail.getDescription() == null) {
+            return createEmptyLovDetail();
+        }
+        
+        return detail;
+    }
+
+    /**
+     * Create empty LOV detail object
+     */
+    private SalesDeliveryNoteHdrDto.LovDetailDto createEmptyLovDetail() {
+        SalesDeliveryNoteHdrDto.LovDetailDto detail = new SalesDeliveryNoteHdrDto.LovDetailDto();
+        detail.setPoid(null);
+        detail.setCode(null);
+        detail.setDescription(null);
+        return detail;
+    }
+
+    /**
+     * Set empty LOV details for fallback
+     */
+    private void setEmptyLovDetails(SalesDeliveryNoteHdrDto dto) {
+        dto.setCustomerDetails(createEmptyLovDetail());
+        dto.setSalesmanDetails(createEmptyLovDetail());
+        dto.setLineDetails(createEmptyLovDetail());
+        dto.setPortDetails(createEmptyLovDetail());
+        dto.setVesselDetails(createEmptyLovDetail());
+        dto.setPrintDivisionDetails(createEmptyLovDetail());
+        dto.setPrincipalDetails(createEmptyLovDetail());
+    }
+
+    /**
+     * Helper methods to safely extract values from Object[]
+     */
+    private Long getLongValue(Object obj) {
+        if (obj == null) return null;
+        if (obj instanceof Number) {
+            return ((Number) obj).longValue();
+        }
+        return null;
+    }
+
+    private String getStringValue(Object obj) {
+        return obj != null ? obj.toString() : null;
+    }
+
+    private Timestamp getTimestampValue(Object obj) {
+        if (obj == null) return null;
+        if (obj instanceof Timestamp) {
+            return (Timestamp) obj;
+        }
+        return null;
     }
 
     // Placeholder for stored procedure call (implemented in Part 2)
@@ -549,10 +901,12 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
     @Override
     public ValidateCustomerChangeResponse validateCustomerChange(Long transactionPoid,
-            Long companyPoid) {
+            Long customerPoid) {
         ValidateCustomerChangeResponse response = new ValidateCustomerChangeResponse();
-        response.setCanChange(
-                salesDeliveryNoteRepository.callSalesSCDNCustomerValidateProc(companyPoid, transactionPoid));
+        boolean valid = salesDeliveryNoteRepository.callSalesSCDNCustomerValidateProc(customerPoid, transactionPoid);
+        response.setCanChange(valid);
+        response.setMessage(valid ? "Customer can be changed" : "Customer cannot be changed");
+        response.setSuccess(true);
         return response;
     }
 
@@ -692,24 +1046,15 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         boolean linkedToQuotation = dn.getQtnRefNo() != null && !dn.getQtnRefNo().trim().isEmpty();
         resp.setLinkedToQuotation(linkedToQuotation);
 
-        // try to detect sales invoice references using common column names.
-        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        String[] candidateSqls = new String[] {
-                "SELECT COUNT(1) FROM AR_SCH_SALES_INVOICE_DTL WHERE TRANSACTION_POID = ? AND COMPANY_POID = ? AND NVL(DELETED,'N') <> 'Y'"
-        };
-
-        int invoiceCount = 0;
-        for (String sql : candidateSqls) {
-            try {
-                Integer cnt = jdbc.queryForObject(sql, Integer.class, transactionPoid, companyPoid);
-                if (cnt != null) {
-                    invoiceCount = cnt;
-                    break;
-                }
-            } catch (Exception ex) {
-                throw new CustomException("Error while checking sales invoice references: " + ex.getMessage());
-            }
-        }
+        // Count sales invoice references using repository
+        // This uses JPQL which handles deleted check: (deleted IS NULL OR UPPER(deleted) <> 'Y')
+        // Equivalent to Oracle's NVL(DELETED,'N') <> 'Y'
+        Long invoiceCountLong = salesDnDtlRepository.countByDnPoidFkAndCompanyPoidAndInvoiceNotDeleted(
+                transactionPoid, companyPoid);
+        int invoiceCount = invoiceCountLong != null ? invoiceCountLong.intValue() : 0;
+        
+        log.debug("Found {} sales invoice(s) referencing delivery note {} for companyPoid={}", 
+                invoiceCount, transactionPoid, companyPoid);
 
         resp.setSalesInvoiceCount(invoiceCount);
 

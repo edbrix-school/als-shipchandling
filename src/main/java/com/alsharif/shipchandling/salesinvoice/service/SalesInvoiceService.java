@@ -30,20 +30,15 @@ public interface SalesInvoiceService {
         SalesInvoiceHdrDto createSalesInvoice(CreateSalesInvoiceRequest request,
                         Long groupPoid, Long companyPoid, String userId);
 
-        SalesInvoiceHdrDto getSalesInvoiceByPoid(Long transactionPoid, Long groupPoid,
-                        Long companyPoid, Boolean includeDetails);
+        SalesInvoiceHdrDto getSalesInvoiceByPoid(Long transactionPoid, Long companyPoid, Boolean includeDetails);
 
         SalesInvoiceHdrDto updateSalesInvoice(Long transactionPoid, UpdateSalesInvoiceRequest request,
                         Long groupPoid, Long companyPoid, String userId);
 
         void deleteSalesInvoice(Long transactionPoid, Long groupPoid, Long companyPoid);
 
-        PaginatedResponse<SalesInvoiceHdrDto> getAllSalesInvoices(Long groupPoid, Long companyPoid,
-                        String invStatus, String verified,
-                        Long customerPoid, Long principalPoid,
-                        String qtnPoid, String search,
-                        Timestamp fromDate, Timestamp toDate,
-                        Integer page, Integer size);
+        PaginatedResponse<SalesInvoiceListDto> getAllSalesInvoices(Long companyPoid,
+                        FilterRequestDto filterRequest, Integer page, Integer size, String sortBy, String sortDir);
 
         // Validation APIs
         ValidationResponse validateDocRef(String docRef, Long groupPoid, Long companyPoid, Long transactionPoid);

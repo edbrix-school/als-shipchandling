@@ -6,6 +6,7 @@ import com.alsharif.shipchandling.exceptions.ResourceNotFoundException;
 import com.alsharif.shipchandling.group.repository.GroupRepository;
 import com.alsharif.shipchandling.stockunitmaster.dto.FilterDto;
 import com.alsharif.shipchandling.stockunitmaster.dto.FilterRequestDto;
+import com.alsharif.shipchandling.stockunitmaster.dto.StockUnitListResponse;
 import com.alsharif.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
 import com.alsharif.shipchandling.stockunitmaster.dto.UnitDependenciesDto;
 import com.alsharif.shipchandling.stockunitmaster.entity.StockUnitMaster;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -342,6 +344,164 @@ public Page<StockUnitMasterDto> listStockUnitsUsingParams(
         dto.setSeqNo(entity.getSeqNo());
         dto.setActive(entity.getActive());
         return dto;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StockUnitListResponse listStockUnitsWithFilters(FilterRequestDto filterRequest, Pageable pageable) {
+        Specification<StockUnitMaster> spec = null;
+
+        // Handle isDeleted filter
+        String isDeleted = filterRequest.isDeleted();
+        if (isDeleted != null && !isDeleted.trim().isEmpty()) {
+            if ("Y".equalsIgnoreCase(isDeleted)) {
+                // Show only deleted records
+                spec = (root, query, cb) -> 
+                    cb.equal(root.get("deleted"), "Y");
+            } else if ("N".equalsIgnoreCase(isDeleted)) {
+                // Show only non-deleted records
+                spec = (root, query, cb) -> 
+                    cb.or(
+                        cb.isNull(root.get("deleted")),
+                        cb.notEqual(root.get("deleted"), "Y")
+                    );
+            }
+        } else {
+            // Default: Show only non-deleted records when isDeleted is not provided
+            spec = (root, query, cb) -> 
+                cb.or(
+                    cb.isNull(root.get("deleted")),
+                    cb.notEqual(root.get("deleted"), "Y")
+                );
+        }
+
+        // Handle operator and filters
+        String operator = filterRequest.operator() != null ? filterRequest.operator().toUpperCase() : "OR";
+        List<FilterDto> filters = filterRequest.filters() != null ? filterRequest.filters() : new ArrayList<>();
+
+        if (!filters.isEmpty()) {
+            boolean isAndOperator = "AND".equals(operator);
+            List<Specification<StockUnitMaster>> filterSpecs = new ArrayList<>();
+            
+            for (FilterDto filter : filters) {
+                String searchField = filter.searchField();
+                String searchValue = filter.searchValue();
+                
+                if (searchField == null || searchValue == null || searchValue.trim().isEmpty()) {
+                    continue;
+                }
+
+                Specification<StockUnitMaster> filterSpec = buildFilterSpecification(searchField, searchValue);
+                
+                if (filterSpec != null) {
+                    filterSpecs.add(filterSpec);
+                }
+            }
+            
+            // Combine filters based on operator
+            if (!filterSpecs.isEmpty()) {
+                Specification<StockUnitMaster> combinedFilterSpec = filterSpecs.get(0);
+                for (int i = 1; i < filterSpecs.size(); i++) {
+                    if (isAndOperator) {
+                        combinedFilterSpec = combinedFilterSpec.and(filterSpecs.get(i));
+                    } else {
+                        combinedFilterSpec = combinedFilterSpec.or(filterSpecs.get(i));
+                    }
+                }
+                if (spec != null) {
+                    spec = spec.and(combinedFilterSpec);
+                } else {
+                    spec = combinedFilterSpec;
+                }
+            }
+        }
+
+        // Execute query
+        Page<StockUnitMaster> page;
+        if (spec != null) {
+            page = stockUnitRepository.findAll(spec, pageable);
+        } else {
+            page = stockUnitRepository.findAll(pageable);
+        }
+
+        // Convert to DTOs
+        List<StockUnitMasterDto> dtoList = page.getContent().stream()
+            .map(entity -> {
+                StockUnitMasterDto dto = new StockUnitMasterDto();
+                BeanUtils.copyProperties(entity, dto);
+                return dto;
+            })
+            .collect(Collectors.toList());
+
+        // Build display fields map
+        Map<String, String> displayFields = new HashMap<>();
+        displayFields.put("stockUnitCode", "text");
+        displayFields.put("stockUnitName", "text");
+
+        // Create response
+        StockUnitListResponse response = new StockUnitListResponse();
+        response.setContent(dtoList);
+        response.setLast(page.isLast());
+        response.setTotalPages(page.getTotalPages());
+        response.setTotalElements(page.getTotalElements());
+        response.setPageSize(page.getSize());
+        response.setDisplayFields(displayFields);
+        response.setPageNumber(page.getNumber());
+
+        return response;
+    }
+
+    private Specification<StockUnitMaster> buildFilterSpecification(String searchField, String searchValue) {
+        String upperField = searchField.toUpperCase();
+        String searchPattern = "%" + searchValue.toLowerCase() + "%";
+
+        if ("STOCK_UNIT_CODE".equals(upperField) || "STOCKUNITCODE".equals(upperField)) {
+            return (root, query, cb) -> cb.like(cb.lower(root.get("stockUnitCode")), searchPattern);
+        }
+        
+        if ("STOCK_UNIT_NAME".equals(upperField) || "STOCKUNITNAME".equals(upperField)) {
+            return (root, query, cb) -> cb.like(cb.lower(root.get("stockUnitName")), searchPattern);
+        }
+        
+        if ("CLASSIFIED".equals(upperField)) {
+            return (root, query, cb) -> cb.equal(root.get("classified"), searchValue);
+        }
+        
+        if ("ACTIVE".equals(upperField)) {
+            return (root, query, cb) -> cb.equal(root.get("active"), searchValue.toUpperCase());
+        }
+        
+        if ("DELETED".equals(upperField)) {
+            String deletedValue = searchValue.toUpperCase();
+            if ("Y".equals(deletedValue)) {
+                return (root, query, cb) -> cb.equal(root.get("deleted"), "Y");
+            } else if ("N".equals(deletedValue)) {
+                return (root, query, cb) -> cb.or(
+                    cb.isNull(root.get("deleted")),
+                    cb.notEqual(root.get("deleted"), "Y")
+                );
+            } else {
+                return (root, query, cb) -> cb.equal(root.get("deleted"), deletedValue);
+            }
+        }
+        
+        if ("GROUP_POID".equals(upperField) || "GROUPPOID".equals(upperField)) {
+            try {
+                Long groupPoid = Long.parseLong(searchValue);
+                return (root, query, cb) -> cb.equal(root.get("groupPoid"), groupPoid);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        
+        if ("GLOBALSEARCH".equals(upperField)) {
+            return (root, query, cb) -> cb.or(
+                cb.like(cb.lower(root.get("stockUnitCode")), searchPattern),
+                cb.like(cb.lower(root.get("stockUnitName")), searchPattern)
+            );
+        }
+        
+        return null;
     }
 
 }

@@ -4,6 +4,7 @@ import com.alsharif.shipchandling.requestforquotation.dto.RfqDependenciesDto;
 import com.alsharif.shipchandling.requestforquotation.dto.request.*;
 import com.alsharif.shipchandling.requestforquotation.dto.response.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 public interface ApRequestForQtnService {
@@ -23,6 +24,11 @@ public interface ApRequestForQtnService {
                                                             String status, Long divisionPoid,
                                                             Long salesQtnPoid, String search,
                                                             java.time.LocalDate fromDate, java.time.LocalDate toDate,
+                                                            int page, int size);
+    
+    org.springframework.data.domain.Page<com.alsharif.shipchandling.requestforquotation.dto.response.ApRequestForQtnListResponseDto> getAllRequestForQuotationsWithFilters(
+                                                            Long groupPoid, Long companyPoid,
+                                                            GetAllRfqFilterRequest filterRequest,
                                                             int page, int size);
     
     // Detail Table APIs
@@ -68,4 +74,6 @@ public interface ApRequestForQtnService {
                                                            Long groupPoid, Long companyPoid, String userId);
     
     RfqDependenciesDto checkRfqDependencies(Long transactionPoid, Long groupPoid, Long companyPoid);
+
+    BigDecimal getTaxPercentage(Long groupPoid, Long companyPoid, Long taxPoid);
 }

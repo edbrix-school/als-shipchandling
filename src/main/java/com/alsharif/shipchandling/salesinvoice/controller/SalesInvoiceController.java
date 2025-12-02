@@ -2,6 +2,7 @@ package com.alsharif.shipchandling.salesinvoice.controller;
 
 import com.alsharif.shipchandling.salesinvoice.dto.*;
 import com.alsharif.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
+import com.alsharif.shipchandling.salesinvoice.dto.FilterRequestDto;
 import com.alsharif.shipchandling.salesinvoice.dto.request.CreateSalesDnDtlRequest;
 import com.alsharif.shipchandling.salesinvoice.dto.request.CreateSalesInvoiceDtlRequest;
 import com.alsharif.shipchandling.salesinvoice.dto.request.CreateSalesInvoiceRequest;
@@ -34,7 +35,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.sql.Timestamp;
-import java.time.OffsetDateTime;
 import java.util.List;
 
 import com.alsharif.shipchandling.salesinvoice.dto.PaginatedResponse;
@@ -61,7 +61,9 @@ public class SalesInvoiceController {
                         @Valid @RequestBody CreateSalesInvoiceRequest request,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestHeader("X-User-Id") String userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Creating sales invoice with groupId: {} companyId: {} userId: {}", groupPoid, companyPoid,
                                 userId);
                 SalesInvoiceHdrDto dto = invoiceService.createSalesInvoice(
@@ -78,17 +80,16 @@ public class SalesInvoiceController {
         @GetMapping("/{transactionPoid}")
         public ResponseEntity<?> getSalesInvoiceByPoid(
                         @PathVariable Long transactionPoid,
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestParam(required = false, defaultValue = "false") Boolean includeDetails,
-                        @RequestParam String documentId,
-                        @RequestParam String actionRequested) {
-                log.info("Fetching sales invoice with transactionPoid: {} groupId: {} companyId: {}", transactionPoid,
-                                groupPoid, companyPoid);
+                        @RequestHeader("companyPoid") Long companyPoid,
+                        @RequestHeader("UserPoid") Long userPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested,
+                        @RequestParam(required = false, defaultValue = "false") Boolean includeDetails) {
+                log.info("Fetching sales invoice with transactionPoid: {} companyId: {} userPoid: {}", transactionPoid,
+                                companyPoid, userPoid);
                 SalesInvoiceHdrDto dto = invoiceService.getSalesInvoiceByPoid(
-                                transactionPoid, groupPoid, companyPoid, includeDetails);
-                log.info("Sales invoice fetched with transactionPoid: {} groupId: {} companyId: {}", transactionPoid,
-                                groupPoid, companyPoid);
+                                transactionPoid, companyPoid, includeDetails);
+                log.info("Sales invoice fetched with transactionPoid: {} companyId: {}", transactionPoid, companyPoid);
                 return success("Sales invoice fetched successfully", dto);
         }
 
@@ -104,7 +105,9 @@ public class SalesInvoiceController {
                         @Valid @RequestBody UpdateSalesInvoiceRequest request,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestHeader("X-User-Id") String userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Updating sales invoice with transactionPoid: {} groupId: {} companyId: {}", transactionPoid,
                                 groupPoid, companyPoid);
                 SalesInvoiceHdrDto dto = invoiceService.updateSalesInvoice(
@@ -124,7 +127,9 @@ public class SalesInvoiceController {
         public ResponseEntity<?> deleteSalesInvoice(
                         @PathVariable Long transactionPoid,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Deleting sales invoice with transactionPoid: {} groupId: {} companyId: {}", transactionPoid,
                                 groupPoid, companyPoid);
                 invoiceService.deleteSalesInvoice(transactionPoid, groupPoid, companyPoid);
@@ -133,37 +138,28 @@ public class SalesInvoiceController {
                 return success("Sales invoice deleted successfully", null);
         }
 
-        @Operation(summary = "Get All Sales Invoices", description = "Retrieves all sales invoices with optional filtering by status, customer, date range, etc. Supports pagination with page and size parameters.", responses = {
+        @Operation(summary = "Get All Sales Invoices", description = "Retrieves all sales invoices with filtering support. Uses POST method with filter request body. Supports pagination with page and size parameters.", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully retrieved sales invoices"),
                         @ApiResponse(responseCode = "401", description = "Unauthorized")
         }, security = @SecurityRequirement(name = "bearerAuth"))
-        @GetMapping
+        @PostMapping("/list")
         public ResponseEntity<?> getAllSalesInvoices(
-                        @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestParam(required = false) String invStatus,
-                        @RequestParam(required = false) String verified,
-                        @RequestParam(required = false) Long customerPoid,
-                        @RequestParam(required = false) Long principalPoid,
-                        @RequestParam(required = false) String partyType,
+                        @RequestHeader("companyPoid") Long companyPoid,
+                        @RequestHeader("UserPoid") Long userPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested,
+                        @Valid @RequestBody FilterRequestDto filterRequest,
                         @RequestParam(required = false, defaultValue = "0") Integer page,
                         @RequestParam(required = false, defaultValue = "10") Integer size,
-                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime fromDate,
-                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime toDate,
-                        @RequestParam(required = false) String search) {
+                        @RequestParam(required = false) String sortBy,
+                        @RequestParam(required = false) String sortDir) {
 
-                Timestamp fromTs = (fromDate == null) ? null : Timestamp.from(fromDate.toInstant());
-                Timestamp toTs = (toDate == null) ? null : Timestamp.from(toDate.toInstant());
-
-                log.info("Fetching all sales invoices with groupId: {} companyId: {} invStatus: {} verified: {} customerPoid: {} principalPoid: {} partyType: {} fromDate: {} toDate: {} search: {} page: {} size: {}",
-                                groupPoid, companyPoid, invStatus, verified, customerPoid, principalPoid, partyType,
-                                fromTs, toTs, search, page, size);
-                PaginatedResponse<SalesInvoiceHdrDto> invoices = invoiceService.getAllSalesInvoices(
-                                groupPoid, companyPoid, invStatus, verified, customerPoid, principalPoid,
-                                null, search, fromTs, toTs, page, size);
-                log.info("Fetched {} sales invoices (page {} of {}) with groupId: {} companyId: {}",
-                                invoices.getData().size(), invoices.getPage() + 1, invoices.getTotalPages(), groupPoid,
-                                companyPoid);
+                log.info("Fetching all sales invoices with companyId: {} userPoid: {} page: {} size: {} sortBy: {} sortDir: {}",
+                                companyPoid, userPoid, page, size, sortBy, sortDir);
+                PaginatedResponse<SalesInvoiceListDto> invoices = invoiceService.getAllSalesInvoices(
+                                companyPoid, filterRequest, page, size, sortBy, sortDir);
+                log.info("Fetched {} sales invoices (page {} of {}) with companyId: {}",
+                                invoices.getContent().size(), invoices.getPageNumber() + 1, invoices.getTotalPages(), companyPoid);
                 return success("Sales invoices fetched successfully", invoices);
         }
 
@@ -176,7 +172,9 @@ public class SalesInvoiceController {
                         @Valid @RequestBody CreateSalesInvoiceDtlRequest request,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestHeader("X-User-Id") String userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Adding item detail to sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, groupPoid, companyPoid);
                 SalesInvoiceDtlDto dto = invoiceService.addInvoiceDetail(
@@ -194,7 +192,9 @@ public class SalesInvoiceController {
                         @Valid @RequestBody UpdateSalesInvoiceDtlRequest request,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestHeader("X-User-Id") String userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Updating item detail in sales invoice with transactionPoid: {} detRowId: {} groupId: {} companyId: {}",
                                 transactionPoid, detRowId, groupPoid, companyPoid);
                 SalesInvoiceDtlDto dto = invoiceService.updateInvoiceDetail(
@@ -210,7 +210,9 @@ public class SalesInvoiceController {
                         @PathVariable Long transactionPoid,
                         @PathVariable Long detRowId,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Deleting item detail from sales invoice with transactionPoid: {} detRowId: {} groupId: {} companyId: {}",
                                 transactionPoid, detRowId, groupPoid, companyPoid);
                 invoiceService.deleteInvoiceDetail(transactionPoid, detRowId, groupPoid,
@@ -225,7 +227,9 @@ public class SalesInvoiceController {
         public ResponseEntity<?> getItemDetails(
                         @PathVariable Long transactionPoid,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Fetching item details for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, groupPoid, companyPoid);
                 List<SalesInvoiceDtlDto> itemDetails = invoiceService.getInvoiceDetails(
@@ -244,7 +248,9 @@ public class SalesInvoiceController {
                         @Valid @RequestBody CreateSalesDnDtlRequest request,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestHeader("X-User-Id") String userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Adding delivery note detail to sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, groupPoid, companyPoid);
                 SalesDnDtlDto dto = invoiceService.addDeliveryNoteDetail(
@@ -262,7 +268,9 @@ public class SalesInvoiceController {
                         @Valid @RequestBody UpdateSalesDnDtlRequest request,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestHeader("X-User-Id") String userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Updating delivery note detail in sales invoice with transactionPoid: {} detRowId: {} groupId: {} companyId: {}",
                                 transactionPoid, detRowId, groupPoid, companyPoid);
                 SalesDnDtlDto dto = invoiceService.updateDeliveryNoteDetail(
@@ -278,7 +286,9 @@ public class SalesInvoiceController {
                         @PathVariable Long transactionPoid,
                         @PathVariable Long detRowId,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Deleting delivery note detail from sales invoice with transactionPoid: {} detRowId: {} groupId: {} companyId: {}",
                                 transactionPoid, detRowId, groupPoid, companyPoid);
                 invoiceService.deleteDeliveryNoteDetail(transactionPoid, detRowId, groupPoid, companyPoid);
@@ -292,7 +302,9 @@ public class SalesInvoiceController {
         public ResponseEntity<?> getDeliveryNoteDetails(
                         @PathVariable Long transactionPoid,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Fetching delivery note details for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, groupPoid, companyPoid);
                 List<SalesDnDtlDto> dnDetails = invoiceService.getDeliveryNoteDetails(
@@ -309,7 +321,9 @@ public class SalesInvoiceController {
         public ResponseEntity<?> getCostBookedDetails(
                         @PathVariable Long transactionPoid,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
 
                 log.info("Fetching cost booked details for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, groupPoid, companyPoid);
@@ -328,7 +342,9 @@ public class SalesInvoiceController {
         public ResponseEntity<?> calculateGp(
                         @PathVariable Long transactionPoid,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Calculating GP for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, groupPoid, companyPoid);
                 CalculateGpResponse response = invoiceService.calculateGp(transactionPoid, groupPoid, companyPoid, "");
@@ -344,7 +360,9 @@ public class SalesInvoiceController {
                         @RequestParam Timestamp transactionDate,
                         @RequestParam Long creditDays,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Calculating due date for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, groupPoid, companyPoid);
                 CalculateDueDateResponse response = invoiceService.calculateDueDate(transactionPoid,
@@ -362,7 +380,9 @@ public class SalesInvoiceController {
                         @RequestBody CalculateDiscountCommissionRequest request,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") Long userId) {
+                        @RequestHeader("X-User-Id") Long userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Calculating item discount/commission for sales invoice with transactionPoid: {} detRowId: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, detRowId, groupPoid, companyPoid, userId);
                 CalculateDiscountCommissionResponse response = invoiceService.calculateItemDiscountCommission(
@@ -380,7 +400,9 @@ public class SalesInvoiceController {
                         @RequestBody CalculateDiscountCommissionRequest request,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") Long userId) {
+                        @RequestHeader("X-User-Id") Long userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Calculating header discount/commission for sales invoice with transactionPoid: {} detRowId: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, detRowId, groupPoid, companyPoid, userId);
                 CalculateDiscountCommissionResponse response = invoiceService.calculateHeaderDiscountCommission(
@@ -397,7 +419,9 @@ public class SalesInvoiceController {
                         @RequestBody LoadQuotationItemsRequest request,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestHeader("X-User-Id") String userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Loading quotation items into sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, groupPoid, companyPoid, userId);
                 LoadQuotationItemsResponse response = invoiceService.loadQuotationItems(
@@ -406,7 +430,7 @@ public class SalesInvoiceController {
                                 // request.getIncentiveAmt2(), request.getIncentiveAmt3(),
                                 groupPoid, companyPoid, userId);
                 SalesInvoiceHdrDto dto = invoiceService.getSalesInvoiceByPoid(
-                                transactionPoid, groupPoid, companyPoid, true);
+                                transactionPoid, companyPoid, true);
                 response.setInvoice(dto);
                 log.info("Quotation items loaded into sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, groupPoid, companyPoid, userId);
@@ -419,7 +443,9 @@ public class SalesInvoiceController {
                         @PathVariable Long transactionPoid,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestHeader("X-User-Id") String userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Loading delivery note into sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, groupPoid, companyPoid, userId);
                 LoadDeliveryNoteResponse response = invoiceService.loadDeliveryNote(
@@ -435,7 +461,9 @@ public class SalesInvoiceController {
                         @PathVariable Long transactionPoid,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestHeader("X-User-Id") String userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Unloading quotation from sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, groupPoid, companyPoid, userId);
                 UnloadQuotationResponse response = invoiceService.unloadQuotation(
@@ -451,7 +479,9 @@ public class SalesInvoiceController {
                         @PathVariable Long transactionPoid,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestHeader("X-User-Id") String userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Loading cost bookings into sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, groupPoid, companyPoid, userId);
                 LoadCostBookingsResponse response = invoiceService.loadCostBookings(
@@ -467,7 +497,9 @@ public class SalesInvoiceController {
                         @PathVariable Long transactionPoid,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestHeader("X-User-Id") String userId,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Verifying sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, groupPoid, companyPoid, userId);
                 VerifyInvoiceResponse response = invoiceService.verifyInvoice(
@@ -482,7 +514,9 @@ public class SalesInvoiceController {
         public ResponseEntity<?> validateCustomer(
                         @RequestParam Long customerPoid,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Validating customer with customerPoid: {} groupId: {} companyId: {}", customerPoid, groupPoid,
                                 companyPoid);
                 ValidationResponse response = invoiceService.validateCustomer(
@@ -498,7 +532,9 @@ public class SalesInvoiceController {
                         @RequestParam Long customerPoid,
                         @RequestBody CreditDetailsRequest request,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Loading credit details for customerPoid: {} groupId: {} companyId: {}", customerPoid,
                                 groupPoid, companyPoid);
                 CreditDetailsResponse response = invoiceService.loadCreditDetails(
@@ -512,7 +548,9 @@ public class SalesInvoiceController {
         @GetMapping("/load-quotation-currency/{transactionPoid}")
         public ResponseEntity<?> loadQuotationCurrency(
                         @PathVariable Long transactionPoid,
-                        @RequestParam String qtnPoid) {
+                        @RequestParam String qtnPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Loading quotation currency for qtnPoid: {}", qtnPoid);
                 LoadQuotationCurrencyResponse response = invoiceService.loadQuotationCurrency(transactionPoid, qtnPoid);
                 log.info("Quotation currency loaded for qtnPoid: {}", qtnPoid);
@@ -524,7 +562,9 @@ public class SalesInvoiceController {
         public ResponseEntity<?> checkSalesInvoiceDependencies(
                         @PathVariable Long transactionPoid,
                         @RequestHeader("X-Group-Poid") Long groupPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid) {
+                        @RequestHeader("X-Company-Poid") Long companyPoid,
+                        @RequestParam(required = true) String documentId,
+                        @RequestParam(required = true) String actionRequested) {
                 log.info("Checking dependencies for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, groupPoid, companyPoid);
                 SalesInvoiceDependenciesDto dto = invoiceService.checkSalesInvoiceDependencies(

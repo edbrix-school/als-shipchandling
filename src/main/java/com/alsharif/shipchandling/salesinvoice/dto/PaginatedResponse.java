@@ -5,17 +5,19 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class PaginatedResponse<T> {
-    private List<T> data;
-    private int page;
-    private int size;
+    private List<T> content;
+    private int pageNumber;
+    private int pageSize;
     private long totalElements;
     private int totalPages;
     private boolean first;
     private boolean last;
+    private Map<String, String> displayFields;
 }
 

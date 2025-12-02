@@ -20,4 +20,17 @@ public class SalesDnDtlDto {
     private Timestamp createdDate;
     private String lastmodifiedBy;
     private Timestamp lastmodifiedDate;
+    
+    // LOV Details
+    private LovDetailDto dnDetails;
+    
+    // Inner class for LOV details
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LovDetailDto {
+        private Long poid;
+        private String code;
+        private String description;
+    }
 }

@@ -12,4 +12,7 @@ public class CreateSalesDnDtlRequest {
     private Long dnPoidFk;
     private Long quotationPoidFk;
     private String remarks;
+    // Action type: "isCreated" to create new, "isDeleted" or "delRowId" to delete
+    // Note: This field is only used in create/update requests, not in response/view APIs
+    private String actionType;
 }
