@@ -14,7 +14,7 @@
 		},
 		{
 			"type": "java (buildArtifact)",
-			"mainClass": "com.alsharif.shipchandling.ShipchandlingApplication",
+			"mainClass": "com.asg.shipchandling.ShipchandlingApplication",
 			"targetPath": "${workspaceFolder}/${workspaceFolderBasename}.jar",
 			"elements": [
 				"${compileOutput}",
