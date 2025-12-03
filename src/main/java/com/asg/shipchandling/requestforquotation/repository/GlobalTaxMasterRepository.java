@@ -1,0 +1,17 @@
+package com.asg.shipchandling.requestforquotation.repository;
+
+import com.asg.shipchandling.requestforquotation.entity.GlobalTaxMaster;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.math.BigDecimal;
+import java.util.Optional;
+
+@Repository
+public interface GlobalTaxMasterRepository extends JpaRepository<GlobalTaxMaster, BigDecimal> {
+
+    @Query("SELECT g FROM GlobalTaxMaster g WHERE g.taxPoid = :taxPoid AND g.active = 'Y'")
+    Optional<GlobalTaxMaster> findActiveByTaxPoid(@Param("taxPoid") BigDecimal taxPoid);
+}
