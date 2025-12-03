@@ -9,13 +9,13 @@ import lombok.NoArgsConstructor;
 import java.sql.Timestamp;
 import java.util.List;
 
-import com.alsharif.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateSalesQuotationSchRequest {
-    
+
     @NotNull(message = "Transaction date is required")
     private Timestamp transactionDate;
 

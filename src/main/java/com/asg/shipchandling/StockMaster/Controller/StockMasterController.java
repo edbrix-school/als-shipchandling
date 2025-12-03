@@ -32,6 +32,7 @@ import com.asg.shipchandling.StockMaster.dto.StockMasterViewResponse;
 import com.asg.shipchandling.StockMaster.dto.StockMasterWarehouseDtlDto;
 import com.asg.shipchandling.StockMaster.dto.UpdateStockMasterRequest;
 import com.asg.shipchandling.StockMaster.dto.ValidationResponse;
+import com.asg.shipchandling.StockMaster.dto.StockDetailsResponse;
 import com.asg.shipchandling.StockMaster.service.StockMasterService;
 import com.asg.common.lib.security.util.UserContext;
 

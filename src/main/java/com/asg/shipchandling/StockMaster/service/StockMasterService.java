@@ -10,6 +10,7 @@ import com.asg.shipchandling.StockMaster.dto.StockMasterViewResponse;
 import com.asg.shipchandling.StockMaster.dto.StockMasterWarehouseDtlDto;
 import com.asg.shipchandling.StockMaster.dto.UpdateStockMasterRequest;
 import com.asg.shipchandling.StockMaster.dto.ValidationResponse;
+import com.asg.shipchandling.StockMaster.dto.StockDetailsResponse;
 import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

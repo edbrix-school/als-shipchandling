@@ -1,6 +1,6 @@
 package com.asg.shipchandling.salesquotationsch.dto;
 
-import com.alsharif.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -65,9 +65,9 @@ public class SalesQuotationSchHdrDto {
     private String salesInvDocRef;
     private Long totalTax;
     private String partyAddressDetails;
-    
+
     private List<SalesQuotationSchItemDtlDto> itemDetails;
-    
+
     // LOV Details (similar to Delivery Note)
     private LovDetailDto customerDetails;
     private LovDetailDto salesmanDetails;
@@ -76,10 +76,10 @@ public class SalesQuotationSchHdrDto {
     private LovDetailDto vesselDetails;
     private LovDetailDto printDivisionDetails;
     private LovDetailDto principalDetails;
-    
+
     // Address Details
     private AddressDetailsResponse addressDetails;
-    
+
     // Inner class for LOV details
     @Data
     @NoArgsConstructor
