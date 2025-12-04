@@ -1082,7 +1082,8 @@ public class StockMasterServiceImpl implements StockMasterService {
                 
                 for (StockCategoryMasterEntity category : childCategories) {
                     Map<String, Object> item = convertCategoryToHierarchicalItem(category, "SUB_GROUP", level);
-                    item.put("parentPoid", parentPoid);
+                    // parentPoid is already set in convertCategoryToHierarchicalItem from category.getParentCategoryPoid()
+                    // No need to override it here - it comes from STOCK_CATEGORY_MASTER.PARENT_CATEGORY_POID
                     result.add(item);
                 }
 
@@ -1156,6 +1157,9 @@ public class StockMasterServiceImpl implements StockMasterService {
         item.put("active", true); // Categories are always active in this context
         item.put("deleted", false);
         item.put("groupPoid", category.getGroupPoid());
+        // Set parentPoid from PARENT_CATEGORY_POID in STOCK_CATEGORY_MASTER
+        // For MAIN_GROUP: parentPoid will be null (root categories)
+        // For SUB_GROUP: parentPoid will be the parent category's CATEGORY_POID
         if (category.getParentCategoryPoid() != null) {
             item.put("parentPoid", category.getParentCategoryPoid());
         }
@@ -1254,6 +1258,21 @@ public class StockMasterServiceImpl implements StockMasterService {
     /**
      * Get complete nested tree structure of Stock Masters and Categories
      * Similar to GL Master tree structure with children arrays
+     * 
+     * Tree Structure Logic:
+     * 1. Categories hierarchy is built using STOCK_CATEGORY_MASTER.PARENT_CATEGORY_POID
+     *    - Root categories: PARENT_CATEGORY_POID is NULL (MAIN_GROUP)
+     *    - Child categories: PARENT_CATEGORY_POID references parent's CATEGORY_POID (SUB_GROUP)
+     * 
+     * 2. Stock items are placed under categories using STOCK_MASTER.CATEGORY_POID
+     *    - Each stock item's CATEGORY_POID matches a category's CATEGORY_POID
+     *    - Stock items appear as LEDGER type nodes under their respective category
+     * 
+     * 3. parentPoid for ALL types (MAIN_GROUP, SUB_GROUP, LEDGER) comes from STOCK_CATEGORY_MASTER.PARENT_CATEGORY_POID
+     *    - MAIN_GROUP: parentPoid = NULL (root categories have no parent)
+     *    - SUB_GROUP: parentPoid = PARENT_CATEGORY_POID (points to parent category)
+     *    - LEDGER: parentPoid = category's PARENT_CATEGORY_POID (points to parent of the category the stock belongs to)
+     *    Note: parentPoid is always different from categoryPoid - it represents the parent in the hierarchy
      */
     @Override
     @Transactional(readOnly = true)
@@ -1271,14 +1290,15 @@ public class StockMasterServiceImpl implements StockMasterService {
         if (userPoid != null && userPoid <= 0) {
             throw new IllegalArgumentException("Invalid userPoid: " + userPoid);
         }
-        // Fetch all categories for the group
+        // Fetch all categories for the group from STOCK_CATEGORY_MASTER
         List<StockCategoryMasterEntity> allCategories = categoryMasterRepository.findByGroupPoid(groupPoid);
         
-        // Build category map for quick lookup
+        // Build category map for quick lookup (CATEGORY_POID -> Category Entity)
         Map<Long, StockCategoryMasterEntity> categoryMap = allCategories.stream()
                 .collect(Collectors.toMap(StockCategoryMasterEntity::getCategoryPoid, cat -> cat));
         
-        // Build category children map
+        // Build category hierarchy map using PARENT_CATEGORY_POID from STOCK_CATEGORY_MASTER
+        // This groups child categories by their parent's CATEGORY_POID to build the tree structure
         Map<Long, List<StockCategoryMasterEntity>> categoryChildrenMap = allCategories.stream()
                 .filter(cat -> cat.getParentCategoryPoid() != null)
                 .collect(Collectors.groupingBy(StockCategoryMasterEntity::getParentCategoryPoid));
@@ -1314,12 +1334,14 @@ public class StockMasterServiceImpl implements StockMasterService {
         
         List<StockMasterEntity> allStockItems = stockMasterRepository.findAll(stockSpec);
         
-        // Group stock items by categoryPoid
+        // Group stock items by CATEGORY_POID from STOCK_MASTER table
+        // This maps each category to its stock items for tree placement
         Map<Long, List<StockMasterEntity>> stockItemsByCategory = allStockItems.stream()
                 .filter(item -> item.getCategoryPoid() != null)
                 .collect(Collectors.groupingBy(StockMasterEntity::getCategoryPoid));
         
-        // Get root categories (MAIN_GROUP)
+        // Get root categories (MAIN_GROUP) - categories with no parent (PARENT_CATEGORY_POID is null)
+        // These are the top-level nodes in the tree structure
         List<StockCategoryMasterEntity> rootCategories = allCategories.stream()
                 .filter(cat -> cat.getParentCategoryPoid() == null)
                 .collect(Collectors.toList());
@@ -1367,6 +1389,9 @@ public class StockMasterServiceImpl implements StockMasterService {
         node.put("active", true);
         node.put("deleted", false);
         node.put("groupPoid", category.getGroupPoid());
+        // Set parentPoid from PARENT_CATEGORY_POID in STOCK_CATEGORY_MASTER
+        // For MAIN_GROUP: parentPoid will be null (root categories)
+        // For SUB_GROUP: parentPoid will be the parent category's CATEGORY_POID
         if (category.getParentCategoryPoid() != null) {
             node.put("parentPoid", category.getParentCategoryPoid());
         }
@@ -1387,7 +1412,8 @@ public class StockMasterServiceImpl implements StockMasterService {
         // Build children array
         List<Map<String, Object>> children = new ArrayList<>();
         
-        // Add child categories (SUB_GROUP)
+        // Add child categories (SUB_GROUP) - recursively build tree using PARENT_CATEGORY_POID relationship
+        // Child categories are those where PARENT_CATEGORY_POID matches this category's CATEGORY_POID
         List<StockCategoryMasterEntity> childCategories = categoryChildrenMap.getOrDefault(
                 category.getCategoryPoid(), new ArrayList<>());
         
@@ -1401,12 +1427,14 @@ public class StockMasterServiceImpl implements StockMasterService {
         }
         
         // Add stock items (LEDGER) for this category
+        // Stock items are placed under their category based on STOCK_MASTER.CATEGORY_POID
         // If no filter: only add to leaf nodes (categories with no children)
         // If filter exists: add to all matching categories
         boolean shouldAddStockItems = childCategories.isEmpty() || 
                 (filterValue != null && !filterValue.trim().isEmpty());
         
         if (shouldAddStockItems) {
+            // Get stock items that belong to this category (matching STOCK_MASTER.CATEGORY_POID)
             List<StockMasterEntity> stockItems = stockItemsByCategory.getOrDefault(
                     category.getCategoryPoid(), new ArrayList<>());
             
@@ -1415,7 +1443,14 @@ public class StockMasterServiceImpl implements StockMasterService {
                 if (filterValue == null || filterValue.trim().isEmpty() || 
                     matchesFilter(stock, filterValue)) {
                     Map<String, Object> stockNode = convertStockToTreeItem(stock, level + 1, companyPoid, userPoid, categoryMap);
-                    stockNode.put("parentPoid", category.getCategoryPoid());
+                    // Set parentPoid to category's PARENT_CATEGORY_POID from STOCK_CATEGORY_MASTER
+                    // This is different from categoryPoid - it points to the parent category in the hierarchy
+                    // For root categories (PARENT_CATEGORY_POID is null), parentPoid will be null
+                    Long parentPoid = category.getParentCategoryPoid();
+                    if (parentPoid != null) {
+                        stockNode.put("parentPoid", parentPoid);
+                    }
+                    // If parentPoid is null (root category), don't set it - it will remain null
                     children.add(stockNode);
                 }
             }
@@ -1437,9 +1472,12 @@ public class StockMasterServiceImpl implements StockMasterService {
         item.put("stockPoid", stock.getStockPoid());
         item.put("stockCode", stock.getStockCode());
         item.put("stockName", stock.getStockName());
-        item.put("categoryPoid", stock.getCategoryPoid());
         
-        // Add category name and code if categoryMap is provided and categoryPoid exists
+        // For LEDGER type: categoryPoid should contain stockPoid value
+        item.put("categoryPoid", stock.getStockPoid());
+        
+        // Add category name and code if categoryMap is provided and stock's actual categoryPoid exists
+        // Note: We still use stock.getCategoryPoid() to look up the category for name/code
         if (categoryMap != null && stock.getCategoryPoid() != null) {
             StockCategoryMasterEntity category = categoryMap.get(stock.getCategoryPoid());
             if (category != null) {

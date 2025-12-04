@@ -68,7 +68,8 @@ public class StockMasterController {
         return success("Stock master fetched successfully", response);
     }
 
-    @GetMapping("/List")
+
+    @GetMapping("/list")
     @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getStockMasters(
             @RequestParam Map<String, String> filters,
