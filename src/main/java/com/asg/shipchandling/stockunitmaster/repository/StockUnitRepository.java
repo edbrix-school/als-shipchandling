@@ -50,4 +50,9 @@ public interface StockUnitRepository
            "AND s.active = 'Y' " +
            "ORDER BY s.seqNo ASC, s.stockUnitCode ASC")
     List<StockUnitMaster> findActiveUnitsByGroupPoid(@Param("groupPoid") Long groupPoid);
+
+    @Query("SELECT s FROM StockUnitMaster s WHERE UPPER(s.stockUnitCode) LIKE UPPER(:codePattern) " +
+           "AND (s.deleted IS NULL OR s.deleted <> 'Y') " +
+           "ORDER BY s.stockUnitCode ASC")
+    List<StockUnitMaster> findByStockUnitCodeContains(@Param("codePattern") String codePattern);
 }

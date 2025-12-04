@@ -12,6 +12,7 @@ import com.asg.shipchandling.salesquotationsch.dto.request.*;
 import com.asg.shipchandling.salesquotationsch.dto.response.CustomerDetailsResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ValidationResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
 
 import java.sql.CallableStatement;
 import java.sql.Connection;
@@ -27,7 +28,8 @@ public class SalesQuotationSchStoredProcRepository {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    public CustomerDetailsResponse callrefreshPreviousQuotationDataProc(Long groupPoid, Long customerPoid, Long companyPoid, Long transactionPoid) {
+    public CustomerDetailsResponse callrefreshPreviousQuotationDataProc(Long groupPoid, Long customerPoid,
+            Long companyPoid, Long transactionPoid) {
         String proc = "{call PROC_SALES_SCQTN_GET_CUST_DATA(?, ?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
@@ -61,10 +63,10 @@ public class SalesQuotationSchStoredProcRepository {
                     response.setMessage("Quotation refreshed successfully");
                     response.setCustomerDetails(items);
                     response.setSuccess(true);
-                   
+
                     return response;
                 }
-            
+
             } catch (SQLException ex) {
                 throw new CustomException("Error calling PROC_SALES_SCQTN_GET_CUST_DATA: " + ex.getMessage());
             }
@@ -85,9 +87,9 @@ public class SalesQuotationSchStoredProcRepository {
                 cs.setLong(3, request.getTransactionPoid());
                 cs.setString(4, request.getLoginUser());
                 cs.registerOutParameter(5, Types.VARCHAR);
-                
+
                 cs.execute();
-                
+
                 String result = cs.getString(5);
                 StoredProcedureResponse response = new StoredProcedureResponse();
                 if (result != null && !result.trim().isEmpty() && result.toUpperCase().contains("ERROR")) {
@@ -117,9 +119,9 @@ public class SalesQuotationSchStoredProcRepository {
                 cs.setLong(2, request.getCompanyPoid());
                 cs.setLong(3, request.getTransactionPoid());
                 cs.registerOutParameter(4, Types.VARCHAR);
-                
+
                 cs.execute();
-                
+
                 String result = cs.getString(4);
                 StoredProcedureResponse response = new StoredProcedureResponse();
                 if (result != null && !result.trim().isEmpty() && result.toUpperCase().contains("ERROR")) {
@@ -139,7 +141,8 @@ public class SalesQuotationSchStoredProcRepository {
 
     /**
      * PROC_SALES_SCQTN_REFRESH_DTL
-     * Refresh cost and price from stock master to Sales quotation detail table and RFQ table
+     * Refresh cost and price from stock master to Sales quotation detail table and
+     * RFQ table
      */
     public StoredProcedureResponse callRefreshDetailProc(RefreshDetailRequest request) {
         String proc = "{call PROC_SALES_SCQTN_REFRESH_DTL(?, ?, ?, ?, ?)}";
@@ -150,9 +153,9 @@ public class SalesQuotationSchStoredProcRepository {
                 cs.setLong(3, request.getTransactionPoid());
                 cs.setString(4, request.getQuotedRate());
                 cs.registerOutParameter(5, Types.VARCHAR);
-                
+
                 cs.execute();
-                
+
                 String result = cs.getString(5);
                 StoredProcedureResponse response = new StoredProcedureResponse();
                 if (result != null && !result.trim().isEmpty() && result.toUpperCase().contains("ERROR")) {
@@ -183,9 +186,9 @@ public class SalesQuotationSchStoredProcRepository {
                 cs.setLong(3, request.getTransactionPoid());
                 cs.setString(4, request.getLoginUser());
                 cs.registerOutParameter(5, Types.VARCHAR);
-                
+
                 cs.execute();
-                
+
                 String result = cs.getString(5);
                 StoredProcedureResponse response = new StoredProcedureResponse();
                 if (result != null && !result.trim().isEmpty() && result.toUpperCase().contains("ERROR")) {
@@ -216,9 +219,9 @@ public class SalesQuotationSchStoredProcRepository {
                 cs.setLong(3, request.getTransactionPoid());
                 cs.setString(4, request.getLoginUser());
                 cs.registerOutParameter(5, Types.VARCHAR);
-                
+
                 cs.execute();
-                
+
                 String result = cs.getString(5);
                 StoredProcedureResponse response = new StoredProcedureResponse();
                 if (result != null && !result.trim().isEmpty() && result.toUpperCase().contains("ERROR")) {
@@ -249,9 +252,9 @@ public class SalesQuotationSchStoredProcRepository {
                 cs.setLong(3, request.getTransactionPoid());
                 cs.setString(4, request.getSelectStatus());
                 cs.registerOutParameter(5, Types.VARCHAR);
-                
+
                 cs.execute();
-                
+
                 String result = cs.getString(5);
                 StoredProcedureResponse response = new StoredProcedureResponse();
                 if (result != null && !result.trim().isEmpty() && result.toUpperCase().contains("ERROR")) {
@@ -279,9 +282,9 @@ public class SalesQuotationSchStoredProcRepository {
             try (CallableStatement cs = con.prepareCall(proc)) {
                 cs.setLong(1, request.getAddressPoid());
                 cs.registerOutParameter(2, Types.VARCHAR);
-                
+
                 cs.execute();
-                
+
                 String result = cs.getString(2);
                 ValidationResponse response = new ValidationResponse();
                 if (result != null && !result.trim().isEmpty() && result.toUpperCase().contains("ERROR")) {
@@ -300,7 +303,8 @@ public class SalesQuotationSchStoredProcRepository {
 
     /**
      * PROC_SALES_SCQTN_QTY_UPDATE
-     * Update new details in Delivery Note and RFQ based on user input after DN and RFQ were created
+     * Update new details in Delivery Note and RFQ based on user input after DN and
+     * RFQ were created
      */
     public StoredProcedureResponse callUpdateQuantityProc(UpdateQuantityRequest request) {
         String proc = "{call PROC_SALES_SCQTN_QTY_UPDATE(?, ?, ?, ?, ?, ?)}";
@@ -312,9 +316,9 @@ public class SalesQuotationSchStoredProcRepository {
                 cs.setString(4, request.getLoginUser());
                 cs.setLong(5, request.getTransactionPoid());
                 cs.registerOutParameter(6, Types.VARCHAR);
-                
+
                 cs.execute();
-                
+
                 String result = cs.getString(6);
                 StoredProcedureResponse response = new StoredProcedureResponse();
                 if (result != null && !result.trim().isEmpty() && result.toUpperCase().contains("ERROR")) {
@@ -334,7 +338,8 @@ public class SalesQuotationSchStoredProcRepository {
 
     /**
      * PROC_SALES_SCQTN_CBOX_VALIDATE
-     * Validate if delivery note has already been created when user unticks a checkbox
+     * Validate if delivery note has already been created when user unticks a
+     * checkbox
      */
     public ValidationResponse callValidateCheckboxProc(ValidateCheckboxRequest request) {
         String proc = "{call PROC_SALES_SCQTN_CBOX_VALIDATE(?, ?, ?, ?, ?)}";
@@ -345,9 +350,9 @@ public class SalesQuotationSchStoredProcRepository {
                 cs.setLong(3, request.getStockPoid());
                 cs.setString(4, request.getDeliverySelect());
                 cs.registerOutParameter(5, Types.VARCHAR);
-                
+
                 cs.execute();
-                
+
                 String result = cs.getString(5);
                 ValidationResponse response = new ValidationResponse();
                 if (result != null && !result.trim().isEmpty() && result.toUpperCase().contains("ERROR")) {
@@ -366,7 +371,8 @@ public class SalesQuotationSchStoredProcRepository {
 
     /**
      * PROC_SALES_SCQTN_DO_CALC
-     * Calculate item details price, qty, and other calculations if user selected 'Suppress Calculation' button
+     * Calculate item details price, qty, and other calculations if user selected
+     * 'Suppress Calculation' button
      */
     public StoredProcedureResponse callCalculateProc(CalculateRequest request) {
         String proc = "{call PROC_SALES_SCQTN_DO_CALC(?, ?, ?, ?, ?)}";
@@ -377,9 +383,9 @@ public class SalesQuotationSchStoredProcRepository {
                 cs.setString(3, request.getLoginUser());
                 cs.setLong(4, request.getTransactionPoid());
                 cs.registerOutParameter(5, Types.VARCHAR);
-                
+
                 cs.execute();
-                
+
                 String result = cs.getString(5);
                 StoredProcedureResponse response = new StoredProcedureResponse();
                 if (result != null && !result.trim().isEmpty() && result.toUpperCase().contains("ERROR")) {
@@ -393,6 +399,51 @@ public class SalesQuotationSchStoredProcRepository {
                 return response;
             } catch (SQLException ex) {
                 throw new CustomException("Error calling PROC_SALES_SCQTN_DO_CALC: " + ex.getMessage());
+            }
+        });
+    }
+
+    public CustomerDetailsResponse callGetCustomerAddressProc(Long userPoid, Long customerPoid, String addressType) {
+        String proc = "{call PROC_GET_QTN_CUST_ADDRESS_V2(?, ?, ?, ?)}";
+        return jdbcTemplate.execute((Connection con) -> {
+            try (CallableStatement cs = con.prepareCall(proc)) {
+                cs.setLong(1, userPoid);
+                cs.setLong(2, customerPoid);
+                cs.setString(3, addressType);
+                cs.registerOutParameter(4, Types.REF_CURSOR);
+
+                cs.execute();
+
+                try (ResultSet rs = (ResultSet) cs.getObject(4)) {
+                    List<AddressDetailsResponse> addressDetails = new ArrayList<>();
+                    if (rs != null) {
+                        while (rs.next()) {
+                            AddressDetailsResponse dto = new AddressDetailsResponse();
+
+                            dto.setAddressPoid(customerPoid);
+
+                            String contactPerson = rs.getString("CONTACT_PERSON");
+                            dto.setContactPerson(contactPerson);
+
+                            String email1 = rs.getString("EMAIL1");
+                            dto.setEmail1(email1);
+
+                            String mobile = rs.getString("MOBILE");
+                            dto.setMobile(mobile);
+
+                            addressDetails.add(dto);
+                        }
+                    }
+                    CustomerDetailsResponse response = new CustomerDetailsResponse();
+                    response.setMessage("Address details retrieved successfully");
+                    response.setAddressDetails(addressDetails);
+                    response.setSuccess(true);
+
+                    return response;
+                }
+
+            } catch (SQLException ex) {
+                throw new CustomException("Error calling PROC_GET_QTN_CUST_ADDRESS_V2: " + ex.getMessage());
             }
         });
     }

@@ -15,4 +15,5 @@ public class CustomerDetailsResponse {
     private String message;
     private boolean success;
     private List<SalesQuotationSchCustomerDetailsDto> customerDetails;
+    private List<AddressDetailsResponse> addressDetails;
 }
