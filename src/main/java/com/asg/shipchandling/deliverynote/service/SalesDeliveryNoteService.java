@@ -1,7 +1,8 @@
 package com.asg.shipchandling.deliverynote.service;
 
 import com.asg.shipchandling.deliverynote.dto.*;
-import com.asg.shipchandling.deliverynote.dto.*;
+import com.asg.shipchandling.deliverynote.dto.request.GetAllDeliveryNoteFilterRequest;
+import org.springframework.data.domain.Page;
 
 import java.sql.Timestamp;
 import java.util.List;
@@ -26,6 +27,10 @@ public interface SalesDeliveryNoteService {
                                                                        Long salesmanPoid, String qtnRefNo,
                                                                        Timestamp fromDate, Timestamp toDate,
                                                                        String search, Integer page, Integer size);
+
+        Page<SalesDeliveryNoteHdrDto> getAllDeliveryNotesWithFilters(Long groupPoid, Long companyPoid,
+                                                                     GetAllDeliveryNoteFilterRequest filterRequest,
+                                                                     int page, int size);
 
         // Validation APIs
         ValidationResponse validateDocRef(String docRef, Long transactionPoid);
