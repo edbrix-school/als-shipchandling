@@ -163,21 +163,19 @@ public class StockMasterServiceImpl implements StockMasterService {
             setEmptyDetails(response);
         }
 
-        if (includeDetails) {
-            // Convert supplier details entities to DTOs
-            List<StockMasterDTLEntity> supplierEntities = dtlRepository.findByStockPoid(stockPoid);
-            List<StockMasterDtlDto> supplierDetails = supplierEntities.stream()
-                    .map(this::convertDtlToDto)
-                    .collect(Collectors.toList());
-            response.setSupplierDetails(supplierDetails);
+        // Always fetch supplier and warehouse details (they are core details of stock master)
+        List<StockMasterDTLEntity> supplierEntities = dtlRepository.findByStockPoid(stockPoid);
+        List<StockMasterDtlDto> supplierDetails = supplierEntities.stream()
+                .map(this::convertDtlToDto)
+                .collect(Collectors.toList());
+        response.setSupplierDetails(supplierDetails);
 
-            // Convert warehouse details entities to DTOs
-            List<StockMasterWarehouseDtl> warehouseEntities = warehouseRepository.findByStockPoid(stockPoid);
-            List<StockMasterWarehouseDtlDto> warehouseDetails = warehouseEntities.stream()
-                    .map(this::convertWarehouseDtlToDto)
-                    .collect(Collectors.toList());
-            response.setWarehouseDetails(warehouseDetails);
-        }
+        // Convert warehouse details entities to DTOs
+        List<StockMasterWarehouseDtl> warehouseEntities = warehouseRepository.findByStockPoid(stockPoid);
+        List<StockMasterWarehouseDtlDto> warehouseDetails = warehouseEntities.stream()
+                .map(this::convertWarehouseDtlToDto)
+                .collect(Collectors.toList());
+        response.setWarehouseDetails(warehouseDetails);
 
         return response;
     }
