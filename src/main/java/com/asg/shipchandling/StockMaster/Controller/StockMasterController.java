@@ -50,9 +50,12 @@ public class StockMasterController {
     @Autowired
     private StockMasterService stockMasterService;
 
+    @Operation(summary = "Get Stock Master by ID", description = "Retrieves a stock master by its POID. Supplier and warehouse details are always included in the response regardless of includeDetails parameter.")
     @GetMapping("/{stockPoid}")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getStockMasterById(
             @PathVariable Long stockPoid,
+            @Parameter(description = "Deprecated: Supplier and warehouse details are always included. This parameter is kept for backward compatibility only.") 
             @RequestParam(required = false, defaultValue = "false") boolean includeDetails,
             @RequestParam(required = false) Long groupPoid) {
 
@@ -66,6 +69,23 @@ public class StockMasterController {
         return com.asg.shipchandling.common.ApiResponse.success("Stock master fetched successfully", response);
     }
 
+    @Operation(summary = "Get Stock Masters List", description = "Retrieves a paginated list of stock masters with optional filtering and tree structure support")
+    @GetMapping
+    @AllowedAction(UserRolesRightsEnum.VIEW)
+    public ResponseEntity<?> getStockMastersRoot(
+            @RequestParam Map<String, String> filters,
+            @RequestParam(required = false) Long parentPoid,
+            @RequestParam(defaultValue = "false") boolean tree,
+            @RequestParam(required = false) String filterValue,
+            @RequestParam(defaultValue = "false") boolean includeDeleted,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "seqno") String sortBy,
+            @RequestParam(defaultValue = "ASC") String sortOrder) {
+        
+        // Delegate to the existing getStockMasters method
+        return getStockMasters(filters, parentPoid, tree, filterValue, includeDeleted, page, size, sortBy, sortOrder);
+    }
 
     @GetMapping("/list")
     @AllowedAction(UserRolesRightsEnum.VIEW)

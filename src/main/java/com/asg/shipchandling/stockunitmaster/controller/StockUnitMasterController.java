@@ -50,7 +50,7 @@ public class StockUnitMasterController {
 
         }
 
-        @Operation(summary = "Create a new stock unit", description = "Creates a new stock unit with the provided details. StockUnitCode is auto-generated.", responses = {
+        @Operation(summary = "Create a new stock unit", description = "Creates a new stock unit with the provided details. StockUnitCode is required and provided by the user.", responses = {
                         @ApiResponse(responseCode = "201", description = "Successfully created the stock unit", content = @Content(mediaType = "application/json", schema = @Schema(implementation = StockUnitMasterDto.class))),
                         @ApiResponse(responseCode = "400", description = "Invalid input, object invalid", content = @Content(mediaType = "application/json")),
                         @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json")),

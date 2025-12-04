@@ -78,7 +78,7 @@ public class StockUnitServiceImpl implements StockUnitService {
 
     private StockUnitMaster mapRequestToEntity(CreateStockUnitMasterRequest request) {
         StockUnitMaster entity = new StockUnitMaster();
-        // stockUnitCode is auto-generated, so we don't set it here
+        entity.setStockUnitCode(request.getStockUnitCode());
         entity.setStockUnitName(request.getStockUnitName());
         entity.setStockUnitName2(request.getStockUnitName2());
         entity.setGroupPoid(request.getGroupPoid());
