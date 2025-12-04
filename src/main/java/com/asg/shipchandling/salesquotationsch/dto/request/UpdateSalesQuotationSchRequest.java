@@ -1,4 +1,4 @@
-package com.asg.shipchandling.salesquotationsch.dto;
+package com.asg.shipchandling.salesquotationsch.dto.request;
 
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -8,18 +8,22 @@ import lombok.NoArgsConstructor;
 import java.sql.Timestamp;
 import java.util.List;
 
+import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
+
 import com.asg.shipchandling.salesquotationsch.dto.request.CreateSalesQuotationSchItemDtlRequest;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class UpdateSalesQuotationSchRequest {
-    
+
     private Timestamp transactionDate;
 
     private Long customerPoid;
 
     private Long addressPoid;
+
+    private boolean newAddressYN;
 
     @Size(max = 20, message = "Currency code must not exceed 20 characters")
     private String currencyCode;
@@ -120,6 +124,7 @@ public class UpdateSalesQuotationSchRequest {
     @Size(max = 1000, message = "Party address details must not exceed 1000 characters")
     private String partyAddressDetails;
 
+    private AddressDetailsResponse addressDetails;
     // Detail tables
     private List<CreateSalesQuotationSchItemDtlRequest> itemDetails;
 }

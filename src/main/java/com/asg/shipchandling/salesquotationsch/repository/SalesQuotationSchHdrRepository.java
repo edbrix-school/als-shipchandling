@@ -105,13 +105,17 @@ public interface SalesQuotationSchHdrRepository extends JpaRepository<SalesQuota
                         // field doesn't exist in table
                         "NULL as divPoid, NULL as divCode, NULL as divDescription, " +
                         // Principal Details - NULL since field doesn't exist in table
-                        "NULL as prPoid, NULL as prCode, NULL as prName " +
+                        "NULL as prPoid, NULL as prCode, NULL as prName, " +
+                        // Address Details (from GLOBAL_ADDRESS_DETAILS)
+                        "addr.ADDRESS_POID as addrPoid, addr.CONTACT_PERSON as addrContactPerson, " +
+                        "addr.EMAIL1 as addrEmail1, addr.MOBILE as addrMobile " +
                         "FROM SALES_QUOTATION_HDR qtn " +
                         "LEFT JOIN SALES_CUSTOMER_MASTER cust ON qtn.CUSTOMER_POID = cust.CUSTOMER_POID " +
                         "LEFT JOIN SALES_SALESMAN_MASTER sm ON qtn.SALESMAN_POID = sm.SALESMAN_POID " +
                         "LEFT JOIN SHIP_LINE_MASTER lm ON qtn.LINE_POID = lm.LINE_POID " +
                         "LEFT JOIN SHIP_PORT_MASTER pm ON qtn.PORT_POID = pm.PORT_POID " +
                         "LEFT JOIN SHIP_VESSEL_MASTER vm ON qtn.VESSEL_POID = TO_CHAR(vm.VESSEL_POID) " +
+                        "LEFT JOIN GLOBAL_ADDRESS_DETAILS addr ON qtn.ADDRESS_POID = addr.ADDRESS_POID " +
                         "WHERE qtn.TRANSACTION_POID = :transactionPoid AND qtn.COMPANY_POID = :companyPoid", nativeQuery = true)
         List<Object[]> findSalesQuotationSchWithDetails(@Param("transactionPoid") Long transactionPoid,
                         @Param("companyPoid") Long companyPoid);
@@ -123,5 +127,11 @@ public interface SalesQuotationSchHdrRepository extends JpaRepository<SalesQuota
         @Query(value = "SELECT DISTINCT c.CUSTOMER_POID FROM SALES_CUSTOMER_MASTER c " +
                 "WHERE UPPER(c.CUSTOMER_NAME) LIKE :pattern", nativeQuery = true)
         List<Long> findCustomerPoidsByName(@Param("pattern") String pattern);
+
+        /**
+         * Get customer name by customer POID
+         */
+        @Query(value = "SELECT CUSTOMER_NAME FROM SALES_CUSTOMER_MASTER WHERE CUSTOMER_POID = :customerPoid", nativeQuery = true)
+        String findCustomerNameByPoid(@Param("customerPoid") Long customerPoid);
 
 }

@@ -9,11 +9,13 @@ import lombok.NoArgsConstructor;
 import java.sql.Timestamp;
 import java.util.List;
 
+import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateSalesQuotationSchRequest {
-    
+
     @NotNull(message = "Transaction date is required")
     private Timestamp transactionDate;
 
@@ -21,6 +23,8 @@ public class CreateSalesQuotationSchRequest {
     private Long customerPoid;
 
     private Long addressPoid;
+
+    private boolean newAddressYN;
 
     @Size(max = 20, message = "Currency code must not exceed 20 characters")
     private String currencyCode;
@@ -121,6 +125,8 @@ public class CreateSalesQuotationSchRequest {
 
     @Size(max = 1000, message = "Party address details must not exceed 1000 characters")
     private String partyAddressDetails;
+
+    private AddressDetailsResponse addressDetails;
 
     // Detail tables
     private List<CreateSalesQuotationSchItemDtlRequest> itemDetails;

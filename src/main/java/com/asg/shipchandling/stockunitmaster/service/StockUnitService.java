@@ -39,4 +39,6 @@ public interface StockUnitService {
 
      StockUnitListResponse listStockUnitsWithFilters(FilterRequestDto filterRequest, Pageable pageable);
 
+     List<StockUnitMasterDto> getStockUnitsByCode(String stockUnitCode);
+
 }

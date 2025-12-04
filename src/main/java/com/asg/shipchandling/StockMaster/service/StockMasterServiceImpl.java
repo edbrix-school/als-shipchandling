@@ -18,6 +18,7 @@ import com.asg.shipchandling.StockMaster.dto.StockMasterViewResponse;
 import com.asg.shipchandling.StockMaster.dto.StockMasterWarehouseDtlDto;
 import com.asg.shipchandling.StockMaster.dto.UpdateStockMasterRequest;
 import com.asg.shipchandling.StockMaster.dto.ValidationResponse;
+import com.asg.shipchandling.StockMaster.dto.StockDetailsResponse;
 import com.asg.shipchandling.StockMaster.entity.StockMasterDTLEntity;
 import com.asg.shipchandling.StockMaster.entity.StockMasterDtlId;
 import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
@@ -1048,6 +1049,12 @@ public class StockMasterServiceImpl implements StockMasterService {
         if (userPoid != null && userPoid <= 0) {
             throw new IllegalArgumentException("Invalid userPoid: " + userPoid);
         }
+        
+        // Fetch all categories for the group to build category map
+        List<StockCategoryMasterEntity> allCategories = categoryMasterRepository.findByGroupPoid(groupPoid);
+        Map<Long, StockCategoryMasterEntity> categoryMap = allCategories.stream()
+                .collect(Collectors.toMap(StockCategoryMasterEntity::getCategoryPoid, cat -> cat));
+        
         List<Map<String, Object>> result = new ArrayList<>();
 
         if (parentPoid == null) {
@@ -1103,7 +1110,8 @@ public class StockMasterServiceImpl implements StockMasterService {
                 List<StockMasterEntity> stockItems = stockMasterRepository.findAll(spec);
                 
                 for (StockMasterEntity stock : stockItems) {
-                    Map<String, Object> item = convertStockToHierarchicalItem(stock, level);
+                    // Use simplified structure for LEDGER items (same as tree view)
+                    Map<String, Object> item = convertStockToTreeItem(stock, level, companyPoid, userPoid, categoryMap);
                     item.put("parentPoid", parentPoid);
                     result.add(item);
                 }
@@ -1158,6 +1166,13 @@ public class StockMasterServiceImpl implements StockMasterService {
      * Convert stock entity to hierarchical item format
      */
     private Map<String, Object> convertStockToHierarchicalItem(StockMasterEntity stock, int level) {
+        return convertStockToHierarchicalItem(stock, level, null);
+    }
+
+    /**
+     * Convert stock entity to hierarchical item format with category information
+     */
+    private Map<String, Object> convertStockToHierarchicalItem(StockMasterEntity stock, int level, Map<Long, StockCategoryMasterEntity> categoryMap) {
         Map<String, Object> item = new HashMap<>();
         
         // Copy all fields from entity
@@ -1219,6 +1234,15 @@ public class StockMasterServiceImpl implements StockMasterService {
         // Convert Y/N/null to boolean (Y=true, N/null=false)
         item.put("active", stock.getActive() != null && "Y".equalsIgnoreCase(stock.getActive()));
         item.put("deleted", stock.getDeleted() != null && "Y".equalsIgnoreCase(stock.getDeleted()));
+        
+        // Add category name and code if categoryMap is provided and categoryPoid exists
+        if (categoryMap != null && stock.getCategoryPoid() != null) {
+            StockCategoryMasterEntity category = categoryMap.get(stock.getCategoryPoid());
+            if (category != null) {
+                item.put("categoryName", category.getCategoryName());
+                item.put("categoryCode", category.getCategoryCode());
+            }
+        }
         
         // Add hierarchical fields
         item.put("type", "LEDGER");
@@ -1390,7 +1414,7 @@ public class StockMasterServiceImpl implements StockMasterService {
                 // Apply filter if provided
                 if (filterValue == null || filterValue.trim().isEmpty() || 
                     matchesFilter(stock, filterValue)) {
-                    Map<String, Object> stockNode = convertStockToTreeItem(stock, level + 1, companyPoid, userPoid);
+                    Map<String, Object> stockNode = convertStockToTreeItem(stock, level + 1, companyPoid, userPoid, categoryMap);
                     stockNode.put("parentPoid", category.getCategoryPoid());
                     children.add(stockNode);
                 }
@@ -1404,9 +1428,34 @@ public class StockMasterServiceImpl implements StockMasterService {
 
     /**
      * Convert stock entity to tree item format with metadata
+     * Returns simplified structure similar to SUB_GROUP with only essential fields
      */
-    private Map<String, Object> convertStockToTreeItem(StockMasterEntity stock, int level, Long companyPoid, Long userPoid) {
-        Map<String, Object> item = convertStockToHierarchicalItem(stock, level);
+    private Map<String, Object> convertStockToTreeItem(StockMasterEntity stock, int level, Long companyPoid, Long userPoid, Map<Long, StockCategoryMasterEntity> categoryMap) {
+        Map<String, Object> item = new HashMap<>();
+        
+        // Add stock essential fields (similar to category fields in SUB_GROUP)
+        item.put("stockPoid", stock.getStockPoid());
+        item.put("stockCode", stock.getStockCode());
+        item.put("stockName", stock.getStockName());
+        item.put("categoryPoid", stock.getCategoryPoid());
+        
+        // Add category name and code if categoryMap is provided and categoryPoid exists
+        if (categoryMap != null && stock.getCategoryPoid() != null) {
+            StockCategoryMasterEntity category = categoryMap.get(stock.getCategoryPoid());
+            if (category != null) {
+                item.put("categoryName", category.getCategoryName());
+                item.put("categoryCode", category.getCategoryCode());
+            }
+        }
+        
+        // Add hierarchical fields
+        item.put("type", "LEDGER");
+        item.put("level", level);
+        
+        // Add status fields
+        item.put("active", stock.getActive() != null && "Y".equalsIgnoreCase(stock.getActive()));
+        item.put("deleted", stock.getDeleted() != null && "Y".equalsIgnoreCase(stock.getDeleted()));
+        item.put("groupPoid", stock.getGroupPoid());
         
         // Add metadata fields
         item.put("id", "row-" + stock.getStockPoid());
@@ -1503,6 +1552,138 @@ public class StockMasterServiceImpl implements StockMasterService {
         }
         
         return false;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid) {
+        logger.info("getStockDetails started for stockPoid={} companyPoid={}", stockPoid, companyPoid);
+        
+        // Fetch stock details with category, tax, and unit in a single query
+        List<Object[]> results = stockMasterRepository.findStockDetailsWithCategoryAndTax(stockPoid);
+        
+        if (results.isEmpty()) {
+            logger.warn("Stock not found for stockPoid={}", stockPoid);
+            throw new ResourceNotFoundException("Stock", "stockPoid", stockPoid);
+        }
+        
+        Object[] row = results.get(0);
+        StockDetailsResponse response = populateStockDetailsFromQueryResult(row);
+        
+        logger.info("getStockDetails completed for stockPoid={}", stockPoid);
+        return response;
+    }
+    
+    /**
+     * Populate StockDetailsResponse from query result
+     * Column order: stock fields (0-16), category fields (17-19), tax fields (20-23), unit fields (24-26)
+     */
+    private StockDetailsResponse populateStockDetailsFromQueryResult(Object[] row) {
+        StockDetailsResponse response = new StockDetailsResponse();
+        int index = 0;
+        
+        // Stock Master fields (indices 0-16)
+        response.setStockPoid(getLongValueFromRow(row[index++]));
+        response.setStockCode(getStringValueFromRow(row[index++]));
+        response.setStockName(getStringValueFromRow(row[index++]));
+        response.setStockName2(getStringValueFromRow(row[index++]));
+        response.setStockDescription(getStringValueFromRow(row[index++]));
+        response.setStockUnitPoid(getLongValueFromRow(row[index++]));
+        response.setStockCost(getBigDecimalValueFromRow(row[index++]));
+        response.setTagPrice(getBigDecimalValueFromRow(row[index++]));
+        response.setRetailPrice(getBigDecimalValueFromRow(row[index++]));
+        response.setWholesalePrice(getBigDecimalValueFromRow(row[index++]));
+        response.setPrice1(getBigDecimalValueFromRow(row[index++]));
+        response.setPrice2(getBigDecimalValueFromRow(row[index++]));
+        response.setPrice3(getBigDecimalValueFromRow(row[index++]));
+        response.setCurrencyCode(getStringValueFromRow(row[index++]));
+        response.setBarcode(getStringValueFromRow(row[index++]));
+        response.setActive(getStringValueFromRow(row[index++]));
+        response.setDeleted(getStringValueFromRow(row[index++]));
+        
+        // Category Details (indices 17-19)
+        StockDetailsResponse.CategoryDetailDto categoryDetails = new StockDetailsResponse.CategoryDetailDto();
+        categoryDetails.setCategoryPoid(getLongValueFromRow(row[index++]));
+        categoryDetails.setCategoryCode(getStringValueFromRow(row[index++]));
+        categoryDetails.setCategoryName(getStringValueFromRow(row[index++]));
+        response.setCategoryDetails(categoryDetails);
+        
+        // Tax Details (indices 20-23)
+        StockDetailsResponse.TaxDetailDto taxDetails = new StockDetailsResponse.TaxDetailDto();
+        taxDetails.setTaxPoid(getLongValueFromRow(row[index++]));
+        taxDetails.setTaxCode(getStringValueFromRow(row[index++]));
+        taxDetails.setTaxName(getStringValueFromRow(row[index++]));
+        taxDetails.setTaxPercentage(getBigDecimalValueFromRow(row[index++]));
+        response.setTaxDetails(taxDetails);
+        
+        // Unit Details (indices 24-26)
+        StockDetailsResponse.UnitDetailDto unitDetails = new StockDetailsResponse.UnitDetailDto();
+        unitDetails.setUnitPoid(getLongValueFromRow(row[index++]));
+        unitDetails.setUnitCode(getStringValueFromRow(row[index++]));
+        unitDetails.setUnitName(getStringValueFromRow(row[index++]));
+        response.setUnitDetails(unitDetails);
+        
+        return response;
+    }
+    
+    /**
+     * Helper method to safely extract Long value from Object[]
+     */
+    private Long getLongValueFromRow(Object obj) {
+        if (obj == null) {
+            return null;
+        }
+        if (obj instanceof Number) {
+            return ((Number) obj).longValue();
+        }
+        return null;
+    }
+    
+    /**
+     * Helper method to safely extract String value from Object[]
+     */
+    private String getStringValueFromRow(Object obj) {
+        return obj != null ? obj.toString() : null;
+    }
+    
+    /**
+     * Helper method to safely extract BigDecimal value from Object[]
+     */
+    private BigDecimal getBigDecimalValueFromRow(Object obj) {
+        if (obj == null) {
+            return null;
+        }
+        if (obj instanceof BigDecimal) {
+            return (BigDecimal) obj;
+        }
+        if (obj instanceof Number) {
+            return BigDecimal.valueOf(((Number) obj).doubleValue());
+        }
+        return null;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StockDetailsResponse getStockDetailsByCode(String stockCode, Long companyPoid) {
+        logger.info("getStockDetailsByCode started for stockCode={} companyPoid={}", stockCode, companyPoid);
+
+        if (stockCode == null || stockCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("stockCode is required");
+        }
+
+        // Fetch stock details with category, tax, and unit in a single query by stock code
+        List<Object[]> results = stockMasterRepository.findStockDetailsWithCategoryAndTaxByCode(stockCode.trim());
+
+        if (results.isEmpty()) {
+            logger.warn("Stock not found for stockCode={}, returning empty response", stockCode);
+            return new StockDetailsResponse();
+        }
+
+        Object[] row  = results.get(0);
+        StockDetailsResponse response = populateStockDetailsFromQueryResult(row);
+
+        logger.info("getStockDetailsByCode completed for stockCode={}", stockCode);
+        return response;
     }
 
 }

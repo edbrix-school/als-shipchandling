@@ -10,6 +10,7 @@ import com.asg.shipchandling.StockMaster.dto.StockMasterViewResponse;
 import com.asg.shipchandling.StockMaster.dto.StockMasterWarehouseDtlDto;
 import com.asg.shipchandling.StockMaster.dto.UpdateStockMasterRequest;
 import com.asg.shipchandling.StockMaster.dto.ValidationResponse;
+import com.asg.shipchandling.StockMaster.dto.StockDetailsResponse;
 import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -65,5 +66,9 @@ public interface StockMasterService {
     List<Map<String, Object>> getStockMastersHierarchical(Long groupPoid, Long parentPoid, String filterValue, boolean includeDeleted, Long companyPoid, Long userPoid);
 
     List<Map<String, Object>> getStockMastersTreeStructure(Long groupPoid, String filterValue, boolean includeDeleted, Long companyPoid, Long userPoid);
+
+    StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid);
+    
+    StockDetailsResponse getStockDetailsByCode(String stockCode, Long companyPoid);
 
 }

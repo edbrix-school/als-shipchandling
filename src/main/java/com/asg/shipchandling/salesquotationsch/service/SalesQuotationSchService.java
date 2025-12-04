@@ -2,13 +2,14 @@ package com.asg.shipchandling.salesquotationsch.service;
 
 import com.asg.shipchandling.salesquotationsch.dto.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.*;
-import com.asg.shipchandling.salesquotationsch.dto.*;
-import com.asg.shipchandling.salesquotationsch.dto.request.*;
 import com.asg.shipchandling.salesquotationsch.dto.response.SalesQuotationSchListResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ValidationResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
 
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -61,4 +62,10 @@ public interface SalesQuotationSchService {
         StoredProcedureResponse updateQuantity(UpdateQuantityRequest request);
         ValidationResponse validateCheckbox(ValidateCheckboxRequest request);
         StoredProcedureResponse calculate(CalculateRequest request);
+        
+        // Excel Import
+        ExcelImportResponse importItemsFromExcel(Long transactionPoid, Long companyPoid, String userId, 
+                MultipartFile file);
+        
+        List<AddressDetailsResponse> getCustomerAddress(Long userPoid, Long customerPoid, String addressType);
 }

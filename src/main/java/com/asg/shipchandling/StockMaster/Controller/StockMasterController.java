@@ -32,6 +32,7 @@ import com.asg.shipchandling.StockMaster.dto.StockMasterViewResponse;
 import com.asg.shipchandling.StockMaster.dto.StockMasterWarehouseDtlDto;
 import com.asg.shipchandling.StockMaster.dto.UpdateStockMasterRequest;
 import com.asg.shipchandling.StockMaster.dto.ValidationResponse;
+import com.asg.shipchandling.StockMaster.dto.StockDetailsResponse;
 import com.asg.shipchandling.StockMaster.service.StockMasterService;
 import com.asg.common.lib.security.util.UserContext;
 
@@ -42,6 +43,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import com.asg.common.lib.annotation.AllowedAction;
+import com.asg.common.lib.enums.UserRolesRightsEnum;
 
 @RestController
 @RequestMapping("/v1/stockmaster")
@@ -66,10 +69,9 @@ public class StockMasterController {
     }
 
     @GetMapping("/List")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getStockMasters(
             @RequestParam Map<String, String> filters,
-            @RequestParam(required = false) String documentId,
-            @RequestParam(required = false) String actionRequested,
             @RequestParam(required = false) Long parentPoid,
             @RequestParam(defaultValue = "false") boolean tree,
             @RequestParam(required = false) String filterValue,
@@ -79,12 +81,13 @@ public class StockMasterController {
             @RequestParam(defaultValue = "seqno") String sortBy,
             @RequestParam(defaultValue = "ASC") String sortOrder) {
 
-        // Check if this is a tree structure request with documentId and actionRequested
-        if (tree && documentId != null && "VIEW".equalsIgnoreCase(actionRequested)) {
-            Long groupPoid = UserContext.getGroupPoid();
-            Long companyPoid = UserContext.getCompanyPoid();
-            Long userPoid = filters.containsKey("userPoid") ? Long.parseLong(filters.get("userPoid")) : null;
-            
+        Long groupPoid = UserContext.getGroupPoid();
+        Long companyPoid = UserContext.getCompanyPoid();
+        Long userPoid = filters.containsKey("userPoid") ? Long.parseLong(filters.get("userPoid")) : null;
+        String documentId = UserContext.getDocumentId();
+
+        // Check if this is a tree structure request with documentId
+        if (tree && documentId != null) {
             List<Map<String, Object>> treeStructure = stockMasterService.getStockMastersTreeStructure(
                     groupPoid, filterValue, includeDeleted, companyPoid, userPoid);
             
@@ -92,11 +95,7 @@ public class StockMasterController {
         }
 
         // Check if this is a hierarchical view request (flat list)
-        if (documentId != null && "VIEW".equalsIgnoreCase(actionRequested)) {
-            Long groupPoid = UserContext.getGroupPoid();
-            Long companyPoid = UserContext.getCompanyPoid();
-            Long userPoid = filters.containsKey("userPoid") ? Long.parseLong(filters.get("userPoid")) : null;
-            
+        if (documentId != null) {
             List<Map<String, Object>> hierarchicalList = stockMasterService.getStockMastersHierarchical(
                     groupPoid, parentPoid, filterValue, includeDeleted, companyPoid, userPoid);
             
@@ -113,7 +112,6 @@ public class StockMasterController {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         if (tree) {
-            Long groupPoid = UserContext.getGroupPoid();
             List<Map<String, Object>> categories = stockMasterService.getStockMastersTree(groupPoid);
             Map<String, Object> data = Map.of("categories", categories);
             return success("Stock masters tree fetched successfully", data);
@@ -132,6 +130,7 @@ public class StockMasterController {
             @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json"))
     }, security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/validate-code")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> validateStockCode(
             @Parameter(description = "Stock code to validate", required = true) @RequestParam String stockCode,
 
@@ -147,6 +146,7 @@ public class StockMasterController {
             @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json"))
     }, security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/validate-name")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> validateStockName(
             @Parameter(description = "Stock name to validate", required = true) @RequestParam String stockName,
 
@@ -161,6 +161,7 @@ public class StockMasterController {
     @Operation(summary = "Check Stock Master Dependencies", 
                description = "Checks if stock item can be deleted by checking for dependencies (stock balance, transactions, etc.)")
     @GetMapping("/{stockPoid}/dependencies")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> checkStockMasterDependencies(
             @PathVariable Long stockPoid) {
         
@@ -171,6 +172,7 @@ public class StockMasterController {
 
      @Operation(summary = "Delete stock master")
     @DeleteMapping("/{stockPoid}")
+    @AllowedAction(UserRolesRightsEnum.DELETE)
     public ResponseEntity<?> deleteStockMaster(
             @PathVariable Long stockPoid) {
         
@@ -190,11 +192,11 @@ public class StockMasterController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @PostMapping("/Create")
+    @AllowedAction(UserRolesRightsEnum.CREATE)
     public ResponseEntity<?> createStockMaster(
-            @Valid @RequestBody CreateStockMasterRequest request,
-            @RequestHeader("userId") String userId) {
+            @Valid @RequestBody CreateStockMasterRequest request) {
 
-        StockMasterDto dto = stockMasterService.createStockMaster(request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), userId);
+        StockMasterDto dto = stockMasterService.createStockMaster(request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
         return success("Stock item created successfully", dto);
     }
 
@@ -213,45 +215,46 @@ public class StockMasterController {
     security = @SecurityRequirement(name = "bearerAuth")
 )
 @PutMapping("/{stockPoid}")
+@AllowedAction(UserRolesRightsEnum.EDIT)
 public ResponseEntity<StockMasterDto> updateStockMaster(
         @PathVariable Long stockPoid,
-        @Valid @RequestBody UpdateStockMasterRequest request,
-        @RequestHeader("userId") String userId) {
+        @Valid @RequestBody UpdateStockMasterRequest request) {
 
-    StockMasterDto updated = stockMasterService.updateStockMaster(stockPoid, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), userId);
+    StockMasterDto updated = stockMasterService.updateStockMaster(stockPoid, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
     return ResponseEntity.ok(updated);
 }
 
 
     @Operation(summary = "Add Supplier Detail")
     @PostMapping("/{stockPoid}/supplier-details")
+    @AllowedAction(UserRolesRightsEnum.CREATE)
     public ResponseEntity<?> addSupplierDetail(
             @PathVariable Long stockPoid,
-            @Valid @RequestBody CreateStockMasterDtlRequest request,
-            @RequestHeader("userId") String userId) {
+            @Valid @RequestBody CreateStockMasterDtlRequest request) {
         
         StockMasterDtlDto dto = stockMasterService.addSupplierDetail(
-                stockPoid, request, UserContext.getGroupPoid(), userId);
+                stockPoid, request, UserContext.getGroupPoid(), UserContext.getUserId());
         return success("Supplier detail added successfully", dto);
     }
 
 
     @Operation(summary = "Update Supplier Detail")
     @PutMapping("/{stockPoid}/supplier-details/{detRowId}")
+    @AllowedAction(UserRolesRightsEnum.EDIT)
     public ResponseEntity<?> updateSupplierDetail(
             @PathVariable Long stockPoid,
             @PathVariable Long detRowId,
-            @Valid @RequestBody CreateStockMasterDtlRequest request,
-            @RequestHeader("userId") String userId) {
+            @Valid @RequestBody CreateStockMasterDtlRequest request){
         
         StockMasterDtlDto dto = stockMasterService.updateSupplierDetail(
-                stockPoid, detRowId, request, UserContext.getGroupPoid(), userId);
+                stockPoid, detRowId, request, UserContext.getGroupPoid(), UserContext.getUserId());
         return success("Supplier detail updated successfully", dto);
     }
 
 
      @Operation(summary = "Delete Supplier Detail")
     @DeleteMapping("/{stockPoid}/supplier-details/{detRowId}")
+    @AllowedAction(UserRolesRightsEnum.DELETE)
     public ResponseEntity<?> deleteSupplierDetail(
             @PathVariable Long stockPoid,
             @PathVariable Long detRowId) {
@@ -262,6 +265,7 @@ public ResponseEntity<StockMasterDto> updateStockMaster(
 
     @Operation(summary = "Get Supplier Details")
     @GetMapping("/{stockPoid}/supplier-details")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getSupplierDetails(
             @PathVariable Long stockPoid) {
         
@@ -272,32 +276,33 @@ public ResponseEntity<StockMasterDto> updateStockMaster(
 
      @Operation(summary = "Add Warehouse Detail")
     @PostMapping("/{stockPoid}/warehouse-details")
+    @AllowedAction(UserRolesRightsEnum.CREATE)
     public ResponseEntity<?> addWarehouseDetail(
             @PathVariable Long stockPoid,
-            @Valid @RequestBody CreateStockMasterWarehouseDtlRequest request,
-            @RequestHeader("userId") String userId) {
+            @Valid @RequestBody CreateStockMasterWarehouseDtlRequest request) {
         
         StockMasterWarehouseDtlDto dto = stockMasterService.addWarehouseDetail(
-                stockPoid, request, UserContext.getGroupPoid(), userId);
+                stockPoid, request, UserContext.getGroupPoid(), UserContext.getUserId());
         return success("Warehouse detail added successfully", dto);
     }
 
 
     @Operation(summary = "Update Warehouse Detail")
     @PutMapping("/{stockPoid}/warehouse-details/{detRowId}")
+    @AllowedAction(UserRolesRightsEnum.EDIT)
     public ResponseEntity<?> updateWarehouseDetail(
             @PathVariable Long stockPoid,
             @PathVariable Long detRowId,
-            @Valid @RequestBody CreateStockMasterWarehouseDtlRequest request,
-            @RequestHeader("userId") String userId) {
+            @Valid @RequestBody CreateStockMasterWarehouseDtlRequest request) {
         
         StockMasterWarehouseDtlDto dto = stockMasterService.updateWarehouseDetail(
-                stockPoid, detRowId, request, UserContext.getGroupPoid(), userId);
+                stockPoid, detRowId, request, UserContext.getGroupPoid(), UserContext.getUserId());
         return success("Warehouse detail updated successfully", dto);
     }
 
     @Operation(summary = "Delete Warehouse Detail")
     @DeleteMapping("/{stockPoid}/warehouse-details/{detRowId}")
+    @AllowedAction(UserRolesRightsEnum.DELETE)
     public ResponseEntity<?> deleteWarehouseDetail(
             @PathVariable Long stockPoid,
             @PathVariable Long detRowId) {
@@ -308,6 +313,7 @@ public ResponseEntity<StockMasterDto> updateStockMaster(
 
     @Operation(summary = "Get Warehouse Details")
     @GetMapping("/{stockPoid}/warehouse-details")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getWarehouseDetails(
             @PathVariable Long stockPoid) {
         
@@ -316,11 +322,25 @@ public ResponseEntity<StockMasterDto> updateStockMaster(
     }
 
     @GetMapping("/by-barcode/{barcode}")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<StockMasterDto> getStockByBarcode(
             @PathVariable String barcode) {
 
         StockMasterDto stock = stockMasterService.getStockMasterByBarcode(barcode, UserContext.getGroupPoid());
         return ResponseEntity.ok(stock);
+    }
+
+    @Operation(summary = "Get Stock Details", description = "Retrieves stock details including category, tax, and unit information for a given stock POID.", responses = {
+                    @ApiResponse(responseCode = "200", description = "Successfully retrieved stock details"),
+                    @ApiResponse(responseCode = "404", description = "Stock not found"),
+                    @ApiResponse(responseCode = "401", description = "Unauthorized")
+    }, security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/{stockPoid}/details")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
+    public ResponseEntity<?> getStockDetails(
+                    @PathVariable Long stockPoid) {
+            StockDetailsResponse response = stockMasterService.getStockDetails(stockPoid, UserContext.getCompanyPoid());
+            return success("Stock details fetched successfully", response);
     }
 
 }

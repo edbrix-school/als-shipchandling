@@ -23,7 +23,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -496,6 +495,31 @@ public Page<StockUnitMasterDto> listStockUnitsUsingParams(
         }
         
         return null;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StockUnitMasterDto> getStockUnitsByCode(String stockUnitCode) {
+        log.info("getStockUnitsByCode started for stockUnitCode={}", stockUnitCode);
+
+        if (stockUnitCode == null || stockUnitCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("stockUnitCode is required");
+        }
+
+        // Create pattern for contains search (case-insensitive)
+        String codePattern = "%" + stockUnitCode.trim() + "%";
+        List<StockUnitMaster> units = stockUnitRepository.findByStockUnitCodeContains(codePattern);
+
+        List<StockUnitMasterDto> dtoList = units.stream()
+                .map(entity -> {
+                    StockUnitMasterDto dto = new StockUnitMasterDto();
+                    BeanUtils.copyProperties(entity, dto);
+                    return dto;
+                })
+                .collect(Collectors.toList());
+
+        log.info("getStockUnitsByCode completed for stockUnitCode={}, found {} units", stockUnitCode, dtoList.size());
+        return dtoList;
     }
 
 }
