@@ -69,12 +69,10 @@ public class StockCategoryController {
     @PostMapping
     public ResponseEntity<?> createStockCategory(
             @Parameter(description = "Stock category creation request", required = true)
-            @Valid @RequestBody CreateStockCategoryRequest request,
-            @Parameter(description = "User ID from request context", required = true)
-            @RequestHeader("X-User-Id") String userId) {
+            @Valid @RequestBody CreateStockCategoryRequest request) {
 
         log.info("createStockCategory started for categoryCode={} groupPoid={}", request.getCategoryCode(), UserContext.getGroupPoid());
-        StockCategoryMasterDto dto = stockCategoryService.createStockCategory(request, UserContext.getGroupPoid(), userId);
+        StockCategoryMasterDto dto = stockCategoryService.createStockCategory(request, UserContext.getGroupPoid(), UserContext.getUserId());
         log.info("createStockCategory completed for categoryPoid={} categoryCode={}",
                 dto != null ? dto.getCategoryPoid() : null,
                 dto != null ? dto.getCategoryCode() : null);
@@ -114,14 +112,10 @@ public class StockCategoryController {
     @GetMapping("/{categoryPoid}")
     public ResponseEntity<?> getStockCategoryByPoid(
             @Parameter(description = "Category POID reference identifier", required = true)
-            @PathVariable Long categoryPoid,
-            @Parameter(description = "Document identifier", required = true, example = "800-300")
-            @RequestParam String documentId,
-            @Parameter(description = "Action requested", required = true)
-            @RequestParam String actionRequested) {
+            @PathVariable Long categoryPoid) {
 
         log.info("getStockCategoryByPoid started for categoryPoid={} groupPoid={} documentId={} actionRequested={}",
-                categoryPoid, UserContext.getGroupPoid(), documentId, actionRequested);
+                categoryPoid, UserContext.getGroupPoid(), UserContext.getDocumentId(), UserContext.getActionRequested());
         StockCategoryMasterDto dto = stockCategoryService.getStockCategoryByPoid(categoryPoid, UserContext.getGroupPoid());
         log.info("getStockCategoryByPoid completed for categoryPoid={} categoryCode={}",
                 categoryPoid, dto != null ? dto.getCategoryCode() : null);
@@ -163,14 +157,12 @@ public class StockCategoryController {
             @Parameter(description = "Category POID reference identifier", required = true)
             @PathVariable Long categoryPoid,
             @Parameter(description = "Stock category update request", required = true)
-            @Valid @RequestBody UpdateStockCategoryRequest request,
-            @Parameter(description = "User ID from request context", required = true)
-            @RequestHeader("X-User-Id") String userId) {
+            @Valid @RequestBody UpdateStockCategoryRequest request) {
 
         log.info("updateStockCategory started for categoryPoid={} groupPoid={} requestedCategoryCode={}",
                 categoryPoid, UserContext.getGroupPoid(), request.getCategoryCode());
         StockCategoryMasterDto dto = stockCategoryService.updateStockCategory(
-                categoryPoid, request, UserContext.getGroupPoid(), userId);
+                categoryPoid, request, UserContext.getGroupPoid(), UserContext.getUserId());
         log.info("updateStockCategory completed for categoryPoid={} newCategoryCode={}",
                 categoryPoid, dto != null ? dto.getCategoryCode() : null);
         return success("Stock category updated successfully", dto);

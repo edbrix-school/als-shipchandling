@@ -1,6 +1,7 @@
 package com.asg.shipchandling.deliverynote.service;
 
 import com.asg.shipchandling.deliverynote.dto.*;
+import com.asg.shipchandling.deliverynote.dto.request.GetAllDeliveryNoteFilterRequest;
 import com.asg.shipchandling.deliverynote.entity.*;
 import com.asg.shipchandling.deliverynote.dto.*;
 import com.asg.shipchandling.deliverynote.entity.SalesDeliveryNoteHdr;
@@ -22,12 +23,17 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
 
 import java.sql.CallableStatement;
 import java.sql.Connection;
@@ -60,6 +66,9 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
     // Add OracleDataSource or DataSource injection for stored procedure calls
     private final DataSource dataSource;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Override
     @Transactional
@@ -287,6 +296,176 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         log.info("getAllDeliveryNotes completed for groupPoid={} companyPoid={} totalElements={}", 
                 groupPoid, companyPoid, response.getTotalElements());
         return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SalesDeliveryNoteHdrDto> getAllDeliveryNotesWithFilters(
+            Long groupPoid, Long companyPoid,
+            GetAllDeliveryNoteFilterRequest filterRequest,
+            int page, int size) {
+
+        // Build dynamic SQL query
+        StringBuilder sqlBuilder = new StringBuilder();
+        sqlBuilder.append("SELECT dn.TRANSACTION_POID, dn.DOC_REF, dn.TRANSACTION_DATE, dn.COMPANY_POID, ");
+        sqlBuilder.append("dn.CUSTOMER_POID, dn.CURRENCY_CODE, dn.CURRENCY_RATE, dn.DELIVERY_STATUS, ");
+        sqlBuilder.append("dn.SALESMAN_POID, dn.PAYMENT_MODE, dn.DELIVERY_TERMS, dn.LINE_POID, ");
+        sqlBuilder.append("dn.VESSEL_POID, dn.VESSEL_NAME, dn.VOYAGE_REF, dn.PORT_POID, ");
+        sqlBuilder.append("dn.PORT_DESCRIPTION, dn.QTN_REF_NO, dn.VESSEL_AGENT, dn.DELIVERY_TO_ADDRESS, ");
+        sqlBuilder.append("dn.DESCRIPTION_PRINT_YN, dn.PARTY_ADDRESS_DETAILS, dn.PRINT_DIVISION_POID, ");
+        sqlBuilder.append("dn.PARTY_TYPE, dn.PRINCIPAL_POID, dn.TOTAL_DISCOUNT, dn.TOTAL_AMOUNT, ");
+        sqlBuilder.append("dn.REMARKS, dn.DELETED, dn.CREATED_BY, dn.CREATED_DATE, ");
+        sqlBuilder.append("dn.LASTMODIFIED_BY, dn.LASTMODIFIED_DATE, scm.CUSTOMER_NAME ");
+        sqlBuilder.append("FROM SALES_DELIVERY_NOTE_HDR dn ");
+        sqlBuilder.append("INNER JOIN SALES_CUSTOMER_MASTER scm ON dn.CUSTOMER_POID = scm.CUSTOMER_POID ");
+        sqlBuilder.append("WHERE dn.COMPANY_POID = :companyPoid ");
+
+        // Apply isDeleted filter
+        if (filterRequest.getIsDeleted() != null && "N".equalsIgnoreCase(filterRequest.getIsDeleted())) {
+            sqlBuilder.append("AND (dn.DELETED IS NULL OR dn.DELETED != 'Y') ");
+        } else if (filterRequest.getIsDeleted() != null && "Y".equalsIgnoreCase(filterRequest.getIsDeleted())) {
+            sqlBuilder.append("AND dn.DELETED = 'Y' ");
+        } else {
+            // Default: exclude deleted records
+            sqlBuilder.append("AND (dn.DELETED IS NULL OR dn.DELETED != 'Y') ");
+        }
+
+        // Apply date range filters
+        if (StringUtils.hasText(filterRequest.getFrom())) {
+            sqlBuilder.append("AND TRUNC(dn.TRANSACTION_DATE) >= TO_DATE(:fromDate, 'YYYY-MM-DD') ");
+        }
+        if (StringUtils.hasText(filterRequest.getTo())) {
+            sqlBuilder.append("AND TRUNC(dn.TRANSACTION_DATE) <= TO_DATE(:toDate, 'YYYY-MM-DD') ");
+        }
+
+        // Build filter conditions
+        List<String> filterConditions = new java.util.ArrayList<>();
+        if (filterRequest.getFilters() != null && !filterRequest.getFilters().isEmpty()) {
+            for (int i = 0; i < filterRequest.getFilters().size(); i++) {
+                GetAllDeliveryNoteFilterRequest.FilterItem filter = filterRequest.getFilters().get(i);
+                if (StringUtils.hasText(filter.getSearchField()) && StringUtils.hasText(filter.getSearchValue())) {
+                    String columnName = mapSearchFieldToColumn(filter.getSearchField());
+                    filterConditions.add("LOWER(" + columnName + ") LIKE LOWER(:filterValue" + i + ")");
+                }
+            }
+        }
+
+        // Add filter conditions with operator
+        if (!filterConditions.isEmpty()) {
+            String operator = "AND".equalsIgnoreCase(filterRequest.getOperator()) ? " AND " : " OR ";
+            sqlBuilder.append("AND (").append(String.join(operator, filterConditions)).append(") ");
+        }
+
+        sqlBuilder.append("ORDER BY dn.TRANSACTION_DATE DESC");
+
+        // Create count query
+        String countSql = "SELECT COUNT(*) FROM (" + sqlBuilder.toString() + ")";
+
+        // Create query
+        Query query = entityManager.createNativeQuery(sqlBuilder.toString());
+        Query countQuery = entityManager.createNativeQuery(countSql);
+
+        // Set parameters
+        query.setParameter("companyPoid", companyPoid);
+        countQuery.setParameter("companyPoid", companyPoid);
+
+        if (StringUtils.hasText(filterRequest.getFrom())) {
+            query.setParameter("fromDate", filterRequest.getFrom());
+            countQuery.setParameter("fromDate", filterRequest.getFrom());
+        }
+        if (StringUtils.hasText(filterRequest.getTo())) {
+            query.setParameter("toDate", filterRequest.getTo());
+            countQuery.setParameter("toDate", filterRequest.getTo());
+        }
+
+        // Set filter parameters
+        if (filterRequest.getFilters() != null && !filterRequest.getFilters().isEmpty()) {
+            for (int i = 0; i < filterRequest.getFilters().size(); i++) {
+                GetAllDeliveryNoteFilterRequest.FilterItem filter = filterRequest.getFilters().get(i);
+                if (StringUtils.hasText(filter.getSearchField()) && StringUtils.hasText(filter.getSearchValue())) {
+                    String paramValue = "%" + filter.getSearchValue() + "%";
+                    query.setParameter("filterValue" + i, paramValue);
+                    countQuery.setParameter("filterValue" + i, paramValue);
+                }
+            }
+        }
+
+        // Get total count
+        Long totalCount = ((Number) countQuery.getSingleResult()).longValue();
+
+        // Apply pagination
+        int offset = page * size;
+        query.setFirstResult(offset);
+        query.setMaxResults(size);
+
+        // Execute query and map results
+        @SuppressWarnings("unchecked")
+        List<Object[]> results = query.getResultList();
+        List<SalesDeliveryNoteHdrDto> dtos = results.stream()
+                .map(this::mapToDeliveryNoteDto)
+                .collect(Collectors.toList());
+
+        // Create page
+        Pageable pageable = PageRequest.of(page, size);
+        return new PageImpl<>(dtos, pageable, totalCount);
+    }
+
+    private String mapSearchFieldToColumn(String searchField) {
+        switch (searchField.toUpperCase()) {
+            case "DOC_REF":
+                return "dn.DOC_REF";
+            case "CUSTOMER_NAME":
+                return "scm.CUSTOMER_NAME";
+            case "QTN_REF_NO":
+                return "dn.QTN_REF_NO";
+            default:
+                return "dn." + searchField;
+        }
+    }
+
+    private SalesDeliveryNoteHdrDto mapToDeliveryNoteDto(Object[] row) {
+        SalesDeliveryNoteHdrDto dto = new SalesDeliveryNoteHdrDto();
+        
+        // Map all fields from the query result
+        // Column order matches the SELECT statement
+        int index = 0;
+        dto.setTransactionPoid(getLongValue(row[index++]));
+        dto.setDocRef(getStringValue(row[index++]));
+        dto.setTransactionDate(getTimestampValue(row[index++]));
+        dto.setCompanyPoid(getLongValue(row[index++]));
+        dto.setCustomerPoid(getLongValue(row[index++]));
+        dto.setCurrencyCode(getStringValue(row[index++]));
+        dto.setCurrencyRate(getLongValue(row[index++]));
+        dto.setDeliveryStatus(getStringValue(row[index++]));
+        dto.setSalesmanPoid(getLongValue(row[index++]));
+        dto.setPaymentMode(getStringValue(row[index++]));
+        dto.setDeliveryTerms(getStringValue(row[index++]));
+        dto.setLinePoid(getLongValue(row[index++]));
+        dto.setVesselPoid(getStringValue(row[index++]));
+        dto.setVesselName(getStringValue(row[index++]));
+        dto.setVoyageRef(getStringValue(row[index++]));
+        dto.setPortPoid(getLongValue(row[index++]));
+        dto.setPortDescription(getStringValue(row[index++]));
+        dto.setQtnRefNo(getStringValue(row[index++]));
+        dto.setVesselAgent(getStringValue(row[index++]));
+        dto.setDeliveryToAddress(getStringValue(row[index++]));
+        dto.setDescriptionPrintYn(getStringValue(row[index++]));
+        dto.setPartyAddressDetails(getStringValue(row[index++]));
+        dto.setPrintDivisionPoid(getLongValue(row[index++]));
+        dto.setPartyType(getStringValue(row[index++]));
+        dto.setPrincipalPoid(getLongValue(row[index++]));
+        dto.setTotalDiscount(getLongValue(row[index++]));
+        dto.setTotalAmount(getLongValue(row[index++]));
+        dto.setRemarks(getStringValue(row[index++]));
+        dto.setDeleted(getStringValue(row[index++]));
+        dto.setCreatedBy(getStringValue(row[index++]));
+        dto.setCreatedDate(getTimestampValue(row[index++]));
+        dto.setLastmodifiedBy(getStringValue(row[index++]));
+        dto.setLastmodifiedDate(getTimestampValue(row[index++]));
+        // Customer name is the last field
+        dto.setCustomerName(getStringValue(row[index++]));
+        
+        return dto;
     }
 
     // Validation Methods
@@ -886,7 +1065,16 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     }
 
     private String getStringValue(Object obj) {
-        return obj != null ? obj.toString() : null;
+        if (obj == null) {
+            return null;
+        }
+        if (obj instanceof String) {
+            return (String) obj;
+        }
+        if (obj instanceof Character) {
+            return String.valueOf((Character) obj);
+        }
+        return obj.toString();
     }
 
     private Timestamp getTimestampValue(Object obj) {

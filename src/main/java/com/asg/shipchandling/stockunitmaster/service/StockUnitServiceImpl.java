@@ -3,6 +3,7 @@ package com.asg.shipchandling.stockunitmaster.service;
 import com.asg.shipchandling.exceptions.ResourceAlreadyExistsException;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
 import com.asg.shipchandling.group.repository.GroupRepository;
+import com.asg.shipchandling.stockunitmaster.dto.CreateStockUnitMasterRequest;
 import com.asg.shipchandling.stockunitmaster.dto.FilterDto;
 import com.asg.shipchandling.stockunitmaster.dto.FilterRequestDto;
 import com.asg.shipchandling.stockunitmaster.dto.StockUnitListResponse;
@@ -54,21 +55,20 @@ public class StockUnitServiceImpl implements StockUnitService {
     }
 
     @Override
-    public StockUnitMasterDto createStockUnit(StockUnitMasterDto stockUnitMasterDto) {
+    @Transactional
+    public StockUnitMasterDto createStockUnit(CreateStockUnitMasterRequest request) {
         StockUnitMasterDto responseDto = new StockUnitMasterDto();
 
-        if (stockUnitRepository.existsByStockUnitCode(stockUnitMasterDto.getStockUnitCode())) {
-            throw new ResourceAlreadyExistsException("stockUnitCode", stockUnitMasterDto.getStockUnitCode());
+        // Validate stock unit name uniqueness
+        if (stockUnitRepository.existsBystockUnitNameIgnoreCaseAndGroupPoid(request.getStockUnitName(), request.getGroupPoid())) {
+            throw new ResourceAlreadyExistsException("stockUnitName", request.getStockUnitName());
         }
 
-        if (stockUnitRepository.existsByStockUnitName(stockUnitMasterDto.getStockUnitName())) {
-            throw new ResourceAlreadyExistsException("stockUnitName", stockUnitMasterDto.getStockUnitName());
-        }
+        // Validate group exists
+        groupRepository.findById(request.getGroupPoid()).orElseThrow(
+                () -> new ResourceNotFoundException("Group", "groupPoid", request.getGroupPoid()));
 
-        groupRepository.findById(stockUnitMasterDto.getGroupPoid()).orElseThrow(
-                () -> new ResourceNotFoundException("Group", "groupPoid", stockUnitMasterDto.getGroupPoid()));
-
-        StockUnitMaster entity = mapDtoToEntity(stockUnitMasterDto);
+        StockUnitMaster entity = mapRequestToEntity(request);
 
         StockUnitMaster responseEntity = stockUnitRepository.save(entity);
         BeanUtils.copyProperties(responseEntity, responseDto);
@@ -76,18 +76,18 @@ public class StockUnitServiceImpl implements StockUnitService {
         return responseDto;
     }
 
-    private StockUnitMaster mapDtoToEntity(StockUnitMasterDto dto) {
+    private StockUnitMaster mapRequestToEntity(CreateStockUnitMasterRequest request) {
         StockUnitMaster entity = new StockUnitMaster();
-        entity.setStockUnitCode(dto.getStockUnitCode());
-        entity.setStockUnitName(dto.getStockUnitName());
-        entity.setStockUnitName2(dto.getStockUnitName2());
-        entity.setGroupPoid(dto.getGroupPoid());
-        entity.setCreatedBy(dto.getCreatedBy());
+        // stockUnitCode is auto-generated, so we don't set it here
+        entity.setStockUnitName(request.getStockUnitName());
+        entity.setStockUnitName2(request.getStockUnitName2());
+        entity.setGroupPoid(request.getGroupPoid());
+        entity.setCreatedBy(request.getCreatedBy());
         entity.setCreatedDate(LocalDateTime.now());
-        entity.setActive(dto.getActive());
-        entity.setSeqNo(dto.getSeqNo());
+        entity.setActive(request.getActive() != null ? request.getActive() : "Y");
+        entity.setSeqNo(request.getSeqNo());
         entity.setDeleted("N");
-        entity.setClassified(dto.getClassified());
+        entity.setClassified(request.getClassified());
 
         return entity;
     }

@@ -81,11 +81,10 @@ public class ApRequestForQuotationController {
         @AllowedAction(UserRolesRightsEnum.CREATE)
         @PostMapping
         public ResponseEntity<?> createRequestForQuotation(
-                        @Valid @RequestBody CreateApRequestForQtnRequest request,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @Valid @RequestBody CreateApRequestForQtnRequest request) {
 
                 ApRequestForQtnHdrDto dto = rfqService.createRequestForQuotation(request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(),
-                                userId);
+                                UserContext.getUserId());
                 return success("RFQ created successfully", dto);
         }
 
@@ -110,11 +109,10 @@ public class ApRequestForQuotationController {
         @PutMapping("/{transactionPoid:\\d+}")
         public ResponseEntity<?> updateRequestForQuotation(
                         @PathVariable Long transactionPoid,
-                        @Valid @RequestBody UpdateApRequestForQtnRequest request,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @Valid @RequestBody UpdateApRequestForQtnRequest request) {
 
                 ApRequestForQtnHdrDto dto = rfqService.updateRequestForQuotation(
-                                transactionPoid, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), userId);
+                                transactionPoid, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 return success("RFQ updated successfully", dto);
         }
 
@@ -260,11 +258,10 @@ public class ApRequestForQuotationController {
         @AllowedAction(UserRolesRightsEnum.EDIT)
         @PostMapping("/{transactionPoid}/add-suppliers")
         public ResponseEntity<?> addRelatedSuppliers(
-                        @PathVariable Long transactionPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @PathVariable Long transactionPoid) {
 
                 AddSuppliersResponse response = rfqService.addRelatedSuppliers(
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), userId);
+                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 return success(response.getMessage(), response);
         }
 
@@ -274,11 +271,10 @@ public class ApRequestForQuotationController {
         @AllowedAction(UserRolesRightsEnum.EMAIL)
         @PostMapping("/{transactionPoid}/send-mail-to-suppliers")
         public ResponseEntity<?> sendMailToSuppliers(
-                        @PathVariable Long transactionPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @PathVariable Long transactionPoid) {
 
                 SendMailResponse response = rfqService.sendMailToSuppliers(
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), userId);
+                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 return success(response.getMessage(), response);
         }
 
@@ -289,11 +285,10 @@ public class ApRequestForQuotationController {
         @PostMapping("/{transactionPoid}/create-purchase-order")
         public ResponseEntity<?> createPurchaseOrder(
                         @PathVariable Long transactionPoid,
-                        @RequestBody CreatePurchaseOrderRequest request,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestBody CreatePurchaseOrderRequest request) {
 
                 CreatePurchaseOrderResponse response = rfqService.createPurchaseOrder(
-                                transactionPoid, request.getSupplierPoid(), UserContext.getGroupPoid(), UserContext.getCompanyPoid(), userId);
+                                transactionPoid, request.getSupplierPoid(), UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 return success(response.getMessage(), response);
         }
 
@@ -304,11 +299,10 @@ public class ApRequestForQuotationController {
         @PostMapping("/{transactionPoid}/update-cost")
         public ResponseEntity<?> updateCost(
                         @PathVariable Long transactionPoid,
-                        @RequestBody UpdateCostRequest request,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestBody UpdateCostRequest request) {
 
                 UpdateCostResponse response = rfqService.updateCost(
-                                transactionPoid, request.getConfirm(), UserContext.getGroupPoid(), UserContext.getCompanyPoid(), userId);
+                                transactionPoid, request.getConfirm(), UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 return success(response.getMessage(), response);
         }
 
@@ -322,11 +316,10 @@ public class ApRequestForQuotationController {
                         @PathVariable Long detRowId,
                         @RequestParam Long stockPoid,
                         @RequestParam Long stockUnitPoid,
-                        @RequestParam Long supplierPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @RequestParam Long supplierPoid) {
 
                 LastPriceResponse response = rfqService.getLastPrice(
-                                stockPoid, stockUnitPoid, supplierPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), userId);
+                                stockPoid, stockUnitPoid, supplierPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 return success("Last price fetched successfully", response);
         }
 
@@ -350,11 +343,10 @@ public class ApRequestForQuotationController {
         @AllowedAction(UserRolesRightsEnum.VIEW)
         @GetMapping("/{transactionPoid}/items-without-suppliers")
         public ResponseEntity<?> getItemsWithoutSuppliers(
-                        @PathVariable Long transactionPoid,
-                        @RequestHeader("X-User-Id") String userId) {
+                        @PathVariable Long transactionPoid) {
 
                 ItemsWithoutSuppliersResponse response = rfqService.getItemsWithoutSuppliers(
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), userId);
+                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 return success("Items without suppliers fetched successfully", response);
         }
 
