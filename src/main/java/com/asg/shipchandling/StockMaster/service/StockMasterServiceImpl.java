@@ -33,6 +33,7 @@ import com.asg.shipchandling.StockMaster.repository.StockMasterWarehouseDtlRepos
 import com.asg.shipchandling.StockMaster.repository.StockCategoryMasterRepository;
 import com.asg.shipchandling.StockMaster.entity.StockCategoryMasterEntity;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
+import com.asg.shipchandling.exceptions.ResourceAlreadyExistsException;
 import com.asg.shipchandling.StockMaster.dto.StockMasterViewResponse.LovDetailDto;
 
 import org.springframework.transaction.annotation.Transactional;
@@ -575,6 +576,12 @@ public class StockMasterServiceImpl implements StockMasterService {
         if (request.getInputTaxPoid() == null) {
             throw new IllegalArgumentException("Input Tax POID cannot be null");
         }
+        
+        // Validate stock name uniqueness within the group
+        if (stockMasterRepository.existsByStockNameAndGroupPoid(request.getStockName(), groupPoid)) {
+            throw new ResourceAlreadyExistsException("Stock name", request.getStockName());
+        }
+        
         StockMasterEntity stock = new StockMasterEntity();
         BeanUtils.copyProperties(request, stock, "stockPoid", "stockCode", "createdBy", "createdDate");
         // stock.setStockPoid(request.getStockPoid());

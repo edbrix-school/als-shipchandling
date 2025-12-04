@@ -52,13 +52,10 @@ public class SalesQuotationSchController {
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @PostMapping
         public ResponseEntity<?> createSalesQuotationSch(
-                        @Valid @RequestBody CreateSalesQuotationSchRequest request,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @Valid @RequestBody CreateSalesQuotationSchRequest request) {
                 log.info("createSalesQuotationSch started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesQuotationSchHdrDto dto = quotationSchService.createSalesQuotationSch(
-                                request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), userId);
+                                request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 log.info("createSalesQuotationSch completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success("Sales quotation sch created successfully", dto);
         }
@@ -71,8 +68,6 @@ public class SalesQuotationSchController {
         @GetMapping("/{transactionPoid}")
         public ResponseEntity<?> getSalesQuotationSchByPoid(
                         @PathVariable Long transactionPoid,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested,
                         @RequestParam(required = false, defaultValue = "false") Boolean includeDetails) {
 
                 log.info("getSalesQuotationSchByPoid started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
@@ -92,14 +87,11 @@ public class SalesQuotationSchController {
         @PutMapping("/{transactionPoid}")
         public ResponseEntity<?> updateSalesQuotationSch(
                         @PathVariable Long transactionPoid,
-                        @Valid @RequestBody UpdateSalesQuotationSchRequest request,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @Valid @RequestBody UpdateSalesQuotationSchRequest request) {
 
                 log.info("updateSalesQuotationSch started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesQuotationSchHdrDto dto = quotationSchService.updateSalesQuotationSch(
-                                UserContext.getGroupPoid(), transactionPoid, request, UserContext.getCompanyPoid(), userId);
+                                UserContext.getGroupPoid(), transactionPoid, request, UserContext.getCompanyPoid(), UserContext.getUserId());
                 log.info("updateSalesQuotationSch completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success("Sales quotation sch updated successfully", dto);
         }
@@ -112,9 +104,7 @@ public class SalesQuotationSchController {
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @DeleteMapping("/{transactionPoid}")
         public ResponseEntity<?> deleteSalesQuotationSch(
-                        @PathVariable Long transactionPoid,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @PathVariable Long transactionPoid) {
                 log.info("deleteSalesQuotationSch started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 quotationSchService.deleteSalesQuotationSch(UserContext.getGroupPoid(), transactionPoid, UserContext.getCompanyPoid());
                 log.info("deleteSalesQuotationSch completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
@@ -127,9 +117,6 @@ public class SalesQuotationSchController {
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @GetMapping
         public ResponseEntity<?> getAllSalesQuotationSch(
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested,
                         @RequestParam(required = false) String quotationStatus,
                         @RequestParam(required = false) Long customerPoid,
                         @RequestParam(required = false) Long salesmanPoid,
@@ -171,7 +158,7 @@ public class SalesQuotationSchController {
                 filter.setSortBy(sortBy);
                 filter.setSortOrder(sortOrder);
 
-                SalesQuotationSchListResponse response = quotationSchService.search(filter, userId);
+                SalesQuotationSchListResponse response = quotationSchService.search(filter, UserContext.getUserId());
                 log.info("getAllSalesQuotationSch completed for companyPoid={} groupPoid={} totalElements={} totalPages={}",
                                 UserContext.getCompanyPoid(), UserContext.getGroupPoid(), response.getTotalElements(), response.getTotalPages());
                 return success("Sales quotation sch fetched successfully", response);
@@ -183,8 +170,6 @@ public class SalesQuotationSchController {
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @PostMapping("/list")
         public ResponseEntity<?> getSalesQuotationSchListWithFilters(
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested,
                         @Valid @RequestBody FilterRequestDto filterRequest,
                         @ParameterObject Pageable pageable) {
 
@@ -202,9 +187,7 @@ public class SalesQuotationSchController {
         @GetMapping("/validate-doc-ref")
         public ResponseEntity<?> validateDocRef(
                         @RequestParam String docRef,
-                        @RequestParam(required = false) Long transactionPoid,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @RequestParam(required = false) Long transactionPoid) {
 
                 log.info("validateDocRef started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 ValidationResponse response = quotationSchService.validateDocRef(docRef, transactionPoid);
@@ -218,13 +201,10 @@ public class SalesQuotationSchController {
         @PostMapping("/{transactionPoid}/item-details")
         public ResponseEntity<?> addItemDetail(
                         @PathVariable Long transactionPoid,
-                        @Valid @RequestBody CreateSalesQuotationSchItemDtlRequest request,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @Valid @RequestBody CreateSalesQuotationSchItemDtlRequest request) {
                 log.info("addItemDetail started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesQuotationSchItemDtlDto dto = quotationSchService.addItemDetail(
-                                transactionPoid, request, UserContext.getCompanyPoid(), userId);
+                                transactionPoid, request, UserContext.getCompanyPoid(), UserContext.getUserId());
                 log.info("addItemDetail completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success("Item detail added successfully", dto);
         }
@@ -234,13 +214,10 @@ public class SalesQuotationSchController {
         public ResponseEntity<?> updateItemDetail(
                         @PathVariable Long transactionPoid,
                         @PathVariable Long detRowId,
-                        @Valid @RequestBody CreateSalesQuotationSchItemDtlRequest request,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @Valid @RequestBody CreateSalesQuotationSchItemDtlRequest request) {
                 log.info("updateItemDetail started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesQuotationSchItemDtlDto dto = quotationSchService.updateItemDetail(
-                                transactionPoid, detRowId, request, UserContext.getCompanyPoid(), userId);
+                                transactionPoid, detRowId, request, UserContext.getCompanyPoid(), UserContext.getUserId());
                 log.info("updateItemDetail completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success("Item detail updated successfully", dto);
         }
@@ -249,9 +226,7 @@ public class SalesQuotationSchController {
         @DeleteMapping("/{transactionPoid}/item-details/{detRowId}")
         public ResponseEntity<?> deleteItemDetail(
                         @PathVariable Long transactionPoid,
-                        @PathVariable Long detRowId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @PathVariable Long detRowId) {
                 log.info("deleteItemDetail started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 quotationSchService.deleteItemDetail(transactionPoid, detRowId, UserContext.getCompanyPoid());
                 log.info("deleteItemDetail completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
@@ -261,9 +236,7 @@ public class SalesQuotationSchController {
         @Operation(summary = "Get Item Details", description = "Retrieves all item details for a sales quotation sch.")
         @GetMapping("/{transactionPoid}/item-details")
         public ResponseEntity<?> getItemDetails(
-                        @PathVariable Long transactionPoid,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @PathVariable Long transactionPoid) {
                 log.info("getItemDetails started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 List<SalesQuotationSchItemDtlDto> itemDetails = quotationSchService.getItemDetails(
                                 transactionPoid, UserContext.getCompanyPoid());
@@ -275,8 +248,6 @@ public class SalesQuotationSchController {
         @GetMapping("/{transactionPoid}/refresh-previous-quotation-data")
         public ResponseEntity<?> refreshPreviousQuotationData(
                         @PathVariable Long transactionPoid,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested,
                         @RequestParam(required = true) Long customerPoid) {
                 log.info("getCustomerDetails by refreshing th previous quotation data started for companyPoid={} groupPoid={}",
                                 UserContext.getCompanyPoid(), UserContext.getGroupPoid());
@@ -296,10 +267,7 @@ public class SalesQuotationSchController {
         @GetMapping("/customer/{customerPoid}/address-details")
         public ResponseEntity<?> getCustomerAddressDetails(
                         @PathVariable Long customerPoid,
-                        @RequestHeader("X-User-Id") String userId,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested,
                         @RequestParam(required = false, defaultValue = "SALES") String addressType) {
                 log.info("getCustomerAddressDetails started for customerPoid={} addressType={} companyPoid={}", 
                                 customerPoid, addressType, companyPoid);
@@ -307,9 +275,9 @@ public class SalesQuotationSchController {
                 // Convert userId string to Long (assuming userId is numeric)
                 Long userPoid;
                 try {
-                        userPoid = Long.parseLong(userId);
+                        userPoid = Long.parseLong(UserContext.getUserId());
                 } catch (NumberFormatException e) {
-                        log.error("Invalid userId format: {}", userId);
+                        log.error("Invalid userId format: {}", UserContext.getUserId());
                         return badRequest("Invalid userId format. Expected numeric value.");
                 }
                 
@@ -327,10 +295,7 @@ public class SalesQuotationSchController {
         @PostMapping("/{transactionPoid}/import-items")
         public ResponseEntity<?> importItems(
                         @PathVariable Long transactionPoid,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestHeader("X-Login-User") String loginUser,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @RequestHeader("X-Login-User") String loginUser) {
                 log.info("importItems started for transactionPoid={} companyPoid={}", transactionPoid, UserContext.getCompanyPoid());
                 ImportItemsRequest request = new ImportItemsRequest(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), transactionPoid, loginUser);
                 StoredProcedureResponse response = quotationSchService.importItems(request);
@@ -351,15 +316,12 @@ public class SalesQuotationSchController {
         public ResponseEntity<?> importItemsFromExcel(
                         @PathVariable Long transactionPoid,
                         @RequestHeader("X-Company-Poid") Long companyPoid,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested,
                         @RequestParam("file") MultipartFile file) {
                 log.info("importItemsFromExcel started for transactionPoid={} companyPoid={} fileName={}", 
                         transactionPoid, companyPoid, file != null ? file.getOriginalFilename() : "null");
                 try {
                         ExcelImportResponse response = quotationSchService.importItemsFromExcel(
-                                transactionPoid, companyPoid, userId, file);
+                                transactionPoid, companyPoid, UserContext.getUserId(), file);
                         log.info("importItemsFromExcel completed for transactionPoid={} successfulRows={} failedRows={}", 
                                 transactionPoid, response.getSuccessfulRows(), response.getFailedRows());
                         if (response.isSuccess()) {
@@ -394,9 +356,7 @@ public class SalesQuotationSchController {
         @Operation(summary = "Clear Items", description = "Clear stock detail table if quotation status is not in 'processing'. Calls PROC_SALES_SCQTN_ITEMS_CLEAR.")
         @PostMapping("/{transactionPoid}/clear-items")
         public ResponseEntity<?> clearItems(
-                        @PathVariable Long transactionPoid,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @PathVariable Long transactionPoid) {
                 log.info("clearItems started for transactionPoid={} companyPoid={}", transactionPoid, UserContext.getCompanyPoid());
                 ClearItemsRequest request = new ClearItemsRequest(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), transactionPoid);
                 StoredProcedureResponse response = quotationSchService.clearItems(request);
@@ -412,9 +372,6 @@ public class SalesQuotationSchController {
         @PostMapping("/{transactionPoid}/refresh-detail")
         public ResponseEntity<?> refreshDetail(
                         @PathVariable Long transactionPoid,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested,
                         @RequestParam(required = false) String quotedRate) {
                 log.info("refreshDetail started for transactionPoid={} companyPoid={} quotedRate={}",
                                 transactionPoid, UserContext.getCompanyPoid(), quotedRate);
@@ -432,13 +389,10 @@ public class SalesQuotationSchController {
         @Operation(summary = "Create RFQ", description = "Create Request For Quotation (RFQ) from the sales quotation. Calls PROC_SALES_SCQTN_RFQ_CREATE.")
         @PostMapping("/{transactionPoid}/create-rfq")
         public ResponseEntity<?> createRfq(
-                        @PathVariable Long transactionPoid,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @PathVariable Long transactionPoid) {
                 log.info("createRfq started for transactionPoid={} companyPoid={} user={}",
-                                transactionPoid, UserContext.getCompanyPoid(), userId);
-                CreateRfqRequest request = new CreateRfqRequest(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), transactionPoid, userId);
+                                transactionPoid, UserContext.getCompanyPoid(), UserContext.getUserId());
+                CreateRfqRequest request = new CreateRfqRequest(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), transactionPoid, UserContext.getUserId());
                 StoredProcedureResponse response = quotationSchService.createRfq(request);
                 log.info("createRfq completed for transactionPoid={}", transactionPoid);
                 if (response.isSuccess()) {
@@ -451,14 +405,11 @@ public class SalesQuotationSchController {
         @Operation(summary = "Create Delivery Note", description = "Create Delivery Note (DN) from quotation. Calls PROC_SALES_SCQTN_DN_CREATE.")
         @PostMapping("/{transactionPoid}/create-delivery-note")
         public ResponseEntity<?> createDeliveryNote(
-                        @PathVariable Long transactionPoid,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @PathVariable Long transactionPoid) {
                 log.info("createDeliveryNote started for transactionPoid={} companyPoid={} user={}",
-                                transactionPoid, UserContext.getCompanyPoid(), userId);
+                                transactionPoid, UserContext.getCompanyPoid(), UserContext.getUserId());
                 CreateDeliveryNoteRequest request = new CreateDeliveryNoteRequest(UserContext.getGroupPoid(), UserContext.getCompanyPoid(),
-                                transactionPoid, userId);
+                                transactionPoid, UserContext.getUserId());
                 StoredProcedureResponse response = quotationSchService.createDeliveryNote(request);
                 log.info("createDeliveryNote completed for transactionPoid={}", transactionPoid);
                 if (response.isSuccess()) {
@@ -472,9 +423,7 @@ public class SalesQuotationSchController {
         @PostMapping("/{transactionPoid}/select-all")
         public ResponseEntity<?> selectAll(
                         @PathVariable Long transactionPoid,
-                        @RequestParam(required = true) String selectStatus,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @RequestParam(required = true) String selectStatus) {
                 log.info("selectAll started for transactionPoid={} companyPoid={}", transactionPoid, UserContext.getCompanyPoid());
                 SelectAllRequest request = new SelectAllRequest(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), transactionPoid, selectStatus);
                 StoredProcedureResponse response = quotationSchService.selectAll(request);
@@ -489,8 +438,6 @@ public class SalesQuotationSchController {
         @Operation(summary = "Validate Customer", description = "Validate customer or principal before save. Calls PROC_SCH_QTN_VALIDATE_CUSTOMER.")
         @PostMapping("/validate-customer")
         public ResponseEntity<?> validateCustomer(
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested,
                         @RequestParam(required = true) Long addressPoid) {
                 log.info("validateCustomer started for addressPoid={} companyPoid={}", addressPoid, UserContext.getCompanyPoid());
                 ValidateCustomerRequest request = new ValidateCustomerRequest(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), null, null, addressPoid);
@@ -503,12 +450,10 @@ public class SalesQuotationSchController {
         @PostMapping("/{transactionPoid}/update-quantity")
         public ResponseEntity<?> updateQuantity(
                         @PathVariable Long transactionPoid,
-                        @RequestHeader("X-User-Id") Long userId,
-                        @RequestHeader("X-Login-User") String loginUser,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @RequestHeader("X-Login-User") String loginUser) {
                 log.info("updateQuantity started for transactionPoid={} companyPoid={} user={}",
-                                transactionPoid, UserContext.getCompanyPoid(), userId);
+                                transactionPoid, UserContext.getCompanyPoid(), UserContext.getUserId());
+                Long userId = Long.parseLong(UserContext.getUserId());
                 UpdateQuantityRequest request = new UpdateQuantityRequest(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), transactionPoid,
                                 userId, loginUser);
                 StoredProcedureResponse response = quotationSchService.updateQuantity(request);
@@ -524,8 +469,6 @@ public class SalesQuotationSchController {
         @PostMapping("/{transactionPoid}/validate-checkbox")
         public ResponseEntity<?> validateCheckbox(
                         @PathVariable Long transactionPoid,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested,
                         @RequestParam(required = true) Long detRowId,
                         @RequestParam(required = true) String deliverySelect,
                         @RequestParam(required = true) Long stockPoid) {
@@ -545,13 +488,10 @@ public class SalesQuotationSchController {
         @Operation(summary = "Calculate", description = "Calculate item details price, qty, and other calculations if user selected 'Suppress Calculation' button. Calls PROC_SALES_SCQTN_DO_CALC.")
         @PostMapping("/{transactionPoid}/calculate")
         public ResponseEntity<?> calculate(
-                        @PathVariable Long transactionPoid,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @PathVariable Long transactionPoid) {
                 log.info("calculate started for transactionPoid={} companyPoid={} user={}",
-                                transactionPoid, UserContext.getCompanyPoid(), userId);
-                CalculateRequest request = new CalculateRequest(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), transactionPoid, userId);
+                                transactionPoid, UserContext.getCompanyPoid(), UserContext.getUserId());
+                CalculateRequest request = new CalculateRequest(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), transactionPoid, UserContext.getUserId());
                 StoredProcedureResponse response = quotationSchService.calculate(request);
                 log.info("calculate completed for transactionPoid={}", transactionPoid);
                 if (response.isSuccess()) {

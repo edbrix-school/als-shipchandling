@@ -48,13 +48,10 @@ public class SalesDeliveryNoteController {
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @PostMapping
         public ResponseEntity<?> createDeliveryNote(
-                        @Valid @RequestBody CreateSalesDeliveryNoteRequest request,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @Valid @RequestBody CreateSalesDeliveryNoteRequest request) {
                 log.info("createDeliveryNote started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesDeliveryNoteHdrDto dto = deliveryNoteService.createDeliveryNote(
-                                request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), userId);
+                                request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 log.info("createDeliveryNote completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success("Delivery note created successfully", dto);
         }
@@ -67,8 +64,6 @@ public class SalesDeliveryNoteController {
         @GetMapping("/{transactionPoid}")
         public ResponseEntity<?> getDeliveryNoteByPoid(
                         @PathVariable Long transactionPoid,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested,
                         @RequestParam(required = false, defaultValue = "false") Boolean includeDetails) {
 
                 log.info("getDeliveryNoteByPoid started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
@@ -87,14 +82,11 @@ public class SalesDeliveryNoteController {
         @PutMapping("/{transactionPoid}")
         public ResponseEntity<?> updateDeliveryNote(
                         @PathVariable Long transactionPoid,
-                        @Valid @RequestBody CreateSalesDeliveryNoteRequest request,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @Valid @RequestBody CreateSalesDeliveryNoteRequest request) {
 
                 log.info("updateDeliveryNote started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesDeliveryNoteHdrDto dto = deliveryNoteService.updateDeliveryNote(
-                                UserContext.getGroupPoid(), transactionPoid, request, UserContext.getCompanyPoid(), userId);
+                                UserContext.getGroupPoid(), transactionPoid, request, UserContext.getCompanyPoid(), UserContext.getUserId());
                 log.info("updateDeliveryNote completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success("Delivery note updated successfully", dto);
         }
@@ -107,9 +99,7 @@ public class SalesDeliveryNoteController {
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @DeleteMapping("/{transactionPoid}")
         public ResponseEntity<?> deleteDeliveryNote(
-                        @PathVariable Long transactionPoid,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @PathVariable Long transactionPoid) {
 
                 log.info("deleteDeliveryNote started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 deliveryNoteService.deleteDeliveryNote(UserContext.getGroupPoid(), transactionPoid, UserContext.getCompanyPoid());
@@ -162,8 +152,6 @@ public class SalesDeliveryNoteController {
         @Operation(summary = "Validate Document Reference", description = "Checks if document reference is unique within the group")
         @GetMapping("/validate-doc-ref")
         public ResponseEntity<?> validateDocRef(
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested,
                         @RequestParam String docRef,
                         @RequestParam(required = false) Long transactionPoid) {
                 log.info("validateDocRef started for  groupPoid={}", UserContext.getGroupPoid());
@@ -178,14 +166,11 @@ public class SalesDeliveryNoteController {
         @PostMapping("/{transactionPoid}/item-details")
         public ResponseEntity<?> addItemDetail(
                         @PathVariable Long transactionPoid,
-                        @Valid @RequestBody CreateSalesDeliveryNoteItemDtlRequest request,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @Valid @RequestBody CreateSalesDeliveryNoteItemDtlRequest request) {
 
                 log.info("addItemDetail started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesDeliveryNoteItemDtlDto dto = deliveryNoteService.addItemDetail(
-                                transactionPoid, request, UserContext.getCompanyPoid(), userId);
+                                transactionPoid, request, UserContext.getCompanyPoid(), UserContext.getUserId());
                 log.info("addItemDetail completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success("Item detail added successfully", dto);
         }
@@ -195,14 +180,11 @@ public class SalesDeliveryNoteController {
         public ResponseEntity<?> updateItemDetail(
                         @PathVariable Long transactionPoid,
                         @PathVariable Long detRowId,
-                        @Valid @RequestBody CreateSalesDeliveryNoteItemDtlRequest request,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @Valid @RequestBody CreateSalesDeliveryNoteItemDtlRequest request) {
 
                 log.info("updateItemDetail started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesDeliveryNoteItemDtlDto dto = deliveryNoteService.updateItemDetail(
-                                transactionPoid, detRowId, request, UserContext.getCompanyPoid(), userId);
+                                transactionPoid, detRowId, request, UserContext.getCompanyPoid(), UserContext.getUserId());
                 log.info("updateItemDetail completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success("Item detail updated successfully", dto);
         }
@@ -211,9 +193,7 @@ public class SalesDeliveryNoteController {
         @DeleteMapping("/{transactionPoid}/item-details/{detRowId}")
         public ResponseEntity<?> deleteItemDetail(
                         @PathVariable Long transactionPoid,
-                        @PathVariable Long detRowId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @PathVariable Long detRowId) {
 
                 log.info("deleteItemDetail started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 deliveryNoteService.deleteItemDetail(transactionPoid, detRowId, UserContext.getCompanyPoid());
@@ -224,9 +204,7 @@ public class SalesDeliveryNoteController {
         @Operation(summary = "Get Item Details", description = "Retrieves all item details for a delivery note.")
         @GetMapping("/{transactionPoid}/item-details")
         public ResponseEntity<?> getItemDetails(
-                        @PathVariable Long transactionPoid,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @PathVariable Long transactionPoid) {
 
                 log.info("getItemDetails started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 List<SalesDeliveryNoteItemDtlDto> itemDetails = deliveryNoteService.getItemDetails(
@@ -241,9 +219,7 @@ public class SalesDeliveryNoteController {
         @GetMapping("/{transactionPoid}/validate-customer-change")
         public ResponseEntity<?> validateCustomerChange(
                         @PathVariable Long transactionPoid,
-                        @RequestHeader("X-Customer-Poid") Long customerPoid,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @RequestHeader("X-Customer-Poid") Long customerPoid) {
 
                 log.info("validateCustomerChange started for customerPoid={} groupPoid={}", customerPoid, UserContext.getGroupPoid());
                 ValidateCustomerChangeResponse response = deliveryNoteService.validateCustomerChange(
@@ -255,14 +231,11 @@ public class SalesDeliveryNoteController {
         @Operation(summary = "Load Quotation Items", description = "Loads items from quotation into delivery note. Requires QtnRefNo to be set. Removes items with CheckAll='N' before loading. Calls PROC_DN_LOAD_QUOTATION_DETAIL.")
         @GetMapping("/{transactionPoid}/load-quotation-items")
         public ResponseEntity<?> loadQuotationItems(
-                        @PathVariable Long transactionPoid,
-                        @RequestHeader("X-User-Id") String userId,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @PathVariable Long transactionPoid) {
 
                 log.info("loadQuotationItems started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 LoadQuotationItemsResponse response = deliveryNoteService.loadQuotationItems(
-                                UserContext.getGroupPoid(), transactionPoid, UserContext.getCompanyPoid(), userId);
+                                UserContext.getGroupPoid(), transactionPoid, UserContext.getCompanyPoid(), UserContext.getUserId());
                 log.info("loadQuotationItems completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success(response.getMessage(), response);
         }
@@ -270,9 +243,7 @@ public class SalesDeliveryNoteController {
         @Operation(summary = "Check Delivery Note Dependencies", description = "Checks if delivery note can be deleted by checking for dependencies (sales invoices, etc.)")
         @GetMapping("/{transactionPoid}/dependencies")
         public ResponseEntity<?> checkDeliveryNoteDependencies(
-                        @PathVariable Long transactionPoid,
-                        @RequestParam(required = true) String documentId,
-                        @RequestParam(required = true) String actionRequested) {
+                        @PathVariable Long transactionPoid) {
 
                 log.info("checkDeliveryNoteDependencies started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(),
                                 UserContext.getGroupPoid());

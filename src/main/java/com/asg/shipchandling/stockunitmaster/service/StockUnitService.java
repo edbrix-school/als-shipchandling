@@ -1,5 +1,6 @@
 package com.asg.shipchandling.stockunitmaster.service;
 
+import com.asg.shipchandling.stockunitmaster.dto.CreateStockUnitMasterRequest;
 import com.asg.shipchandling.stockunitmaster.dto.FilterRequestDto;
 import com.asg.shipchandling.stockunitmaster.dto.StockUnitListResponse;
 import com.asg.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
@@ -15,7 +16,7 @@ import org.springframework.stereotype.Service;
 public interface StockUnitService {
      StockUnitMasterDto getStockUnitByPoid(Long stockUnitPoid);
 
-     StockUnitMasterDto createStockUnit(StockUnitMasterDto stockUnitMasterDto);
+     StockUnitMasterDto createStockUnit(CreateStockUnitMasterRequest request);
 
      StockUnitMasterDto updateStockUnit(Long stockUnitPoid, StockUnitMasterDto stockUnitMasterDto);
 

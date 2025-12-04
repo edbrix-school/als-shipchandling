@@ -1,5 +1,6 @@
 package com.asg.shipchandling.stockunitmaster.controller;
 
+import com.asg.shipchandling.stockunitmaster.dto.CreateStockUnitMasterRequest;
 import com.asg.shipchandling.stockunitmaster.dto.FilterRequestDto;
 import com.asg.shipchandling.stockunitmaster.dto.StockUnitListResponse;
 import com.asg.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
@@ -22,6 +23,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import static com.asg.shipchandling.common.ApiResponse.*;
+import com.asg.common.lib.annotation.AllowedAction;
+import com.asg.common.lib.enums.UserRolesRightsEnum;
 
 import java.util.List;
 
@@ -39,27 +42,27 @@ public class StockUnitMasterController {
                         @ApiResponse(responseCode = "404", description = "Stock unit not found", content = @Content(mediaType = "application/json"))
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @GetMapping("/{stockUnitPoid}")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> getStockUnitByPoid(
-                        @Parameter(description = "StockUnitPoid reference identifier", required = true) @PathVariable Long stockUnitPoid,
-                        @Parameter(description = "Document identifier", required = true, example = "800-320") @RequestParam String documentId,
-                        @Parameter(description = "Action requested", required = true) @RequestParam String actionRequested) {
+                        @Parameter(description = "StockUnitPoid reference identifier", required = true) @PathVariable Long stockUnitPoid) {
                 StockUnitMasterDto stockUnitMasterDto = stockUnitService.getStockUnitByPoid(stockUnitPoid);
                 return success("Task fetched successfully", stockUnitMasterDto);
 
         }
 
-        @Operation(summary = "Create a new stock unit", description = "Creates a new stock unit with the provided details", responses = {
+        @Operation(summary = "Create a new stock unit", description = "Creates a new stock unit with the provided details. StockUnitCode is auto-generated.", responses = {
                         @ApiResponse(responseCode = "201", description = "Successfully created the stock unit", content = @Content(mediaType = "application/json", schema = @Schema(implementation = StockUnitMasterDto.class))),
                         @ApiResponse(responseCode = "400", description = "Invalid input, object invalid", content = @Content(mediaType = "application/json")),
                         @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json")),
                         @ApiResponse(responseCode = "409", description = "Country with the same code already exists", content = @Content(mediaType = "application/json"))
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @PostMapping("/create")
+        @AllowedAction(UserRolesRightsEnum.CREATE)
         public ResponseEntity<?> createStockUnit(
 
-                        @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Country object that needs to be created", required = true, content = @Content(mediaType = "application/json", schema = @Schema(implementation = StockUnitMasterDto.class))) @Parameter(description = "Stock unit details to be created", required = true) @Valid @RequestBody StockUnitMasterDto stockUnitMasterDto) {
+                        @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Stock unit object that needs to be created", required = true, content = @Content(mediaType = "application/json", schema = @Schema(implementation = CreateStockUnitMasterRequest.class))) @Parameter(description = "Stock unit details to be created", required = true) @Valid @RequestBody CreateStockUnitMasterRequest request) {
 
-                StockUnitMasterDto response = stockUnitService.createStockUnit(stockUnitMasterDto);
+                StockUnitMasterDto response = stockUnitService.createStockUnit(request);
 
                 return success("Stock unit created successfully", response);
         }
@@ -71,6 +74,7 @@ public class StockUnitMasterController {
                         @ApiResponse(responseCode = "404", description = "Country not found", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"status\": 404, \"message\": \"Stock unit not found with stockUnitPoid: 123\"}")))
         })
         @PutMapping("/{stockUnitPoid}")
+        @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> updateStockUnit(
                         @Parameter(description = "ID of the stock unit to update", required = true) @PathVariable Long stockUnitPoid,
 
@@ -83,9 +87,7 @@ public class StockUnitMasterController {
                                             "active": "Y",
                                             "stockunitTicketRate": 10.5
                                         }
-                                        """))) @Valid @RequestBody StockUnitMasterDto stockUnitMasterDto,
-                        @Parameter(description = "Document identifier", required = true, example = "800-320") @RequestParam String documentId,
-                        @Parameter(description = "Action requested", required = true) @RequestParam String actionRequested) {
+                                        """))) @Valid @RequestBody StockUnitMasterDto stockUnitMasterDto) {
                 stockUnitMasterDto.setStockUnitPoid(stockUnitPoid);
 
                 StockUnitMasterDto updatedCountry = stockUnitService.updateStockUnit(stockUnitPoid, stockUnitMasterDto);
@@ -118,9 +120,8 @@ public class StockUnitMasterController {
                                         """)
         }))
         @PostMapping("/list")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> getStockUnitList(
-                        @Parameter(description = "Document identifier", required = true, example = "200-001") @RequestParam String documentId,
-                        @Parameter(description = "Action requested", required = true) @RequestParam String actionRequested,
                         @Valid @RequestBody FilterRequestDto filterRequest,
                         @ParameterObject Pageable pageable) {
 
@@ -135,10 +136,9 @@ public class StockUnitMasterController {
                         @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json"))
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @DeleteMapping("/{stockUnitPoid}")
+        @AllowedAction(UserRolesRightsEnum.DELETE)
         public ResponseEntity<?> softDeleteCountry(
-                        @Parameter(description = "StockUnitPoid reference identifier", required = true) @PathVariable Long stockUnitPoid,
-                        @Parameter(description = "Document identifier", required = true, example = "800-320") @RequestParam String documentId,
-                        @Parameter(description = "Action requested", required = true) @RequestParam String actionRequested) {
+                        @Parameter(description = "StockUnitPoid reference identifier", required = true) @PathVariable Long stockUnitPoid) {
 
                 stockUnitService.softDeleteStockUnit(stockUnitPoid);
                 // Only return a simple message now:
@@ -150,6 +150,7 @@ public class StockUnitMasterController {
                         @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json"))
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @GetMapping("/validate-code")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> validateStockUnitCode(
                         @RequestParam String stockUnitCode,
                         @RequestParam(required = false) Long excludeStockUnitPoid) {
@@ -170,6 +171,7 @@ public class StockUnitMasterController {
                         @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json"))
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @GetMapping("/validate-name")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> validateStockUnitName(
                         @Parameter(description = "Stock unit name to validate", required = true) @RequestParam String stockUnitName,
                         @Parameter(description = "Stock unit POID to exclude (for update scenarios)", required = false) @RequestParam(required = false) Long excludeStockUnitPoid) {
@@ -192,6 +194,7 @@ public class StockUnitMasterController {
                         @ApiResponse(responseCode = "404", description = "Stock unit not found", content = @Content(mediaType = "application/json"))
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @GetMapping("/{stockUnitPoid}/dependencies")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> checkUnitDependencies(
                         @Parameter(description = "Stock unit POID", required = true) @PathVariable Long stockUnitPoid) {
 
@@ -205,6 +208,7 @@ public class StockUnitMasterController {
         }, security = @SecurityRequirement(name = "bearerAuth"))
 
         @GetMapping("/active")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> getActiveStockUnits(
                         @RequestParam(required = false) String classified,
                         @RequestParam(required = false) String search) {

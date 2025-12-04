@@ -162,13 +162,11 @@ public class SalesQuotationShipController {
     @DeleteMapping(path = "/{transactionPoid}")
     public ResponseEntity<SalesQuotationShipDeleteResponse> delete(
             @Parameter(description = "Transaction POID of the sales quotation to delete", required = true)
-            @PathVariable("transactionPoid") BigDecimal transactionPoid,
-            @Parameter(description = "User ID from request context", required = true)
-            @RequestHeader("X-User-Id") String userId) {
+            @PathVariable("transactionPoid") BigDecimal transactionPoid) {
         BigDecimal companyId = BigDecimal.valueOf(UserContext.getCompanyPoid());
         log.info("delete sales quotation started for transactionPoid={} companyId={} userId={}", 
-                transactionPoid, companyId, userId);
-        SalesQuotationShipDeleteResponse response = service.deleteQuotation(transactionPoid, companyId, userId);
+                transactionPoid, companyId, UserContext.getUserId());
+        SalesQuotationShipDeleteResponse response = service.deleteQuotation(transactionPoid, companyId, UserContext.getUserId());
         log.info("delete sales quotation completed for transactionPoid={} canDelete={}", 
                 transactionPoid, response.isCanDelete());
         return ResponseEntity.ok(response);
@@ -205,8 +203,6 @@ public class SalesQuotationShipController {
     )
     @GetMapping
     public SalesQuotationShipListResponse search(
-            @Parameter(description = "User ID from request context (required for line access control)", required = true)
-            @RequestHeader("X-User-Id") String userId,
             @Parameter(description = "Customer POID (optional)")
             @RequestParam(value = "customerId", required = false) BigDecimal customerId,
             @Parameter(description = "Salesman POID (optional)")
@@ -242,6 +238,7 @@ public class SalesQuotationShipController {
             @Parameter(description = "Sort order (optional, ASC or DESC, default: DESC)")
             @RequestParam(value = "sortOrder", required = false, defaultValue = "DESC") String sortOrder) {
         BigDecimal companyId = BigDecimal.valueOf(UserContext.getCompanyPoid());
+        String userId = UserContext.getUserId();
         log.info("search sales quotations started for companyId={} userId={} page={} size={}", 
                 companyId, userId, page, size);
         
@@ -1102,15 +1099,13 @@ public class SalesQuotationShipController {
     public SalesQuotationShipService.AddLocalChargesResponse addLocalCharges(
             @Parameter(description = "Transaction POID of the sales quotation", required = true)
             @PathVariable("transactionPoid") BigDecimal transactionPoid,
-            @Parameter(description = "User ID from request context (required)", required = true)
-            @RequestHeader("X-User-Id") String userId,
             @Parameter(description = "Request body with confirmation flag. Must set confirm=true to proceed.", required = true)
             @RequestBody AddLocalChargesRequest request) {
         BigDecimal companyId = BigDecimal.valueOf(UserContext.getCompanyPoid());
         log.info("addLocalCharges started for transactionPoid={} companyId={} userId={} confirm={}",
-                transactionPoid, companyId, userId, request != null ? request.confirm() : false);
+                transactionPoid, companyId, UserContext.getUserId(), request != null ? request.confirm() : false);
         SalesQuotationShipService.AddLocalChargesResponse response = service.addLocalCharges(
-                transactionPoid, companyId, userId, request != null && request.confirm());
+                transactionPoid, companyId, UserContext.getUserId(), request != null && request.confirm());
         log.info("addLocalCharges completed for transactionPoid={} success={} chargesAdded={}",
                 transactionPoid, response.success(), response.chargesAdded());
         return response;
@@ -1145,9 +1140,8 @@ public class SalesQuotationShipController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @GetMapping(path = "/default-salesman")
-    public SalesQuotationShipService.SalesmanDefaultResponse getDefaultSalesman(
-            @Parameter(description = "User ID from request context (required, must be numeric)", required = true)
-            @RequestHeader("X-User-Id") String userId) {
+    public SalesQuotationShipService.SalesmanDefaultResponse getDefaultSalesman() {
+        String userId = UserContext.getUserId();
         log.info("getDefaultSalesman started for userId={}", userId);
         SalesQuotationShipService.SalesmanDefaultResponse response = service.getDefaultSalesman(userId);
         log.info("getDefaultSalesman completed for userId={} salesmanPoid={}",
@@ -1185,9 +1179,8 @@ public class SalesQuotationShipController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @GetMapping(path = "/user-lines")
-    public SalesQuotationShipService.LineAccessResponse getUserLines(
-            @Parameter(description = "User ID from request context (required, must be numeric)", required = true)
-            @RequestHeader("X-User-Id") String userId) {
+    public SalesQuotationShipService.LineAccessResponse getUserLines() {
+        String userId = UserContext.getUserId();
         log.info("getUserLines started for userId={}", userId);
         SalesQuotationShipService.LineAccessResponse response = service.getAccessibleLines(userId);
         log.info("getUserLines completed for userId={} lineList={}",
@@ -1327,10 +1320,9 @@ public class SalesQuotationShipController {
     )
     @GetMapping(path = "/customers/{customerId}/contact")
     public CustomerContactResponse getCustomerContact(
-            @Parameter(description = "User ID from request context (required)", required = true)
-            @RequestParam("userId") BigDecimal userId,
             @Parameter(description = "Customer POID (required)", required = true)
             @PathVariable("customerId") BigDecimal customerId) {
+        BigDecimal userId = new BigDecimal(UserContext.getUserId());
         return service.getCustomerContactDetails(userId, customerId);
     }
 
@@ -1414,14 +1406,12 @@ public class SalesQuotationShipController {
     public SalesQuotationShipItemDto addChargeDetail(
             @Parameter(description = "Transaction POID of the sales quotation", required = true)
             @PathVariable("transactionPoid") BigDecimal transactionPoid,
-            @Parameter(description = "User ID from request context (required)", required = true)
-            @RequestHeader("X-User-Id") String userId,
             @Parameter(description = "Charge detail request. Calculated fields (buyingCharge, sellingCharge, taxAmount, local amounts) are read-only and will be calculated automatically.", required = true)
             @RequestBody SalesQuotationShipChargeRequest request) {
         BigDecimal companyId = BigDecimal.valueOf(UserContext.getCompanyPoid());
         log.info("addChargeDetail started for transactionPoid={} companyId={} userId={}", 
-                transactionPoid, companyId, userId);
-        SalesQuotationShipItemDto dto = service.addChargeDetail(transactionPoid, companyId, userId, request);
+                transactionPoid, companyId, UserContext.getUserId());
+        SalesQuotationShipItemDto dto = service.addChargeDetail(transactionPoid, companyId, UserContext.getUserId(), request);
         log.info("addChargeDetail completed for transactionPoid={} detRowId={}", 
                 transactionPoid, dto != null ? dto.getDetailRowId() : null);
         return dto;
@@ -1468,14 +1458,12 @@ public class SalesQuotationShipController {
             @PathVariable("transactionPoid") BigDecimal transactionPoid,
             @Parameter(description = "Detail Row ID of the charge detail to update (cannot be changed)", required = true)
             @PathVariable("detRowId") BigDecimal detRowId,
-            @Parameter(description = "User ID from request context (required)", required = true)
-            @RequestHeader("X-User-Id") String userId,
             @Parameter(description = "Charge detail update request. Calculated fields (buyingCharge, sellingCharge, taxAmount, local amounts) are read-only and will be recalculated automatically. DetRowId in request body is ignored.", required = true)
             @RequestBody SalesQuotationShipChargeRequest request) {
         BigDecimal companyId = BigDecimal.valueOf(UserContext.getCompanyPoid());
         log.info("updateChargeDetail started for transactionPoid={} detRowId={} companyId={} userId={}",
-                transactionPoid, detRowId, companyId, userId);
-        SalesQuotationShipItemDto dto = service.updateChargeDetail(transactionPoid, detRowId, companyId, userId, request);
+                transactionPoid, detRowId, companyId, UserContext.getUserId());
+        SalesQuotationShipItemDto dto = service.updateChargeDetail(transactionPoid, detRowId, companyId, UserContext.getUserId(), request);
         log.info("updateChargeDetail completed for transactionPoid={} detRowId={}",
                 transactionPoid, detRowId);
         return dto;
@@ -1609,14 +1597,12 @@ public class SalesQuotationShipController {
     public SalesQuotationShipEquipmentDto addEquipmentDetail(
             @Parameter(description = "Transaction POID of the sales quotation", required = true)
             @PathVariable("transactionPoid") BigDecimal transactionPoid,
-            @Parameter(description = "User ID from request context (required)", required = true)
-            @RequestHeader("X-User-Id") String userId,
             @Parameter(description = "Equipment detail request. Quantity defaults to 1 if not provided.", required = true)
             @RequestBody SalesQuotationShipEquipmentRequest request) {
         BigDecimal companyId = BigDecimal.valueOf(UserContext.getCompanyPoid());
         log.info("addEquipmentDetail started for transactionPoid={} companyId={} userId={}",
-                transactionPoid, companyId, userId);
-        SalesQuotationShipEquipmentDto dto = service.addEquipmentDetail(transactionPoid, companyId, userId, request);
+                transactionPoid, companyId, UserContext.getUserId());
+        SalesQuotationShipEquipmentDto dto = service.addEquipmentDetail(transactionPoid, companyId, UserContext.getUserId(), request);
         log.info("addEquipmentDetail completed for transactionPoid={} detRowId={}",
                 transactionPoid, dto != null ? dto.getDetailRowId() : null);
         return dto;
@@ -1661,14 +1647,12 @@ public class SalesQuotationShipController {
             @PathVariable("transactionPoid") BigDecimal transactionPoid,
             @Parameter(description = "Detail Row ID of the equipment detail to update (cannot be changed)", required = true)
             @PathVariable("detRowId") BigDecimal detRowId,
-            @Parameter(description = "User ID from request context (required)", required = true)
-            @RequestHeader("X-User-Id") String userId,
             @Parameter(description = "Equipment detail update request. DetRowId in request body is ignored.", required = true)
             @RequestBody SalesQuotationShipEquipmentRequest request) {
         BigDecimal companyId = BigDecimal.valueOf(UserContext.getCompanyPoid());
         log.info("updateEquipmentDetail started for transactionPoid={} detRowId={} companyId={} userId={}",
-                transactionPoid, detRowId, companyId, userId);
-        SalesQuotationShipEquipmentDto dto = service.updateEquipmentDetail(transactionPoid, detRowId, companyId, userId, request);
+                transactionPoid, detRowId, companyId, UserContext.getUserId());
+        SalesQuotationShipEquipmentDto dto = service.updateEquipmentDetail(transactionPoid, detRowId, companyId, UserContext.getUserId(), request);
         log.info("updateEquipmentDetail completed for transactionPoid={} detRowId={}",
                 transactionPoid, detRowId);
         return dto;
@@ -1757,15 +1741,13 @@ public class SalesQuotationShipController {
     public SalesQuotationShipService.CustomerContactResponse getCustomerAddress(
             @Parameter(description = "Transaction POID of the sales quotation", required = true)
             @PathVariable("transactionPoid") BigDecimal transactionPoid,
-            @Parameter(description = "User ID from request context (required)", required = true)
-            @RequestHeader("X-User-Id") String userId,
             @Parameter(description = "Customer POID (from address selection, required)", required = true)
             @RequestParam("customerPoid") BigDecimal customerPoid) {
         BigDecimal companyId = BigDecimal.valueOf(UserContext.getCompanyPoid());
         log.info("getCustomerAddress started for transactionPoid={} companyId={} userId={} customerPoid={}",
-                transactionPoid, companyId, userId, customerPoid);
+                transactionPoid, companyId, UserContext.getUserId(), customerPoid);
         SalesQuotationShipService.CustomerContactResponse response = service.getCustomerAddressDetails(
-                transactionPoid, companyId, userId, customerPoid);
+                transactionPoid, companyId, UserContext.getUserId(), customerPoid);
         log.info("getCustomerAddress completed for transactionPoid={} customerPoid={}",
                 transactionPoid, customerPoid);
         return response;

@@ -17,10 +17,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -111,6 +114,64 @@ public class GlobalExceptionHandler {
         String msg = "File exceeds the maximum allowed upload size. Please upload a smaller file.";
         log.warn("MaxUploadSizeExceededException: {}", ex.getMessage());
         return ApiResponse.badRequest(msg);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<?> handleDataIntegrityViolation(DataIntegrityViolationException ex, HttpServletRequest request) {
+        log.warn("DataIntegrityViolationException at {}: {}", request.getRequestURI(), ex.getMessage());
+        
+        String errorMessage = ex.getMessage();
+        if (errorMessage == null) {
+            errorMessage = ex.getCause() != null ? ex.getCause().getMessage() : "Data integrity violation";
+        }
+        
+        // Parse constraint name from Oracle error message
+        // Pattern: ORA-00001: unique constraint (SCHEMA.CONSTRAINT_NAME) violated
+        Pattern constraintPattern = Pattern.compile("unique constraint \\([^.]+\\.([^)]+)\\)", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = constraintPattern.matcher(errorMessage);
+        
+        if (matcher.find()) {
+            String constraintName = matcher.group(1);
+            String userMessage = getConstraintViolationMessage(constraintName, errorMessage);
+            if (userMessage != null) {
+                return ApiResponse.conflict(userMessage);
+            }
+        }
+        
+        // Fallback for other constraint violations
+        if (errorMessage.toLowerCase().contains("unique constraint") || 
+            errorMessage.toLowerCase().contains("duplicate key")) {
+            return ApiResponse.conflict("A record with the same information already exists. Please use a different value.");
+        }
+        
+        // Generic data integrity error
+        log.error("Unhandled DataIntegrityViolationException: {}", errorMessage);
+        return ApiResponse.error("Data integrity violation occurred", HttpStatus.CONFLICT.value());
+    }
+    
+    private String getConstraintViolationMessage(String constraintName, String errorMessage) {
+        // Map known constraint names to user-friendly messages
+        if (constraintName != null) {
+            switch (constraintName.toUpperCase()) {
+                case "STOCK_MASTER_UK2":
+                    // Extract stock name from error message if possible, otherwise generic message
+                    Pattern stockNamePattern = Pattern.compile("stock[_-]?name[\\s=:]+['\"]?([^'\"\\s]+)['\"]?", Pattern.CASE_INSENSITIVE);
+                    Matcher stockNameMatcher = stockNamePattern.matcher(errorMessage);
+                    if (stockNameMatcher.find()) {
+                        String stockName = stockNameMatcher.group(1);
+                        return String.format("Stock name '%s' already exists for this group. Please use a different name.", stockName);
+                    }
+                    return "Stock name already exists for this group. Please use a different name.";
+                case "STOCK_MASTER_UK1":
+                    return "Stock code already exists. Please use a different code.";
+                default:
+                    // Try to extract field name from constraint name
+                    if (constraintName.contains("_UK") || constraintName.contains("_PK")) {
+                        return String.format("A record with this information already exists (constraint: %s). Please use a different value.", constraintName);
+                    }
+            }
+        }
+        return null;
     }
 
     @ExceptionHandler(RuntimeException.class)
