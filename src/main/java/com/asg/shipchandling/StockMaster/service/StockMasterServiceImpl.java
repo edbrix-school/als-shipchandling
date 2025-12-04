@@ -1048,6 +1048,12 @@ public class StockMasterServiceImpl implements StockMasterService {
         if (userPoid != null && userPoid <= 0) {
             throw new IllegalArgumentException("Invalid userPoid: " + userPoid);
         }
+        
+        // Fetch all categories for the group to build category map
+        List<StockCategoryMasterEntity> allCategories = categoryMasterRepository.findByGroupPoid(groupPoid);
+        Map<Long, StockCategoryMasterEntity> categoryMap = allCategories.stream()
+                .collect(Collectors.toMap(StockCategoryMasterEntity::getCategoryPoid, cat -> cat));
+        
         List<Map<String, Object>> result = new ArrayList<>();
 
         if (parentPoid == null) {
@@ -1103,7 +1109,8 @@ public class StockMasterServiceImpl implements StockMasterService {
                 List<StockMasterEntity> stockItems = stockMasterRepository.findAll(spec);
                 
                 for (StockMasterEntity stock : stockItems) {
-                    Map<String, Object> item = convertStockToHierarchicalItem(stock, level);
+                    // Use simplified structure for LEDGER items (same as tree view)
+                    Map<String, Object> item = convertStockToTreeItem(stock, level, companyPoid, userPoid, categoryMap);
                     item.put("parentPoid", parentPoid);
                     result.add(item);
                 }
@@ -1158,6 +1165,13 @@ public class StockMasterServiceImpl implements StockMasterService {
      * Convert stock entity to hierarchical item format
      */
     private Map<String, Object> convertStockToHierarchicalItem(StockMasterEntity stock, int level) {
+        return convertStockToHierarchicalItem(stock, level, null);
+    }
+
+    /**
+     * Convert stock entity to hierarchical item format with category information
+     */
+    private Map<String, Object> convertStockToHierarchicalItem(StockMasterEntity stock, int level, Map<Long, StockCategoryMasterEntity> categoryMap) {
         Map<String, Object> item = new HashMap<>();
         
         // Copy all fields from entity
@@ -1219,6 +1233,15 @@ public class StockMasterServiceImpl implements StockMasterService {
         // Convert Y/N/null to boolean (Y=true, N/null=false)
         item.put("active", stock.getActive() != null && "Y".equalsIgnoreCase(stock.getActive()));
         item.put("deleted", stock.getDeleted() != null && "Y".equalsIgnoreCase(stock.getDeleted()));
+        
+        // Add category name and code if categoryMap is provided and categoryPoid exists
+        if (categoryMap != null && stock.getCategoryPoid() != null) {
+            StockCategoryMasterEntity category = categoryMap.get(stock.getCategoryPoid());
+            if (category != null) {
+                item.put("categoryName", category.getCategoryName());
+                item.put("categoryCode", category.getCategoryCode());
+            }
+        }
         
         // Add hierarchical fields
         item.put("type", "LEDGER");
@@ -1390,7 +1413,7 @@ public class StockMasterServiceImpl implements StockMasterService {
                 // Apply filter if provided
                 if (filterValue == null || filterValue.trim().isEmpty() || 
                     matchesFilter(stock, filterValue)) {
-                    Map<String, Object> stockNode = convertStockToTreeItem(stock, level + 1, companyPoid, userPoid);
+                    Map<String, Object> stockNode = convertStockToTreeItem(stock, level + 1, companyPoid, userPoid, categoryMap);
                     stockNode.put("parentPoid", category.getCategoryPoid());
                     children.add(stockNode);
                 }
@@ -1404,9 +1427,34 @@ public class StockMasterServiceImpl implements StockMasterService {
 
     /**
      * Convert stock entity to tree item format with metadata
+     * Returns simplified structure similar to SUB_GROUP with only essential fields
      */
-    private Map<String, Object> convertStockToTreeItem(StockMasterEntity stock, int level, Long companyPoid, Long userPoid) {
-        Map<String, Object> item = convertStockToHierarchicalItem(stock, level);
+    private Map<String, Object> convertStockToTreeItem(StockMasterEntity stock, int level, Long companyPoid, Long userPoid, Map<Long, StockCategoryMasterEntity> categoryMap) {
+        Map<String, Object> item = new HashMap<>();
+        
+        // Add stock essential fields (similar to category fields in SUB_GROUP)
+        item.put("stockPoid", stock.getStockPoid());
+        item.put("stockCode", stock.getStockCode());
+        item.put("stockName", stock.getStockName());
+        item.put("categoryPoid", stock.getCategoryPoid());
+        
+        // Add category name and code if categoryMap is provided and categoryPoid exists
+        if (categoryMap != null && stock.getCategoryPoid() != null) {
+            StockCategoryMasterEntity category = categoryMap.get(stock.getCategoryPoid());
+            if (category != null) {
+                item.put("categoryName", category.getCategoryName());
+                item.put("categoryCode", category.getCategoryCode());
+            }
+        }
+        
+        // Add hierarchical fields
+        item.put("type", "LEDGER");
+        item.put("level", level);
+        
+        // Add status fields
+        item.put("active", stock.getActive() != null && "Y".equalsIgnoreCase(stock.getActive()));
+        item.put("deleted", stock.getDeleted() != null && "Y".equalsIgnoreCase(stock.getDeleted()));
+        item.put("groupPoid", stock.getGroupPoid());
         
         // Add metadata fields
         item.put("id", "row-" + stock.getStockPoid());
