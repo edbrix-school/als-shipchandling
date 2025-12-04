@@ -1,7 +1,6 @@
 package com.asg.shipchandling.stockunitmaster.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -19,7 +18,7 @@ public class StockUnitMaster {
     @Column(name = "STOCK_UNIT_POID", nullable = false)
     private Long stockUnitPoid;
 
-    @Column(name = "STOCK_UNIT_CODE", length = 20,nullable = false, unique = true)
+    @Column(name = "STOCK_UNIT_CODE", length = 20, nullable = false)
     private String stockUnitCode;
 
     @Column(name = "STOCK_UNIT_NAME", length = 100,nullable = false, unique = true)
