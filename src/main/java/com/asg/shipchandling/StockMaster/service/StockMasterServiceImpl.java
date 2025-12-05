@@ -1343,11 +1343,13 @@ public class StockMasterServiceImpl implements StockMasterService {
         item.put("active", stock.getActive() != null && "Y".equalsIgnoreCase(stock.getActive()));
         item.put("deleted", stock.getDeleted() != null && "Y".equalsIgnoreCase(stock.getDeleted()));
         
-        // Add category name and code if categoryMap is provided and categoryPoid exists
+        // For LEDGER type: categoryName should be stockName
+        item.put("categoryName", stock.getStockName());
+        
+        // Add category code if categoryMap is provided and categoryPoid exists
         if (categoryMap != null && stock.getCategoryPoid() != null) {
             StockCategoryMasterEntity category = categoryMap.get(stock.getCategoryPoid());
             if (category != null) {
-                item.put("categoryName", category.getCategoryName());
                 item.put("categoryCode", category.getCategoryCode());
             }
         }
@@ -1580,12 +1582,13 @@ public class StockMasterServiceImpl implements StockMasterService {
         // For LEDGER type: categoryPoid should contain stockPoid value
         item.put("categoryPoid", stock.getStockPoid());
         
-        // Add category name and code if categoryMap is provided and stock's actual categoryPoid exists
-        // Note: We still use stock.getCategoryPoid() to look up the category for name/code
+        // For LEDGER type: categoryName should be stockName
+        item.put("categoryName", stock.getStockName());
+        
+        // Add category code if categoryMap is provided and stock's actual categoryPoid exists
         if (categoryMap != null && stock.getCategoryPoid() != null) {
             StockCategoryMasterEntity category = categoryMap.get(stock.getCategoryPoid());
             if (category != null) {
-                item.put("categoryName", category.getCategoryName());
                 item.put("categoryCode", category.getCategoryCode());
             }
         }

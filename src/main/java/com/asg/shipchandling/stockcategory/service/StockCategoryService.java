@@ -8,6 +8,7 @@ import com.asg.shipchandling.stockcategory.dto.request.UpdateStockCategoryReques
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 @Service
 public interface StockCategoryService {
 
@@ -35,4 +36,6 @@ public interface StockCategoryService {
     CategoryDependenciesDto checkCategoryDependencies(Long categoryPoid, Long groupPoid);
 
     List<StockCategoryHierarchyDto> getCategoryHierarchy(Long categoryPoid, Long groupPoid);
+
+    List<Map<String, Object>> getStockCategoriesHierarchical(Long groupPoid, Long parentPoid, String filterValue, boolean includeDeleted, boolean tree);
 }
