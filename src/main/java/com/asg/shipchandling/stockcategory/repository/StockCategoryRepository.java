@@ -49,4 +49,16 @@ public interface StockCategoryRepository extends JpaRepository<StockCategoryMast
             @Param("groupPoid") Long groupPoid);
 
     List<StockCategoryMaster> findByGroupPoidAndDeletedNotOrDeletedIsNull(Long groupPoid, String deleted);
+
+    @Query("SELECT c FROM StockCategoryMaster c WHERE c.parentCategoryPoid IS NULL " +
+            "AND c.groupPoid = :groupPoid")
+    List<StockCategoryMaster> findRootCategoriesByGroupPoid(@Param("groupPoid") Long groupPoid);
+
+    @Query("SELECT c FROM StockCategoryMaster c WHERE c.parentCategoryPoid = :parentCategoryPoid " +
+            "AND c.groupPoid = :groupPoid")
+    List<StockCategoryMaster> findChildrenByParentCategoryPoidAndGroupPoidAll(
+            @Param("parentCategoryPoid") Long parentCategoryPoid,
+            @Param("groupPoid") Long groupPoid);
+
+    List<StockCategoryMaster> findByGroupPoid(Long groupPoid);
 }

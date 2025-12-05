@@ -5,15 +5,9 @@ import com.asg.shipchandling.stockcategory.dto.request.CreateStockCategoryReques
 import com.asg.shipchandling.stockcategory.dto.request.UpdateStockCategoryRequest;
 import com.asg.shipchandling.stockcategory.dto.response.ValidationResponse;
 import com.asg.shipchandling.stockcategory.service.StockCategoryService;
-import com.asg.shipchandling.StockMaster.service.StockMasterService;
-import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
 import com.asg.common.lib.security.util.UserContext;
 import com.asg.common.lib.annotation.AllowedAction;
 import com.asg.common.lib.enums.UserRolesRightsEnum;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -39,7 +33,6 @@ public class StockCategoryController {
 
 
     private final StockCategoryService stockCategoryService;
-    private final StockMasterService stockMasterService;
 
     @Operation(
             summary = "Create stock category",
@@ -508,8 +501,8 @@ public class StockCategoryController {
     }
 
     @Operation(
-            summary = "Get stock masters list",
-            description = "Retrieves stock masters with support for tree structure, hierarchical view, and paginated list. Supports filtering and sorting.",
+            summary = "Get stock categories list",
+            description = "Retrieves stock categories with support for tree structure, hierarchical view, and paginated list. Supports filtering and sorting. When parentPoid is provided, returns child categories in hierarchical format similar to stock master API.",
             responses = {
                     @ApiResponse(
                             responseCode = "200",
@@ -529,9 +522,9 @@ public class StockCategoryController {
             },
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    @GetMapping("/List")
+    @GetMapping("/list")
     @AllowedAction(UserRolesRightsEnum.VIEW)
-    public ResponseEntity<?> getStockMasters(
+    public ResponseEntity<?> getStockCategoriesList(
             @Parameter(description = "Filter parameters", required = false)
             @RequestParam Map<String, String> filters,
             @Parameter(description = "Parent POID for hierarchical view", required = false)
@@ -552,46 +545,27 @@ public class StockCategoryController {
             @RequestParam(defaultValue = "ASC") String sortOrder) {
 
         Long groupPoid = UserContext.getGroupPoid();
-        Long companyPoid = UserContext.getCompanyPoid();
-        Long userPoid = filters.containsKey("userPoid") ? Long.parseLong(filters.get("userPoid")) : null;
         String documentId = UserContext.getDocumentId();
 
-        // Check if this is a tree structure request with documentId
-        if (tree && documentId != null) {
-            List<Map<String, Object>> treeStructure = stockMasterService.getStockMastersTreeStructure(
-                    groupPoid, filterValue, includeDeleted, companyPoid, userPoid);
-            
-            return success("Stock Master tree structure retrieved successfully", treeStructure);
-        }
-
-        // Check if this is a hierarchical view request (flat list)
-        if (documentId != null) {
-            List<Map<String, Object>> hierarchicalList = stockMasterService.getStockMastersHierarchical(
-                    groupPoid, parentPoid, filterValue, includeDeleted, companyPoid, userPoid);
+        // When parentPoid is provided or documentId is present, return hierarchical structure
+        if (parentPoid != null || documentId != null) {
+            List<Map<String, Object>> hierarchicalList = stockCategoryService.getStockCategoriesHierarchical(
+                    groupPoid, parentPoid, filterValue, includeDeleted, tree);
             
             Map<String, Object> data = Map.of(
                     "content", hierarchicalList,
                     "totalElements", hierarchicalList.size());
             
-            return success("Stock Master list retrieved successfully", data);
+            return success("Stock Category list retrieved successfully", data);
         }
 
-        Sort sort = sortOrder.equalsIgnoreCase("DESC")
-                ? Sort.by(sortBy).descending()
-                : Sort.by(sortBy).ascending();
-        Pageable pageable = PageRequest.of(page, size, sort);
-
+        // Default behavior: return flat list or tree based on tree parameter
         if (tree) {
-            List<Map<String, Object>> categories = stockMasterService.getStockMastersTree(groupPoid);
-            Map<String, Object> data = Map.of("categories", categories);
-            return success("Stock masters tree fetched successfully", data);
+            List<StockCategoryTreeDto> treeStructure = stockCategoryService.getStockCategoryTree(groupPoid, null, null);
+            return success("Stock category tree fetched successfully", treeStructure);
         } else {
-            Page<StockMasterEntity> result = stockMasterService.getStockMasters(filters, pageable);
-            Map<String, Object> data = Map.of(
-                    "content", result.getContent(),
-                    "totalElements", result.getTotalElements(),
-                    "totalPages", result.getTotalPages());
-            return success("Stock masters list fetched successfully", data);
+            List<StockCategoryMasterDto> categories = stockCategoryService.getAllStockCategories(groupPoid, null, null);
+            return success("Stock categories fetched successfully", categories);
         }
     }
 }

@@ -15,7 +15,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -462,5 +462,197 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         dto.setHasChildren(childCount > 0);
 
         return dto;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getStockCategoriesHierarchical(Long groupPoid, Long parentPoid, String filterValue, boolean includeDeleted, boolean tree) {
+        log.info("getStockCategoriesHierarchical service started for groupPoid={} parentPoid={} filterValue={} includeDeleted={} tree={}", 
+                groupPoid, parentPoid, filterValue, includeDeleted, tree);
+        
+        List<Map<String, Object>> result = new ArrayList<>();
+        
+        // Fetch all categories for the group to build category map
+        List<StockCategoryMaster> allCategories;
+        if (includeDeleted) {
+            allCategories = stockCategoryRepository.findByGroupPoid(groupPoid);
+        } else {
+            allCategories = stockCategoryRepository.findByGroupPoidAndDeletedNotOrDeletedIsNull(groupPoid, "Y");
+        }
+        
+        Map<Long, StockCategoryMaster> categoryMap = allCategories.stream()
+                .collect(Collectors.toMap(StockCategoryMaster::getCategoryPoid, cat -> cat));
+        
+        if (parentPoid == null) {
+            // Return MAIN_GROUP items (root categories with no parent)
+            List<StockCategoryMaster> rootCategories;
+            if (includeDeleted) {
+                rootCategories = stockCategoryRepository.findRootCategoriesByGroupPoid(groupPoid);
+            } else {
+                rootCategories = stockCategoryRepository.findParentCategoriesByGroupPoid(groupPoid);
+            }
+            
+            // Apply filter if provided
+            if (filterValue != null && !filterValue.trim().isEmpty()) {
+                String searchPattern = filterValue.toLowerCase();
+                rootCategories = rootCategories.stream()
+                        .filter(c -> (c.getCategoryCode() != null && c.getCategoryCode().toLowerCase().contains(searchPattern)) ||
+                                (c.getCategoryName() != null && c.getCategoryName().toLowerCase().contains(searchPattern)))
+                        .collect(Collectors.toList());
+            }
+            
+            for (StockCategoryMaster category : rootCategories) {
+                // Check if this category has child categories
+                Long childCount = stockCategoryRepository.countChildrenByParentCategoryPoid(category.getCategoryPoid());
+                
+                String type = (childCount > 0) ? "MAIN_GROUP" : "LEDGER";
+                Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, 0, includeDeleted);
+                
+                if (tree && childCount > 0) {
+                    // Add children for tree structure only if it has children
+                    List<Map<String, Object>> children = getChildrenForCategory(category.getCategoryPoid(), groupPoid, 1, includeDeleted, filterValue, categoryMap, tree);
+                    item.put("children", children);
+                    
+                    // If filterValue is provided and this category doesn't match, but has matching children, still include it
+                    if (filterValue != null && !filterValue.trim().isEmpty() && children.isEmpty()) {
+                        String searchPattern = filterValue.toLowerCase();
+                        boolean categoryMatches = (category.getCategoryCode() != null && category.getCategoryCode().toLowerCase().contains(searchPattern)) ||
+                                (category.getCategoryName() != null && category.getCategoryName().toLowerCase().contains(searchPattern));
+                        if (!categoryMatches) {
+                            // Category doesn't match and has no matching children, skip it
+                            continue;
+                        }
+                    }
+                }
+                result.add(item);
+            }
+        } else {
+            // Check if parentPoid is a category
+            Optional<StockCategoryMaster> parentCategory = stockCategoryRepository.findByCategoryPoidAndGroupPoid(parentPoid, groupPoid);
+            
+            if (parentCategory.isPresent()) {
+                // Parent is a category - return child categories (SUB_GROUP)
+                StockCategoryMaster parent = parentCategory.get();
+                int level = calculateCategoryLevel(parent, groupPoid) + 1;
+                
+                // Get child categories
+                List<StockCategoryMaster> childCategories;
+                if (includeDeleted) {
+                    childCategories = stockCategoryRepository.findChildrenByParentCategoryPoidAndGroupPoidAll(parentPoid, groupPoid);
+                } else {
+                    childCategories = stockCategoryRepository.findChildrenByParentCategoryPoidAndGroupPoid(parentPoid, groupPoid);
+                }
+                
+                // Apply filter if provided
+                if (filterValue != null && !filterValue.trim().isEmpty()) {
+                    String searchPattern = filterValue.toLowerCase();
+                    childCategories = childCategories.stream()
+                            .filter(c -> (c.getCategoryCode() != null && c.getCategoryCode().toLowerCase().contains(searchPattern)) ||
+                                    (c.getCategoryName() != null && c.getCategoryName().toLowerCase().contains(searchPattern)))
+                            .collect(Collectors.toList());
+                }
+                
+                for (StockCategoryMaster category : childCategories) {
+                    // Check if this category has child categories
+                    Long childCount = stockCategoryRepository.countChildrenByParentCategoryPoid(category.getCategoryPoid());
+                    
+                    String type = (childCount > 0) ? "SUB_GROUP" : "LEDGER";
+                    Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, level, includeDeleted);
+                    
+                    if (tree && childCount > 0) {
+                        // Add children for tree structure only if it has children
+                        List<Map<String, Object>> children = getChildrenForCategory(category.getCategoryPoid(), groupPoid, level + 1, includeDeleted, filterValue, categoryMap, tree);
+                        item.put("children", children);
+                    }
+                    result.add(item);
+                }
+            }
+        }
+        
+        log.info("getStockCategoriesHierarchical service completed for groupPoid={} resultCount={}", groupPoid, result.size());
+        return result;
+    }
+    
+    private List<Map<String, Object>> getChildrenForCategory(Long categoryPoid, Long groupPoid, int level, boolean includeDeleted, String filterValue, Map<Long, StockCategoryMaster> categoryMap, boolean tree) {
+        List<Map<String, Object>> children = new ArrayList<>();
+        
+        List<StockCategoryMaster> childCategories;
+        if (includeDeleted) {
+            childCategories = stockCategoryRepository.findChildrenByParentCategoryPoidAndGroupPoidAll(categoryPoid, groupPoid);
+        } else {
+            childCategories = stockCategoryRepository.findChildrenByParentCategoryPoidAndGroupPoid(categoryPoid, groupPoid);
+        }
+        
+        // Apply filter if provided
+        if (filterValue != null && !filterValue.trim().isEmpty()) {
+            String searchPattern = filterValue.toLowerCase();
+            childCategories = childCategories.stream()
+                    .filter(c -> (c.getCategoryCode() != null && c.getCategoryCode().toLowerCase().contains(searchPattern)) ||
+                            (c.getCategoryName() != null && c.getCategoryName().toLowerCase().contains(searchPattern)))
+                    .collect(Collectors.toList());
+        }
+        
+        for (StockCategoryMaster category : childCategories) {
+            // Check if this category has child categories
+            Long childCount = stockCategoryRepository.countChildrenByParentCategoryPoid(category.getCategoryPoid());
+            
+            String type = (childCount > 0) ? "SUB_GROUP" : "LEDGER";
+            Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, level, includeDeleted);
+            
+            if (tree && childCount > 0) {
+                // Recursively add children only if it has children
+                List<Map<String, Object>> grandChildren = getChildrenForCategory(category.getCategoryPoid(), groupPoid, level + 1, includeDeleted, filterValue, categoryMap, tree);
+                item.put("children", grandChildren);
+                
+                // If filterValue is provided and this category doesn't match, but has matching children, still include it
+                if (filterValue != null && !filterValue.trim().isEmpty() && grandChildren.isEmpty()) {
+                    String searchPattern = filterValue.toLowerCase();
+                    boolean categoryMatches = (category.getCategoryCode() != null && category.getCategoryCode().toLowerCase().contains(searchPattern)) ||
+                            (category.getCategoryName() != null && category.getCategoryName().toLowerCase().contains(searchPattern));
+                    if (!categoryMatches) {
+                        // Category doesn't match and has no matching children, skip it
+                        continue;
+                    }
+                }
+            }
+            children.add(item);
+        }
+        
+        return children;
+    }
+    
+    private int calculateCategoryLevel(StockCategoryMaster category, Long groupPoid) {
+        if (category.getParentCategoryPoid() == null) {
+            return 0;
+        }
+        
+        Optional<StockCategoryMaster> parent = stockCategoryRepository.findByCategoryPoidAndGroupPoid(category.getParentCategoryPoid(), groupPoid);
+        
+        if (parent.isPresent()) {
+            return calculateCategoryLevel(parent.get(), groupPoid) + 1;
+        }
+        
+        return 0;
+    }
+    
+    private Map<String, Object> convertCategoryToHierarchicalItem(StockCategoryMaster category, String type, int level, boolean includeDeleted) {
+        Map<String, Object> item = new HashMap<>();
+        item.put("categoryPoid", category.getCategoryPoid());
+        item.put("categoryCode", category.getCategoryCode());
+        item.put("categoryName", category.getCategoryName());
+        item.put("type", type);
+        item.put("level", level);
+        item.put("active", category.getActive() != null && "Y".equalsIgnoreCase(category.getActive()));
+        item.put("deleted", category.getDeleted() != null && "Y".equalsIgnoreCase(category.getDeleted()));
+        item.put("groupPoid", category.getGroupPoid());
+        
+        // Set parentPoid from PARENT_CATEGORY_POID
+        // For MAIN_GROUP: parentPoid will be null (root categories)
+        // For SUB_GROUP: parentPoid will be the parent category's CATEGORY_POID
+        if (category.getParentCategoryPoid() != null) {
+            item.put("parentPoid", category.getParentCategoryPoid());
+        }
+        
+        return item;
     }
 }
