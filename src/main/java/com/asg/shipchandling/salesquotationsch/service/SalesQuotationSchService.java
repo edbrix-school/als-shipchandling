@@ -7,6 +7,7 @@ import com.asg.shipchandling.salesquotationsch.dto.response.StoredProcedureRespo
 import com.asg.shipchandling.salesquotationsch.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.CurrencyRateResponse;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
@@ -68,4 +69,7 @@ public interface SalesQuotationSchService {
                 MultipartFile file);
         
         List<AddressDetailsResponse> getCustomerAddress(Long userPoid, Long customerPoid, String addressType);
+        
+        // Currency Rate
+        CurrencyRateResponse getLatestCurrencyRate(Long currencyPoid);
 }

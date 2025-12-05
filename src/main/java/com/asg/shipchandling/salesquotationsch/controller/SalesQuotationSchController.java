@@ -24,6 +24,7 @@ import com.asg.shipchandling.salesquotationsch.dto.response.StoredProcedureRespo
 import com.asg.shipchandling.salesquotationsch.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.CurrencyRateResponse;
 import com.asg.shipchandling.salesquotationsch.service.SalesQuotationSchService;
 import com.asg.common.lib.security.util.UserContext;
 
@@ -36,7 +37,7 @@ import static com.asg.shipchandling.common.ApiResponse.success;
 import static com.asg.shipchandling.common.ApiResponse.badRequest;
 
 @RestController
-@RequestMapping("/v1/sales-quotation-sch")
+@RequestMapping("/v1/sales-quotations")
 @RequiredArgsConstructor
 @Slf4j
 public class SalesQuotationSchController {
@@ -499,6 +500,23 @@ public class SalesQuotationSchController {
                 } else {
                         return badRequest(response.getErrorMessage());
                 }
+        }
+
+        @Operation(summary = "Get Latest Currency Rate", description = "Retrieves the latest buy and sell rates for a given currency POID from GLOBAL_CURRENCY_RATES table.", responses = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved currency rate"),
+                        @ApiResponse(responseCode = "404", description = "Currency or rate not found"),
+                        @ApiResponse(responseCode = "400", description = "Invalid input"),
+                        @ApiResponse(responseCode = "401", description = "Unauthorized")
+        }, security = @SecurityRequirement(name = "bearerAuth"))
+        @GetMapping("/rate")
+        public ResponseEntity<?> getLatestCurrencyRate(
+                        @RequestParam Long currencyPoid) {
+                log.info("getLatestCurrencyRate started for currencyPoid={} companyPoid={} groupPoid={}", 
+                                currencyPoid, UserContext.getCompanyPoid(), UserContext.getGroupPoid());
+                CurrencyRateResponse response = quotationSchService.getLatestCurrencyRate(currencyPoid);
+                log.info("getLatestCurrencyRate completed for currencyPoid={} currencyCode={}", 
+                                currencyPoid, response.getCurrencyCode());
+                return success("Currency rate fetched successfully", response);
         }
 
 }
