@@ -998,10 +998,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // Build display fields map (keys in uppercase)
         Map<String, String> displayFields = new HashMap<>();
         displayFields.put("DATE", "text");
-        displayFields.put("DOCREF", "text");
-        displayFields.put("QTNREF", "text");
-        displayFields.put("PARTYNAME", "text");
-        displayFields.put("VESSELNAME", "text");
+        displayFields.put("DOC_REF", "text");
+        displayFields.put("QTN_REF", "text");
+        displayFields.put("PARTY_NAME", "text");
+        displayFields.put("VESSEL_NAME", "text");
         
         // Create paginated response
         PaginatedResponse<SalesInvoiceListDto> response = new PaginatedResponse<>();
