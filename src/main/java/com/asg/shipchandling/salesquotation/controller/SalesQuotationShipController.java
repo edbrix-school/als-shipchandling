@@ -24,7 +24,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 @RestController
-@RequestMapping(path = "/v1/sales-quotations", produces = MediaType.APPLICATION_JSON_VALUE)
+@RequestMapping(path = "/v0/sales-quotations", produces = MediaType.APPLICATION_JSON_VALUE)
 public class SalesQuotationShipController {
 
     private static final Logger log = LoggerFactory.getLogger(SalesQuotationShipController.class);

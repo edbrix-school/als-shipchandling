@@ -8,13 +8,18 @@ import com.asg.shipchandling.salesquotationsch.dto.response.StoredProcedureRespo
 import com.asg.shipchandling.salesquotationsch.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.CurrencyRateResponse;
 import com.asg.shipchandling.StockMaster.service.StockMasterService;
 import com.asg.shipchandling.StockMaster.dto.StockDetailsResponse;
 import com.asg.shipchandling.stockunitmaster.service.StockUnitService;
 import com.asg.shipchandling.common.repository.GlobalAddressMasterRepository;
 import com.asg.shipchandling.common.repository.GlobalAddressDetailsRepository;
+import com.asg.shipchandling.common.repository.GlobalCurrencyMasterRepository;
+import com.asg.shipchandling.common.repository.GlobalCurrencyRatesRepository;
 import com.asg.shipchandling.common.entity.GlobalAddressMaster;
 import com.asg.shipchandling.common.entity.GlobalAddressDetails;
+import com.asg.shipchandling.common.entity.GlobalCurrencyMaster;
+import com.asg.shipchandling.common.entity.GlobalCurrencyRates;
 import com.asg.shipchandling.salesquotationsch.entity.*;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
 import com.asg.shipchandling.exceptions.CustomException;
@@ -63,6 +68,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private final StockUnitService stockUnitMasterService;
     private final GlobalAddressMasterRepository globalAddressMasterRepository;
     private final GlobalAddressDetailsRepository globalAddressDetailsRepository;
+    private final GlobalCurrencyMasterRepository globalCurrencyMasterRepository;
+    private final GlobalCurrencyRatesRepository globalCurrencyRatesRepository;
 
     @Override
     @Transactional
@@ -1623,5 +1630,44 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             return new ArrayList<>();
         }
 
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CurrencyRateResponse getLatestCurrencyRate(Long currencyPoid) {
+        log.info("getLatestCurrencyRate called for currencyPoid={}", currencyPoid);
+        
+        if (currencyPoid == null) {
+            throw new CustomException("Currency POID is required");
+        }
+        
+        // Find currency by POID
+        GlobalCurrencyMaster currency = globalCurrencyMasterRepository
+                .findByCurrencyPoid(java.math.BigDecimal.valueOf(currencyPoid))
+                .orElseThrow(() -> new ResourceNotFoundException("Currency", "currencyPoid", currencyPoid));
+        
+        // Check if currency is active and not deleted
+        if (!"Y".equalsIgnoreCase(currency.getActive()) || "Y".equalsIgnoreCase(currency.getDeleted())) {
+            throw new CustomException("Currency is not active or has been deleted");
+        }
+        
+        // Get latest rate by currency code
+        GlobalCurrencyRates latestRate = globalCurrencyRatesRepository
+                .findLatestByCurrencyCode(currency.getCurrencyCode())
+                .orElseThrow(() -> new ResourceNotFoundException("Currency Rate", "currencyCode", currency.getCurrencyCode()));
+        
+        // Map to response DTO
+        CurrencyRateResponse response = new CurrencyRateResponse();
+        response.setCurrencyPoid(currencyPoid);
+        response.setCurrencyCode(currency.getCurrencyCode());
+        response.setCurrencyName(currency.getCurrencyName());
+        response.setBuyRate(latestRate.getBuyRate());
+        response.setSellRate(latestRate.getSellRate());
+        response.setRateDate(latestRate.getRateDate());
+        
+        log.info("getLatestCurrencyRate completed for currencyPoid={} currencyCode={} buyRate={} sellRate={}", 
+                currencyPoid, currency.getCurrencyCode(), latestRate.getBuyRate(), latestRate.getSellRate());
+        
+        return response;
     }
 }
