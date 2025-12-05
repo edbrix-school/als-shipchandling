@@ -64,7 +64,7 @@ public class StockCategoryController {
             @Parameter(description = "Stock category creation request", required = true)
             @Valid @RequestBody CreateStockCategoryRequest request) {
 
-        log.info("createStockCategory started for categoryCode={} groupPoid={}", request.getCategoryCode(), UserContext.getGroupPoid());
+        log.info("createStockCategory started for categoryName={} groupPoid={}", request.getCategoryName(), UserContext.getGroupPoid());
         StockCategoryMasterDto dto = stockCategoryService.createStockCategory(request, UserContext.getGroupPoid(), UserContext.getUserId());
         log.info("createStockCategory completed for categoryPoid={} categoryCode={}",
                 dto != null ? dto.getCategoryPoid() : null,
