@@ -9,12 +9,15 @@ import com.asg.shipchandling.stockcategory.dto.request.CreateStockCategoryReques
 import com.asg.shipchandling.stockcategory.dto.request.UpdateStockCategoryRequest;
 import com.asg.shipchandling.stockcategory.entity.StockCategoryMaster;
 import com.asg.shipchandling.stockcategory.repository.StockCategoryRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -24,19 +27,16 @@ import java.util.stream.Collectors;
 public class StockCategoryServiceImpl implements StockCategoryService {
 
     private final StockCategoryRepository stockCategoryRepository;
+    
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Override
     @Transactional
     public StockCategoryMasterDto createStockCategory(CreateStockCategoryRequest request, Long groupPoid, String userId) {
-        log.info("createStockCategory service started for categoryCode={} groupPoid={} userId={}",
-                request.getCategoryCode(), groupPoid, userId);
-        // Validate category code uniqueness
-        if (stockCategoryRepository.existsByCategoryCodeIgnoreCaseAndGroupPoid(request.getCategoryCode(), groupPoid)) {
-            log.warn("createStockCategory validation failed - categoryCode={} already exists for groupPoid={}",
-                    request.getCategoryCode(), groupPoid);
-            throw new ResourceAlreadyExistsException("categoryCode" , request.getCategoryCode());
-        }
-
+        log.info("createStockCategory service started for categoryName={} groupPoid={} userId={}",
+                request.getCategoryName(), groupPoid, userId);
+        
         // Validate category name uniqueness
         if (stockCategoryRepository.existsByCategoryNameIgnoreCaseAndGroupPoid(request.getCategoryName(), groupPoid)) {
             log.warn("createStockCategory validation failed - categoryName={} already exists for groupPoid={}",
@@ -47,8 +47,8 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         // Validate parent category if SUB_GROUP
         if ("SUB_GROUP".equals(request.getCategoryType())) {
             if (request.getParentCategoryPoid() == null) {
-                log.warn("createStockCategory validation failed - missing parent for SUB_GROUP categoryCode={}",
-                        request.getCategoryCode());
+                log.warn("createStockCategory validation failed - missing parent for SUB_GROUP categoryName={}",
+                        request.getCategoryName());
                 throw new CustomException("Parent category is required for SUB_GROUP type");
             }
             StockCategoryMaster parent = stockCategoryRepository.findByCategoryPoidAndGroupPoid(
@@ -63,9 +63,14 @@ public class StockCategoryServiceImpl implements StockCategoryService {
             }
         }
 
+        // Auto-generate categoryCode
+        String categoryCode = generateCategoryCode(groupPoid);
+        log.info("createStockCategory auto-generated categoryCode={} for groupPoid={}", categoryCode, groupPoid);
+
         // Create entity
         StockCategoryMaster category = new StockCategoryMaster();
         BeanUtils.copyProperties(request, category);
+        category.setCategoryCode(categoryCode);  // Set auto-generated code
         category.setGroupPoid(groupPoid);
         category.setCreatedBy(userId);
         category.setLastmodifiedBy(userId);
@@ -77,16 +82,21 @@ public class StockCategoryServiceImpl implements StockCategoryService {
             log.info("createStockCategory persisted categoryPoid={} categoryCode={}", savedCategory.getCategoryPoid(), savedCategory.getCategoryCode());
 
             // IMPORTANT: Retrieve GL values after insert (they are set by DB trigger)
-            // Need to refresh entity to get trigger-populated values
-            stockCategoryRepository.flush();
-            StockCategoryMaster refreshedCategory = stockCategoryRepository.findByCategoryPoid(
-                    savedCategory.getCategoryPoid()).orElse(savedCategory);
+            // Flush to ensure trigger executes, then clear and reload entity to get trigger-populated values
+            entityManager.flush();
+            entityManager.clear(); // Clear persistence context to force fresh load
+            
+            // Reload entity to get trigger-populated GL values
+            StockCategoryMaster refreshedCategory = stockCategoryRepository.findByCategoryPoid(savedCategory.getCategoryPoid())
+                    .orElseThrow(() -> new ResourceNotFoundException("Stock Category", "categoryPoid", savedCategory.getCategoryPoid()));
+            
+            log.info("createStockCategory after reload - stockGlPoid={} salesGlPoid={} costOfSalesGlPoid={}",
+                    refreshedCategory.getStockGlPoid(), refreshedCategory.getSalesGlPoid(), refreshedCategory.getCostOfSalesGlPoid());
 
             // Convert to DTO
-            StockCategoryMasterDto dto = new StockCategoryMasterDto();
-            BeanUtils.copyProperties(refreshedCategory, dto);
-            log.info("createStockCategory completed for categoryPoid={} with stockGlPoid={}",
-                    dto.getCategoryPoid(), dto.getStockGlPoid());
+            StockCategoryMasterDto dto = convertToDto(refreshedCategory);
+            log.info("createStockCategory completed for categoryPoid={} with stockGlPoid={} salesGlPoid={} costOfSalesGlPoid={}",
+                    dto.getCategoryPoid(), dto.getStockGlPoid(), dto.getSalesGlPoid(), dto.getCostOfSalesGlPoid());
             return dto;
     }
 
@@ -104,9 +114,9 @@ public class StockCategoryServiceImpl implements StockCategoryService {
             throw new ResourceNotFoundException("Stock Category", "categoryPoid", categoryPoid);
         }
 
-        StockCategoryMasterDto dto = new StockCategoryMasterDto();
-        BeanUtils.copyProperties(category, dto);
-        log.info("getStockCategoryByPoid completed for categoryPoid={} categoryCode={}", categoryPoid, dto.getCategoryCode());
+        StockCategoryMasterDto dto = convertToDto(category);
+        log.info("getStockCategoryByPoid completed for categoryPoid={} categoryCode={} stockGlPoid={} salesGlPoid={} costOfSalesGlPoid={}", 
+                categoryPoid, dto.getCategoryCode(), dto.getStockGlPoid(), dto.getSalesGlPoid(), dto.getCostOfSalesGlPoid());
         return dto;
     }
 
@@ -183,6 +193,13 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         category.setCategoryName2(request.getCategoryName2());
         category.setCategoryType(request.getCategoryType());
         category.setParentCategoryPoid(request.getParentCategoryPoid());
+        
+        // Update GL fields (convert Long to BigDecimal, allow null to clear fields)
+        // Always set from request to allow clearing by passing null
+        category.setStockGlPoid(request.getStockGlPoid() != null ? BigDecimal.valueOf(request.getStockGlPoid()) : null);
+        category.setSalesGlPoid(request.getSalesGlPoid() != null ? BigDecimal.valueOf(request.getSalesGlPoid()) : null);
+        category.setCostOfSalesGlPoid(request.getCostOfSalesGlPoid() != null ? BigDecimal.valueOf(request.getCostOfSalesGlPoid()) : null);
+        
         category.setOutputTaxPoid(request.getOutputTaxPoid());
         category.setInputTaxPoid(request.getInputTaxPoid());
         category.setCostCenterPoid(request.getCostCenterPoid());
@@ -190,15 +207,53 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         category.setActive(request.getActive() != null ? request.getActive() : category.getActive());
         category.setLastmodifiedBy(userId);
 
-        // Save and refresh to get trigger-updated GL values
+        // Save the entity
         StockCategoryMaster savedCategory = stockCategoryRepository.save(category);
-        stockCategoryRepository.flush();
-        StockCategoryMaster refreshedCategory = stockCategoryRepository.findByCategoryPoid(
-                savedCategory.getCategoryPoid()).orElse(savedCategory);
+        entityManager.flush();
+        entityManager.clear(); // Clear persistence context to force fresh load
+        
+        // Reload entity to get latest values (including any trigger updates)
+        StockCategoryMaster refreshedCategory = stockCategoryRepository.findByCategoryPoidAndGroupPoid(categoryPoid, groupPoid)
+                .orElseThrow(() -> new ResourceNotFoundException("Stock Category", "categoryPoid", categoryPoid));
+        
+        // Always set GL values from request (even if null) to ensure user-provided values are persisted
+        // This handles both updating to new values and clearing by setting to null
+        boolean glChanged = false;
+        BigDecimal requestedStockGl = request.getStockGlPoid() != null ? BigDecimal.valueOf(request.getStockGlPoid()) : null;
+        BigDecimal requestedSalesGl = request.getSalesGlPoid() != null ? BigDecimal.valueOf(request.getSalesGlPoid()) : null;
+        BigDecimal requestedCostOfSalesGl = request.getCostOfSalesGlPoid() != null ? BigDecimal.valueOf(request.getCostOfSalesGlPoid()) : null;
+        
+        // Check if GL values need to be updated (compare with current values)
+        if ((requestedStockGl == null && refreshedCategory.getStockGlPoid() != null) ||
+            (requestedStockGl != null && !requestedStockGl.equals(refreshedCategory.getStockGlPoid()))) {
+            refreshedCategory.setStockGlPoid(requestedStockGl);
+            glChanged = true;
+        }
+        if ((requestedSalesGl == null && refreshedCategory.getSalesGlPoid() != null) ||
+            (requestedSalesGl != null && !requestedSalesGl.equals(refreshedCategory.getSalesGlPoid()))) {
+            refreshedCategory.setSalesGlPoid(requestedSalesGl);
+            glChanged = true;
+        }
+        if ((requestedCostOfSalesGl == null && refreshedCategory.getCostOfSalesGlPoid() != null) ||
+            (requestedCostOfSalesGl != null && !requestedCostOfSalesGl.equals(refreshedCategory.getCostOfSalesGlPoid()))) {
+            refreshedCategory.setCostOfSalesGlPoid(requestedCostOfSalesGl);
+            glChanged = true;
+        }
+        
+        // If GL values were changed, save again to persist user-provided values
+        if (glChanged) {
+            refreshedCategory = stockCategoryRepository.save(refreshedCategory);
+            entityManager.flush();
+            log.info("updateStockCategory GL values updated - stockGlPoid={} salesGlPoid={} costOfSalesGlPoid={}",
+                    refreshedCategory.getStockGlPoid(), refreshedCategory.getSalesGlPoid(), refreshedCategory.getCostOfSalesGlPoid());
+        } else {
+            log.info("updateStockCategory after reload - stockGlPoid={} salesGlPoid={} costOfSalesGlPoid={}",
+                    refreshedCategory.getStockGlPoid(), refreshedCategory.getSalesGlPoid(), refreshedCategory.getCostOfSalesGlPoid());
+        }
 
-        StockCategoryMasterDto dto = new StockCategoryMasterDto();
-        BeanUtils.copyProperties(refreshedCategory, dto);
-        log.info("updateStockCategory completed for categoryPoid={} categoryCode={}", categoryPoid, dto.getCategoryCode());
+        StockCategoryMasterDto dto = convertToDto(refreshedCategory);
+        log.info("updateStockCategory completed for categoryPoid={} categoryCode={} stockGlPoid={} salesGlPoid={} costOfSalesGlPoid={}", 
+                categoryPoid, dto.getCategoryCode(), dto.getStockGlPoid(), dto.getSalesGlPoid(), dto.getCostOfSalesGlPoid());
         return dto;
     }
 
@@ -440,9 +495,48 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         log.debug("validateNoCircularReference completed for categoryPoid={} depthTraversed={}", categoryPoid, depth);
     }
 
+    /**
+     * Auto-generate category code in format CAT### (e.g., CAT001, CAT002, etc.)
+     */
+    private String generateCategoryCode(Long groupPoid) {
+        // Find the highest category code for this group
+        List<StockCategoryMaster> categories = stockCategoryRepository.findByGroupPoid(groupPoid);
+        
+        int maxNumber = 0;
+        for (StockCategoryMaster cat : categories) {
+            if (cat.getCategoryCode() != null && cat.getCategoryCode().startsWith("CAT")) {
+                try {
+                    String numberPart = cat.getCategoryCode().substring(3);
+                    int num = Integer.parseInt(numberPart);
+                    if (num > maxNumber) {
+                        maxNumber = num;
+                    }
+                } catch (NumberFormatException e) {
+                    // Ignore if not in expected format
+                }
+            }
+        }
+        
+        // Generate next code
+        int nextNumber = maxNumber + 1;
+        return String.format("CAT%03d", nextNumber);
+    }
+
     private StockCategoryMasterDto convertToDto(StockCategoryMaster category) {
         StockCategoryMasterDto dto = new StockCategoryMasterDto();
         BeanUtils.copyProperties(category, dto);
+        
+        // Convert BigDecimal GL fields to Long
+        if (category.getStockGlPoid() != null) {
+            dto.setStockGlPoid(category.getStockGlPoid().longValue());
+        }
+        if (category.getSalesGlPoid() != null) {
+            dto.setSalesGlPoid(category.getSalesGlPoid().longValue());
+        }
+        if (category.getCostOfSalesGlPoid() != null) {
+            dto.setCostOfSalesGlPoid(category.getCostOfSalesGlPoid().longValue());
+        }
+        
         return dto;
     }
 
