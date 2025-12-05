@@ -997,7 +997,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         
         // Build display fields map (keys in uppercase)
         Map<String, String> displayFields = new HashMap<>();
-        displayFields.put("DATE", "text");
+        displayFields.put("DATE", "date");
         displayFields.put("DOC_REF", "text");
         displayFields.put("QTN_REF", "text");
         displayFields.put("PARTY_NAME", "text");
