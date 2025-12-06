@@ -84,7 +84,7 @@ public class ApRequestForQuotationController {
                         @Valid @RequestBody CreateApRequestForQtnRequest request) {
 
                 ApRequestForQtnHdrDto dto = rfqService.createRequestForQuotation(request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(),
-                                UserContext.getUserId());
+                                UserContext.getUserPoid().toString());
                 return success("RFQ created successfully", dto);
         }
 
@@ -112,7 +112,7 @@ public class ApRequestForQuotationController {
                         @Valid @RequestBody UpdateApRequestForQtnRequest request) {
 
                 ApRequestForQtnHdrDto dto = rfqService.updateRequestForQuotation(
-                                transactionPoid, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                transactionPoid, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid().toString());
                 return success("RFQ updated successfully", dto);
         }
 
@@ -261,7 +261,7 @@ public class ApRequestForQuotationController {
                         @PathVariable Long transactionPoid) {
 
                 AddSuppliersResponse response = rfqService.addRelatedSuppliers(
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid().toString());
                 return success(response.getMessage(), response);
         }
 
@@ -274,7 +274,7 @@ public class ApRequestForQuotationController {
                         @PathVariable Long transactionPoid) {
 
                 SendMailResponse response = rfqService.sendMailToSuppliers(
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid().toString());
                 return success(response.getMessage(), response);
         }
 
@@ -288,7 +288,7 @@ public class ApRequestForQuotationController {
                         @RequestBody CreatePurchaseOrderRequest request) {
 
                 CreatePurchaseOrderResponse response = rfqService.createPurchaseOrder(
-                                transactionPoid, request.getSupplierPoid(), UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                transactionPoid, request.getSupplierPoid(), UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid().toString());
                 return success(response.getMessage(), response);
         }
 
@@ -302,7 +302,7 @@ public class ApRequestForQuotationController {
                         @RequestBody UpdateCostRequest request) {
 
                 UpdateCostResponse response = rfqService.updateCost(
-                                transactionPoid, request.getConfirm(), UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                transactionPoid, request.getConfirm(), UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid().toString());
                 return success(response.getMessage(), response);
         }
 
@@ -319,7 +319,7 @@ public class ApRequestForQuotationController {
                         @RequestParam Long supplierPoid) {
 
                 LastPriceResponse response = rfqService.getLastPrice(
-                                stockPoid, stockUnitPoid, supplierPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                stockPoid, stockUnitPoid, supplierPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid().toString());
                 return success("Last price fetched successfully", response);
         }
 
@@ -346,7 +346,7 @@ public class ApRequestForQuotationController {
                         @PathVariable Long transactionPoid) {
 
                 ItemsWithoutSuppliersResponse response = rfqService.getItemsWithoutSuppliers(
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid().toString());
                 return success("Items without suppliers fetched successfully", response);
         }
 
