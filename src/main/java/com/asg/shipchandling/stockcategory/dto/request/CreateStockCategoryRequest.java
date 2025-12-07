@@ -29,6 +29,10 @@ public class CreateStockCategoryRequest {
 
     private Long parentCategoryPoid;  // Required if categoryType is SUB_GROUP (validated by @ValidParentCategory)
 
+    private Long stockGlPoid;
+    private Long salesGlPoid;
+    private Long costOfSalesGlPoid;
+
     private BigDecimal outputTaxPoid;
     private BigDecimal inputTaxPoid;
     private BigDecimal costCenterPoid;

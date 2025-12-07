@@ -86,8 +86,20 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         deliveryNote.setCreatedBy(userId);
         deliveryNote.setLastmodifiedBy(userId);
         deliveryNote.setDeleted("N");
-        deliveryNote
-                .setDescriptionPrintYn(request.getDescriptionPrintYn() != null ? request.getDescriptionPrintYn() : "Y");
+        deliveryNote.setDescriptionPrintYn("Y"); // Default value
+        deliveryNote.setTransactionDate(new Timestamp(System.currentTimeMillis())); // Set current date
+        
+        // Handle partyType-based field requirements
+        if (request.getPartyType() != null && "PRINCIPAL".equalsIgnoreCase(request.getPartyType())) {
+            // When partyType is PRINCIPAL, customerPoid should be set to 0
+            deliveryNote.setCustomerPoid(0L);
+        } else if (request.getPartyType() != null && "CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            // When partyType is CUSTOMER, principalPoid should be null
+            deliveryNote.setPrincipalPoid(null);
+        } else if (request.getPrincipalPoid() != null) {
+            // If principalPoid is provided (even without explicit partyType), set customerPoid to 0
+            deliveryNote.setCustomerPoid(0L);
+        }
 
         // Save to get transactionPoid
         SalesDeliveryNoteHdr savedDeliveryNote = deliveryNoteHdrRepository.save(deliveryNote);
@@ -95,16 +107,8 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         log.info("createDeliveryNote persisted groupPoid={} userId={} transactionPoid={} ", groupPoid, userId,
                 savedDeliveryNote.getTransactionPoid());
 
-        // Save item details (only items with CheckAll = "Y")
-        if (request.getItemDetails() != null && !request.getItemDetails().isEmpty()) {
-            saveItemDetails(savedDeliveryNote.getTransactionPoid(),
-                    request.getItemDetails().stream()
-                            .filter(item -> "Y".equals(item.getCheckAll()))
-                            .collect(Collectors.toList()),
-                    userId);
-        }
-
-        // Calculate totals
+        // Item details are not saved during create - they can be added later via update API
+        // Calculate totals (will be 0 if no items)
         calculateTotals(savedDeliveryNote.getTransactionPoid());
 
         // Refresh to get auto-generated DocRef
@@ -112,8 +116,8 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         SalesDeliveryNoteHdr refreshedDeliveryNote = deliveryNoteHdrRepository.findByTransactionPoid(
                 savedDeliveryNote.getTransactionPoid()).orElse(savedDeliveryNote);
 
-        // Convert to DTO
-        SalesDeliveryNoteHdrDto dto = convertToDto(refreshedDeliveryNote, true);
+        // Convert to DTO (without details and itemDetails)
+        SalesDeliveryNoteHdrDto dto = convertToDto(refreshedDeliveryNote, false);
         log.info("createDeliveryNote completed for groupPoid={} userId={} transactionPoid={}", groupPoid, userId,
                 dto.getTransactionPoid());
         return dto;
@@ -158,7 +162,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     @Override
     @Transactional
     public SalesDeliveryNoteHdrDto updateDeliveryNote(Long groupPoid, Long transactionPoid,
-            CreateSalesDeliveryNoteRequest request,
+            UpdateSalesDeliveryNoteRequest request,
             Long companyPoid, String userId) {
         log.info("updateDeliveryNote service started for transactionPoid={} groupPoid={}", transactionPoid, groupPoid);
         SalesDeliveryNoteHdr deliveryNote = deliveryNoteHdrRepository
@@ -178,12 +182,17 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
             throw new CustomException("Cannot update delivery note. Current document is in closed status");
         }
 
-        // Validate customer change if customer is being changed
-        if (!deliveryNote.getCustomerPoid().equals(request.getCustomerPoid())) {
-            ValidateCustomerChangeResponse validation = validateCustomerChange(
-                    transactionPoid, companyPoid);
-            if (!validation.getCanChange()) {
-                throw new CustomException(validation.getMessage());
+        // Validate customer change if customer is being changed (only for CUSTOMER party type)
+        if (request.getPartyType() != null && "CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            Long existingCustomerPoid = deliveryNote.getCustomerPoid();
+            Long newCustomerPoid = request.getCustomerPoid();
+            if (existingCustomerPoid != null && newCustomerPoid != null && 
+                !existingCustomerPoid.equals(newCustomerPoid)) {
+                ValidateCustomerChangeResponse validation = validateCustomerChange(
+                        transactionPoid, companyPoid);
+                if (!validation.getCanChange()) {
+                    throw new CustomException(validation.getMessage());
+                }
             }
         }
 
@@ -191,35 +200,57 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         validateDeliveryNoteRequest(request);
 
         // Update fields (excluding read-only fields)
+        // Store original transactionDate before copying
+        Timestamp originalTransactionDate = deliveryNote.getTransactionDate();
         BeanUtils.copyProperties(request, deliveryNote, "transactionPoid", "docRef", "createdBy",
-                "createdDate", "qtnRefNo", "deliveryStatus");
+                "createdDate", "qtnRefNo");
+        // If transactionDate is not provided in request, preserve the original value
+        if (request.getTransactionDate() == null) {
+            deliveryNote.setTransactionDate(originalTransactionDate);
+        }
         deliveryNote.setLastmodifiedBy(userId);
+        
+        // Handle partyType-based field requirements
+        if (request.getPartyType() != null && "PRINCIPAL".equalsIgnoreCase(request.getPartyType())) {
+            // When partyType is PRINCIPAL, customerPoid should be set to 0
+            deliveryNote.setCustomerPoid(0L);
+        } else if (request.getPartyType() != null && "CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            // When partyType is CUSTOMER, principalPoid should be null
+            deliveryNote.setPrincipalPoid(null);
+        } else if (request.getPrincipalPoid() != null) {
+            // If principalPoid is provided (even without explicit partyType), set customerPoid to 0
+            deliveryNote.setCustomerPoid(0L);
+        }
 
         // Remove items with CheckAll = "N" before updating
         // itemDtlRepository.deleteByTransactionPoidAndCheckAllN(transactionPoid);
+
+        // Save header first
+        SalesDeliveryNoteHdr savedDeliveryNote = deliveryNoteHdrRepository.save(deliveryNote);
+        deliveryNoteHdrRepository.flush();
 
         // Process item details based on actionType (UPDATE, DELETE, or CREATE)
         if (request.getItemDetails() != null && !request.getItemDetails().isEmpty()) {
             processItemDetailsByActionType(transactionPoid, 
                     request.getItemDetails(),
-                    // .stream()
-                    // .filter(item -> item.getActionType() != null)
-                    //         .filter(item -> "Y".equals(item.getCheckAll()))
-                    //         .collect(Collectors.toList()),
                     userId);
+            // Flush to ensure items are persisted before calculating totals
+            entityManager.flush();
         }
-
-        // Save
-        SalesDeliveryNoteHdr savedDeliveryNote = deliveryNoteHdrRepository.save(deliveryNote);
-        deliveryNoteHdrRepository.flush();
+        
         // Calculate totals
         calculateTotals(transactionPoid);
+        
+        // Refresh to get all items including newly created ones
+        deliveryNoteHdrRepository.flush();
+        SalesDeliveryNoteHdr refreshedDeliveryNote = deliveryNoteHdrRepository.findByTransactionPoid(transactionPoid)
+                .orElse(savedDeliveryNote);
 
         // Call stored procedure to update quotation header with deleted details
         // callUpdateDeletedDetailsProcedure(groupPoid, companyPoid, userId,
         // transactionPoid);
 
-        SalesDeliveryNoteHdrDto dto = convertToDto(savedDeliveryNote, true);
+        SalesDeliveryNoteHdrDto dto = convertToDto(refreshedDeliveryNote, true);
         log.info("updateDeliveryNote completed for transactionPoid={} companyPoid={}",
                 deliveryNote.getTransactionPoid(), deliveryNote.getCompanyPoid());
         return dto;
@@ -667,20 +698,62 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
     // Helper methods
     private void validateDeliveryNoteRequest(CreateSalesDeliveryNoteRequest request) {
-        if (request.getCustomerPoid() == null) {
-            log.warn("Validation failed : Customer is required, for customerPoid={}", request.getCustomerPoid());
-            throw new CustomException("Customer is required");
+        // Validate partyType-based requirements
+        if (request.getPartyType() != null && "CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            if (request.getCustomerPoid() == null) {
+                log.warn("Validation failed : Customer is required when partyType is CUSTOMER");
+                throw new CustomException("Customer is required when party type is CUSTOMER");
+            }
+        } else if (request.getPartyType() != null && "PRINCIPAL".equalsIgnoreCase(request.getPartyType())) {
+            if (request.getPrincipalPoid() == null) {
+                log.warn("Validation failed : Principal is required when partyType is PRINCIPAL");
+                throw new CustomException("Principal is required when party type is PRINCIPAL");
+            }
+        } else if (request.getPartyType() == null || request.getPartyType().trim().isEmpty()) {
+            // Default to CUSTOMER if partyType is not provided
+            if (request.getCustomerPoid() == null) {
+                log.warn("Validation failed : Customer is required");
+                throw new CustomException("Customer is required");
+            }
         }
-        if (request.getTransactionDate() == null) {
-            log.warn("Validation failed : Transaction date is required, for customerPoid={}",
-                    request.getCustomerPoid());
-            throw new CustomException("Transaction date is required");
+        
+        if (request.getSalesmanPoid() == null) {
+            log.warn("Validation failed : Salesman is required");
+            throw new CustomException("Salesman is required");
+        }
+        if (request.getCurrencyRate() == null) {
+            log.warn("Validation failed : Currency rate is required");
+            throw new CustomException("Currency rate is required");
+        }
+    }
+
+    private void validateDeliveryNoteRequest(UpdateSalesDeliveryNoteRequest request) {
+        // Validate partyType-based requirements
+        if (request.getPartyType() != null && "CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            if (request.getCustomerPoid() == null) {
+                log.warn("Validation failed : Customer is required when partyType is CUSTOMER");
+                throw new CustomException("Customer is required when party type is CUSTOMER");
+            }
+        } else if (request.getPartyType() != null && "PRINCIPAL".equalsIgnoreCase(request.getPartyType())) {
+            if (request.getPrincipalPoid() == null) {
+                log.warn("Validation failed : Principal is required when partyType is PRINCIPAL");
+                throw new CustomException("Principal is required when party type is PRINCIPAL");
+            }
+        } else if (request.getPartyType() == null || request.getPartyType().trim().isEmpty()) {
+            // Default to CUSTOMER if partyType is not provided
+            if (request.getCustomerPoid() == null) {
+                log.warn("Validation failed : Customer is required");
+                throw new CustomException("Customer is required");
+            }
         }
     }
 
     private void saveItemDetails(Long transactionPoid, List<CreateSalesDeliveryNoteItemDtlRequest> details,
             String userId) {
-        Long detRowId = 1L;
+        // Get the maximum detRowId for this transaction to avoid conflicts
+        Long maxDetRowId = itemDtlRepository.findMaxDetRowIdByTransactionPoid(transactionPoid);
+        Long detRowId = (maxDetRowId != null && maxDetRowId > 0) ? maxDetRowId + 1 : 1L;
+        
         for (CreateSalesDeliveryNoteItemDtlRequest detail : details) {
             SalesDeliveryNoteItemDtl itemDtl = new SalesDeliveryNoteItemDtl();
             itemDtl.setTransactionPoid(transactionPoid);
@@ -700,6 +773,8 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
             itemDtl.setLastmodifiedBy(userId);
             itemDtlRepository.save(itemDtl);
         }
+        // Flush to ensure items are persisted
+        entityManager.flush();
     }
 
     private void updateItemDetails(Long transactionPoid, List<CreateSalesDeliveryNoteItemDtlRequest> details,
@@ -714,9 +789,10 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
     /**
      * Process item details based on actionType:
-     * - DELETE: Delete the item by detRowId
-     * - UPDATE: Update the existing item by detRowId
-     * - CREATE/null: Add as new item
+     * - isDeleted: Delete the item by detRowId
+     * - isUpdated: Update the existing item by detRowId
+     * - isCreated/null: Add as new item
+     * - noChange/noChanges: Validate item exists but don't modify (will be included in response)
      */
     private void processItemDetailsByActionType(Long transactionPoid, 
             List<CreateSalesDeliveryNoteItemDtlRequest> details, String userId) {
@@ -729,7 +805,30 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         for (CreateSalesDeliveryNoteItemDtlRequest item : details) {
             String actionType = item.getActionType();
             
-            if ("DELETE".equalsIgnoreCase(actionType)) {
+            // Handle noChange/noChanges - validate item exists but don't modify
+            if ("noChange".equalsIgnoreCase(actionType) || "noChanges".equalsIgnoreCase(actionType)) {
+                if (item.getDetRowId() != null) {
+                    // Validate that the item exists in database
+                    SalesDeliveryNoteItemDtl existingItem = itemDtlRepository
+                            .findById(new SalesDeliveryNoteItemDtlId(transactionPoid, item.getDetRowId()))
+                            .orElse(null);
+                    if (existingItem == null) {
+                        log.warn("noChange action: Item not found in database transactionPoid={} detRowId={}, treating as CREATE",
+                                transactionPoid, item.getDetRowId());
+                        itemsToCreate.add(item);
+                    } else {
+                        log.debug("noChange action: Item exists, skipping modification transactionPoid={} detRowId={}", 
+                                transactionPoid, item.getDetRowId());
+                        // Item exists, no modification needed - it will be included in response automatically
+                    }
+                } else {
+                    log.warn("noChange action requires detRowId, treating as CREATE transactionPoid={}", transactionPoid);
+                    itemsToCreate.add(item);
+                }
+                continue; // Skip to next item
+            }
+            
+            if ("isDeleted".equalsIgnoreCase(actionType) || "DELETE".equalsIgnoreCase(actionType)) {
                 // Delete item by detRowId
                 if (item.getDetRowId() != null) {
                     try {
@@ -740,9 +839,9 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
                                 transactionPoid, item.getDetRowId(), ex.getMessage());
                     }
                 } else {
-                    log.warn("DELETE action requires detRowId, skipping item transactionPoid={}", transactionPoid);
+                    log.warn("isDeleted action requires detRowId, skipping item transactionPoid={}", transactionPoid);
                 }
-            } else if ("UPDATE".equalsIgnoreCase(actionType)) {
+            } else if ("isUpdated".equalsIgnoreCase(actionType) || "UPDATE".equalsIgnoreCase(actionType)) {
                 // Update existing item by detRowId
                 if (item.getDetRowId() != null) {
                     try {
@@ -794,12 +893,12 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
                         log.warn("Failed to update item detail transactionPoid={} detRowId={}: {}", 
                                 transactionPoid, item.getDetRowId(), ex.getMessage());
                     }
-                } else {
-                    log.warn("UPDATE action requires detRowId, treating as CREATE transactionPoid={}", transactionPoid);
-                    itemsToCreate.add(item);
-                }
+                    } else {
+                        log.warn("isUpdated action requires detRowId, treating as CREATE transactionPoid={}", transactionPoid);
+                        itemsToCreate.add(item);
+                    }
             } else {
-                // CREATE or null actionType - add as new item
+                // isCreated or null actionType - add as new item
                 itemsToCreate.add(item);
             }
         }

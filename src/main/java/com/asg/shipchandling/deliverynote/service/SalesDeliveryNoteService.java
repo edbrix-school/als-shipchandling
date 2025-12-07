@@ -17,7 +17,7 @@ public interface SalesDeliveryNoteService {
                         Long companyPoid, Boolean includeDetails);
 
         SalesDeliveryNoteHdrDto updateDeliveryNote(Long groupPoid, Long transactionPoid,
-                        CreateSalesDeliveryNoteRequest request,
+                        UpdateSalesDeliveryNoteRequest request,
                         Long companyPoid, String userId);
 
         void deleteDeliveryNote(Long groupPoid, Long transactionPoid, Long companyPoid);

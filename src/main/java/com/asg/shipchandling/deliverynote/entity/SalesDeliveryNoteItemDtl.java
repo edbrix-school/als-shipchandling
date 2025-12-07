@@ -42,7 +42,7 @@ public class SalesDeliveryNoteItemDtl {
     @Column(name = "AMOUNT")
     private Long amount;
 
-    @Column(name = "REMARKS", length = 100)
+    @Column(name = "REMARKS", length = 4000)
     private String remarks;
 
     @Column(name = "STOCK_UNIT_POID")
