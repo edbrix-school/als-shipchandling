@@ -21,5 +21,5 @@ class CreateSalesDeliveryNoteItemDtlRequest {
     private Long qtnDetRowId; // Set when loading from quotation
     private Long totCost;
     private String itemType;
-    private String actionType; // "UPDATE", "DELETE", or null/"CREATE" for new items
+    private String actionType; // "isCreated", "isUpdated", "isDeleted", "noChange", or null (defaults to isCreated)
 }

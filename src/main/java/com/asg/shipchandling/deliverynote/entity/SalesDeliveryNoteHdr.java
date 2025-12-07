@@ -38,7 +38,7 @@ public class SalesDeliveryNoteHdr {
     @Column(name = "COMPANY_POID")
     private Long companyPoid;
 
-    @Column(name = "CUSTOMER_POID", nullable = false)
+    @Column(name = "CUSTOMER_POID")
     private Long customerPoid;
 
     @Column(name = "CURRENCY_CODE", length = 20)
@@ -89,13 +89,13 @@ public class SalesDeliveryNoteHdr {
     @Column(name = "DESCRIPTION_PRINT_YN", length = 1)
     private String descriptionPrintYn = "Y";
 
-    @Column(name = "PARTY_ADDRESS_DETAILS", length = 500)
+    @Column(name = "PARTY_ADDRESS_DETAILS", length = 1000)
     private String partyAddressDetails;
 
     @Column(name = "PRINT_DIVISION_POID")
     private Long printDivisionPoid;
 
-    @Column(name = "PARTY_TYPE", length = 500)
+    @Column(name = "PARTY_TYPE", length = 100)
     private String partyType;
 
     @Column(name = "PRINCIPAL_POID")

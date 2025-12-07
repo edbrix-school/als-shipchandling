@@ -1,7 +1,6 @@
 package com.asg.shipchandling.deliverynote.dto;
 
 
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -16,10 +15,8 @@ import java.util.List;
 public class UpdateSalesDeliveryNoteRequest {
     // Same fields as CreateSalesDeliveryNoteRequest (excluding transactionPoid, docRef, createdBy, createdDate, qtnRefNo)
     
-    @NotNull(message = "Transaction date is required")
     private Timestamp transactionDate;
 
-    @NotNull(message = "Customer is required")
     private Long customerPoid;
 
     @Size(max = 20, message = "Currency code must not exceed 20 characters")
@@ -65,6 +62,14 @@ public class UpdateSalesDeliveryNoteRequest {
 
     @Size(max = 500, message = "Remarks must not exceed 500 characters")
     private String remarks;
+
+    @Size(max = 100, message = "Party type must not exceed 100 characters")
+    private String partyType;
+
+    private Long principalPoid;
+
+    @Size(max = 1000, message = "Party address details must not exceed 1000 characters")
+    private String partyAddressDetails;
 
     // Detail tables
     private List<CreateSalesDeliveryNoteItemDtlRequest> itemDetails;

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.asg.shipchandling.deliverynote.dto.CreateSalesDeliveryNoteItemDtlRequest;
 import com.asg.shipchandling.deliverynote.dto.CreateSalesDeliveryNoteRequest;
+import com.asg.shipchandling.deliverynote.dto.UpdateSalesDeliveryNoteRequest;
 import com.asg.shipchandling.deliverynote.dto.LoadQuotationItemsResponse;
 import com.asg.shipchandling.deliverynote.dto.SalesDeliveryNoteDependenciesDto;
 import com.asg.shipchandling.deliverynote.dto.SalesDeliveryNoteHdrDto;
@@ -64,7 +65,7 @@ public class SalesDeliveryNoteController {
         @GetMapping("/{transactionPoid}")
         public ResponseEntity<?> getDeliveryNoteByPoid(
                         @PathVariable Long transactionPoid,
-                        @RequestParam(required = false, defaultValue = "false") Boolean includeDetails) {
+                        @RequestParam(required = false, defaultValue = "true") Boolean includeDetails) {
 
                 log.info("getDeliveryNoteByPoid started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesDeliveryNoteHdrDto dto = deliveryNoteService.getDeliveryNoteByPoid(UserContext.getGroupPoid(),
@@ -82,7 +83,7 @@ public class SalesDeliveryNoteController {
         @PutMapping("/{transactionPoid}")
         public ResponseEntity<?> updateDeliveryNote(
                         @PathVariable Long transactionPoid,
-                        @Valid @RequestBody CreateSalesDeliveryNoteRequest request) {
+                        @Valid @RequestBody UpdateSalesDeliveryNoteRequest request) {
 
                 log.info("updateDeliveryNote started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesDeliveryNoteHdrDto dto = deliveryNoteService.updateDeliveryNote(

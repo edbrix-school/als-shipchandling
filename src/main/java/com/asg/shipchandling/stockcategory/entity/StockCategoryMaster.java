@@ -40,13 +40,13 @@ public class StockCategoryMaster {
     private Long parentCategoryPoid;
 
     @Column(name = "STOCK_GL_POID")
-    private BigDecimal stockGlPoid;
+    private Long stockGlPoid;
 
     @Column(name = "SALES_GL_POID")
-    private BigDecimal salesGlPoid;
+    private Long salesGlPoid;
 
     @Column(name = "COST_OF_SALES_GL_POID")
-    private BigDecimal costOfSalesGlPoid;
+    private Long costOfSalesGlPoid;
 
     @Column(name = "OUTPUT_TAX_POID")
     private BigDecimal outputTaxPoid;
