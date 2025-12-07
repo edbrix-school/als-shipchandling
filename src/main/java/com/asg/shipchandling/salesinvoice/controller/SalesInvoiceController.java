@@ -30,6 +30,8 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.asg.common.lib.annotation.AllowedAction;
+import com.asg.common.lib.enums.UserRolesRightsEnum;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -55,12 +57,13 @@ public class SalesInvoiceController {
                         @ApiResponse(responseCode = "401", description = "Unauthorized")
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @PostMapping
+        @AllowedAction(UserRolesRightsEnum.CREATE)
         public ResponseEntity<?> createSalesInvoice(
                         @Valid @RequestBody CreateSalesInvoiceRequest request) {
                 log.info("Creating sales invoice with groupId: {} companyId: {} userId: {}", UserContext.getGroupPoid(), UserContext.getCompanyPoid(),
                                 UserContext.getUserId());
                 SalesInvoiceHdrDto dto = invoiceService.createSalesInvoice(
-                                request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid().toString());
                 log.info("Sales invoice created with transactionPoid: {}", dto.getTransactionPoid());
                 return success("Sales invoice created successfully", dto);
         }
@@ -71,6 +74,7 @@ public class SalesInvoiceController {
                         @ApiResponse(responseCode = "401", description = "Unauthorized")
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @GetMapping("/{transactionPoid}")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> getSalesInvoiceByPoid(
                         @PathVariable Long transactionPoid,
                         @RequestParam(required = false, defaultValue = "false") Boolean includeDetails) {
@@ -89,13 +93,14 @@ public class SalesInvoiceController {
                         @ApiResponse(responseCode = "401", description = "Unauthorized")
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @PutMapping("/{transactionPoid}")
+        @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> updateSalesInvoice(
                         @PathVariable Long transactionPoid,
                         @Valid @RequestBody UpdateSalesInvoiceRequest request) {
                 log.info("Updating sales invoice with transactionPoid: {} groupId: {} companyId: {}", transactionPoid,
                                 UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 SalesInvoiceHdrDto dto = invoiceService.updateSalesInvoice(
-                                transactionPoid, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                transactionPoid, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid().toString());
                 log.info("Sales invoice updated with transactionPoid: {} groupId: {} companyId: {}", transactionPoid,
                                 UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 return success("Sales invoice updated successfully", dto);
@@ -108,6 +113,7 @@ public class SalesInvoiceController {
                         @ApiResponse(responseCode = "401", description = "Unauthorized")
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @DeleteMapping("/{transactionPoid}")
+        @AllowedAction(UserRolesRightsEnum.DELETE)
         public ResponseEntity<?> deleteSalesInvoice(
                         @PathVariable Long transactionPoid) {
                 log.info("Deleting sales invoice with transactionPoid: {} groupId: {} companyId: {}", transactionPoid,
@@ -123,6 +129,7 @@ public class SalesInvoiceController {
                         @ApiResponse(responseCode = "401", description = "Unauthorized")
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @PostMapping("/list")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> getAllSalesInvoices(
                         @Valid @RequestBody FilterRequestDto filterRequest,
                         @RequestParam(required = false, defaultValue = "0") Integer page,
@@ -143,6 +150,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Add Invoice Item Detail", description = "Adds a new item detail to the sales invoice. Auto-populates tax percentage if tax is selected.")
         @PostMapping("/{transactionPoid}/item-details")
+        @AllowedAction(UserRolesRightsEnum.CREATE)
         public ResponseEntity<?> addItemDetail(
                         @PathVariable Long transactionPoid,
                         @Valid @RequestBody CreateSalesInvoiceDtlRequest request) {
@@ -157,6 +165,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Update Invoice Item Detail", description = "Updates an existing invoice item detail. Cannot update if invoice is verified.")
         @PutMapping("/{transactionPoid}/item-details/{detRowId}")
+        @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> updateItemDetail(
                         @PathVariable Long transactionPoid,
                         @PathVariable Long detRowId,
@@ -164,7 +173,7 @@ public class SalesInvoiceController {
                 log.info("Updating item detail in sales invoice with transactionPoid: {} detRowId: {} groupId: {} companyId: {}",
                                 transactionPoid, detRowId, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 SalesInvoiceDtlDto dto = invoiceService.updateInvoiceDetail(
-                                transactionPoid, detRowId, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                transactionPoid, detRowId, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid().toString());
                 log.info("Item detail updated in sales invoice with transactionPoid: {} detRowId: {} groupId: {} companyId: {}",
                                 transactionPoid, detRowId, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 return success("Item detail updated successfully", dto);
@@ -172,6 +181,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Delete Invoice Item Detail", description = "Deletes an invoice item detail. Cannot delete if invoice is verified.")
         @DeleteMapping("/{transactionPoid}/item-details/{detRowId}")
+        @AllowedAction(UserRolesRightsEnum.DELETE)
         public ResponseEntity<?> deleteItemDetail(
                         @PathVariable Long transactionPoid,
                         @PathVariable Long detRowId) {
@@ -186,6 +196,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Get Invoice Item Details", description = "Retrieves all item details for a sales invoice.")
         @GetMapping("/{transactionPoid}/item-details")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> getItemDetails(
                         @PathVariable Long transactionPoid) {
                 log.info("Fetching item details for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
@@ -201,6 +212,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Add Delivery Note Detail", description = "Adds a delivery note reference to the sales invoice.")
         @PostMapping("/{transactionPoid}/delivery-note-details")
+        @AllowedAction(UserRolesRightsEnum.CREATE)
         public ResponseEntity<?> addDeliveryNoteDetail(
                         @PathVariable Long transactionPoid,
                         @Valid @RequestBody CreateSalesDnDtlRequest request) {
@@ -215,6 +227,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Update Delivery Note Detail", description = "Updates an existing delivery note detail. Cannot update if invoice is verified.")
         @PutMapping("/{transactionPoid}/delivery-note-details/{detRowId}")
+        @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> updateDeliveryNoteDetail(
                         @PathVariable Long transactionPoid,
                         @PathVariable Long detRowId,
@@ -230,6 +243,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Delete Delivery Note Detail", description = "Deletes a delivery note detail. Cannot delete if invoice is verified.")
         @DeleteMapping("/{transactionPoid}/delivery-note-details/{detRowId}")
+        @AllowedAction(UserRolesRightsEnum.DELETE)
         public ResponseEntity<?> deleteDeliveryNoteDetail(
                         @PathVariable Long transactionPoid,
                         @PathVariable Long detRowId) {
@@ -243,6 +257,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Get Delivery Note Details", description = "Retrieves all delivery note details for a sales invoice.")
         @GetMapping("/{transactionPoid}/delivery-note-details")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> getDeliveryNoteDetails(
                         @PathVariable Long transactionPoid) {
                 log.info("Fetching delivery note details for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
@@ -258,6 +273,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Get Cost Booked Details", description = "Retrieves all cost booked details for a sales invoice. This is a read-only table.")
         @GetMapping("/{transactionPoid}/cost-booked-details")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> getCostBookedDetails(
                         @PathVariable Long transactionPoid) {
 
@@ -275,6 +291,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Recalculates GP", description = "Recalculates Gross Profit for the invoice. Calls PROC_AR_SCH_GP_CALC.")
         @PostMapping("/{transactionPoid}/refresh-gp")
+        @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> calculateGp(
                         @PathVariable Long transactionPoid) {
                 log.info("Calculating GP for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
@@ -287,6 +304,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Calculate Due Date", description = "Calculates due date from transaction date and credit days. Calls PROC_CALC_DUEDAYS.")
         @GetMapping("/{transactionPoid}/calculate-due-date")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> calculateDueDate(
                         @PathVariable Long transactionPoid,
                         @RequestParam Timestamp transactionDate,
@@ -302,6 +320,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Calculate Item Discount/Commission", description = "Calculates discount and commission for an invoice item. Calls PROC_AR_SCH_DIS_COM_CAL.")
         @PostMapping("/{transactionPoid}/item-details/{detRowId}/calculate-discount-commission")
+        @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> calculateItemDiscountCommission(
                         @PathVariable Long transactionPoid,
                         @PathVariable Long detRowId,
@@ -318,6 +337,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Calculate Header Discount/Commission", description = "Calculates discount and commission at header level. Calls PROC_AR_SCH_DIS_COM_CAL_HDR.")
         @PostMapping("/{transactionPoid}/item-details/{detRowId}/calculate-header-discount-commission")
+        @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> calculateHeaderDiscountCommission(
                         @PathVariable Long transactionPoid,
                         @PathVariable Long detRowId,
@@ -334,6 +354,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Load Quotation", description = "Loads quotation items into invoice. Invoice details table must be empty. Calls PROC_AR_SCH_QTN_LOAD_BUTTON.")
         @PostMapping("/{transactionPoid}/load-quotation")
+        @AllowedAction(UserRolesRightsEnum.CREATE)
         public ResponseEntity<?> loadQuotationItems(
                         @PathVariable Long transactionPoid,
                         @RequestBody LoadQuotationItemsRequest request) {
@@ -354,6 +375,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Load Delivery Note", description = "Loads delivery note items into invoice. Delivery notes must be selected first. Invoice details table must be empty. Calls PROC_AR_SCH_SALESINV_DN_LOAD.")
         @PostMapping("/{transactionPoid}/load-delivery-note")
+        @AllowedAction(UserRolesRightsEnum.CREATE)
         public ResponseEntity<?> loadDeliveryNote(
                         @PathVariable Long transactionPoid) {
                 log.info("Loading delivery note into sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
@@ -367,6 +389,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Unload Quotation", description = "Unloads/clears quotation details from invoice. Calls PROC_AR_SCH_UNLOAD_QUOTATION1.")
         @PostMapping("/{transactionPoid}/unload-quotation")
+        @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> unloadQuotation(
                         @PathVariable Long transactionPoid) {
                 log.info("Unloading quotation from sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
@@ -380,6 +403,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Load Cost Bookings", description = "Loads cost booking details into the invoice. Calls PROC_AR_SCH_SALES_INV_PJ_LOAD1.")
         @PostMapping("/{transactionPoid}/load-cost-bookings")
+        @AllowedAction(UserRolesRightsEnum.CREATE)
         public ResponseEntity<?> loadCostBookings(
                         @PathVariable Long transactionPoid) {
                 log.info("Loading cost bookings into sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
@@ -393,6 +417,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Verify Invoice", description = "Verifies the invoice. Once verified, invoice cannot be edited.")
         @PostMapping("/{transactionPoid}/verify")
+        @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> verifyInvoice(
                         @PathVariable Long transactionPoid) {
                 log.info("Verifying sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
@@ -406,6 +431,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Validate Customer", description = "Validates customer credit details. Calls PROC_VALIDATE_CUSTOMER.")
         @GetMapping("/validate-customer")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> validateCustomer(
                         @RequestParam Long customerPoid) {
                 log.info("Validating customer with customerPoid: {} groupId: {} companyId: {}", customerPoid, UserContext.getGroupPoid(),
@@ -419,6 +445,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Load Credit Details", description = "Loads customer credit details (credit days, payment mode, etc.). Calls PROC_LOAD_CREDIT_DETAILS.")
         @PostMapping("/load-credit-details")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> loadCreditDetails(
                         @RequestParam Long customerPoid,
                         @RequestBody CreditDetailsRequest request) {
@@ -433,6 +460,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Load Quotation Currency", description = "Loads currency code and rate from quotation. Calls PROC_AR_SCH_QTN_LOAD_CUR1.")
         @GetMapping("/load-quotation-currency/{transactionPoid}")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> loadQuotationCurrency(
                         @PathVariable Long transactionPoid,
                         @RequestParam String qtnPoid) {
@@ -444,6 +472,7 @@ public class SalesInvoiceController {
 
         @Operation(summary = "Check Sales Invoice Dependencies", description = "Checks if invoice can be deleted by checking for dependencies (receipts, credit notes, GL postings).")
         @GetMapping("/{transactionPoid}/dependencies")
+        @AllowedAction(UserRolesRightsEnum.DELETE)
         public ResponseEntity<?> checkSalesInvoiceDependencies(
                         @PathVariable Long transactionPoid) {
                 log.info("Checking dependencies for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
