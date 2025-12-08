@@ -200,37 +200,37 @@ public class StockMasterController {
     }
 
 
-    @Operation(
-            summary = "Create or Update stock master",
-            description = "Creates a new stock item or updates existing one based on actionRequired. StockCode is auto-generated. Calls stored procedures for validation.",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Successfully created/updated stock item"),
-                    @ApiResponse(responseCode = "400", description = "Invalid input or validation error"),
-                    @ApiResponse(responseCode = "401", description = "Unauthorized")
-            },
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
-    @PostMapping
-    @AllowedAction(UserRolesRightsEnum.CREATE)
-    public ResponseEntity<?> createOrUpdateStockMaster(
-            @RequestParam(required = true) String documentId,
-            @RequestParam(required = true) String actionRequired,
-            @Valid @RequestBody CreateStockMasterRequest request) {
+    // @Operation(
+    //         summary = "Create or Update stock master",
+    //         description = "Creates a new stock item or updates existing one based on actionRequired. StockCode is auto-generated. Calls stored procedures for validation.",
+    //         responses = {
+    //                 @ApiResponse(responseCode = "200", description = "Successfully created/updated stock item"),
+    //                 @ApiResponse(responseCode = "400", description = "Invalid input or validation error"),
+    //                 @ApiResponse(responseCode = "401", description = "Unauthorized")
+    //         },
+    //         security = @SecurityRequirement(name = "bearerAuth")
+    // )
+    // @PostMapping
+    // @AllowedAction(UserRolesRightsEnum.CREATE)
+    // public ResponseEntity<?> createOrUpdateStockMaster(
+    //         @RequestParam(required = true) String documentId,
+    //         @RequestParam(required = true) String actionRequired,
+    //         @Valid @RequestBody CreateStockMasterRequest request) {
 
-        if ("CREATE".equalsIgnoreCase(actionRequired)) {
-            StockMasterDto dto = stockMasterService.createStockMaster(request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
-            return com.asg.shipchandling.common.ApiResponse.success("Stock item created successfully", dto);
-        } else if ("UPDATE".equalsIgnoreCase(actionRequired)) {
-            if (request.getStockPoid() == null) {
-                return com.asg.shipchandling.common.ApiResponse.badRequest("stockPoid is required for UPDATE operation");
-            }
-            UpdateStockMasterRequest updateRequest = convertToUpdateRequest(request);
-            StockMasterDto dto = stockMasterService.updateStockMaster(request.getStockPoid(), updateRequest, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
-            return com.asg.shipchandling.common.ApiResponse.success("Stock Master Updated Successfully", dto);
-        } else {
-            return com.asg.shipchandling.common.ApiResponse.badRequest("Invalid actionRequired. Must be CREATE or UPDATE");
-        }
-    }
+    //     if ("CREATE".equalsIgnoreCase(actionRequired)) {
+    //         StockMasterDto dto = stockMasterService.createStockMaster(request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+    //         return com.asg.shipchandling.common.ApiResponse.success("Stock item created successfully", dto);
+    //     } else if ("UPDATE".equalsIgnoreCase(actionRequired)) {
+    //         if (request.getStockPoid() == null) {
+    //             return com.asg.shipchandling.common.ApiResponse.badRequest("stockPoid is required for UPDATE operation");
+    //         }
+    //         UpdateStockMasterRequest updateRequest = convertToUpdateRequest(request);
+    //         StockMasterDto dto = stockMasterService.updateStockMaster(request.getStockPoid(), updateRequest, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+    //         return com.asg.shipchandling.common.ApiResponse.success("Stock Master Updated Successfully", dto);
+    //     } else {
+    //         return com.asg.shipchandling.common.ApiResponse.badRequest("Invalid actionRequired. Must be CREATE or UPDATE");
+    //     }
+    // }
 
     @Operation(
             summary = "Create stock master",
@@ -242,20 +242,22 @@ public class StockMasterController {
             },
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    @PostMapping("/Create")
+    @PostMapping("/create")
     @AllowedAction(UserRolesRightsEnum.CREATE)
     public ResponseEntity<?> createStockMaster(
-            @Valid @RequestBody CreateStockMasterRequest request) {
-
+        @Valid @RequestBody CreateStockMasterRequest request) {
+        // Use documentId for logging/context (can be used for audit trail or validation)
+        // documentId is available for use in service layer if needed
+        
         StockMasterDto dto = stockMasterService.createStockMaster(request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
         return com.asg.shipchandling.common.ApiResponse.success("Stock item created successfully", dto);
     }
 
-    private UpdateStockMasterRequest convertToUpdateRequest(CreateStockMasterRequest request) {
-        UpdateStockMasterRequest updateRequest = new UpdateStockMasterRequest();
-        BeanUtils.copyProperties(request, updateRequest);
-        return updateRequest;
-    }
+    // private UpdateStockMasterRequest convertToUpdateRequest(CreateStockMasterRequest request) {
+    //     UpdateStockMasterRequest updateRequest = new UpdateStockMasterRequest();
+    //     BeanUtils.copyProperties(request, updateRequest);
+    //     return updateRequest;
+    // }
 
 
 
