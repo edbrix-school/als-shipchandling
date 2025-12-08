@@ -278,22 +278,21 @@ public class SalesQuotationSchController {
         @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> getCustomerAddressDetails(
                         @PathVariable Long customerPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
                         @RequestParam(required = false, defaultValue = "SALES") String addressType) {
                 log.info("getCustomerAddressDetails started for customerPoid={} addressType={} companyPoid={}", 
-                                customerPoid, addressType, companyPoid);
+                                customerPoid, addressType, UserContext.getCompanyPoid());
                 
                 // Convert userId string to Long (assuming userId is numeric)
-                Long userPoid;
-                try {
-                        userPoid = Long.parseLong(UserContext.getUserId());
-                } catch (NumberFormatException e) {
-                        log.error("Invalid userId format: {}", UserContext.getUserId());
-                        return badRequest("Invalid userId format. Expected numeric value.");
-                }
+                // Long userPoid;
+                // try {
+                //         userPoid = Long.parseLong(UserContext.getUserId());
+                // } catch (NumberFormatException e) {
+                //         log.error("Invalid userId format: {}", UserContext.getUserId());
+                //         return badRequest("Invalid userId format. Expected numeric value.");
+                // }
                 
                 List<AddressDetailsResponse> addressDetails = quotationSchService.getCustomerAddress(
-                                userPoid, customerPoid, addressType);
+                                UserContext.getUserPoid(), customerPoid, addressType);
                 
                 log.info("getCustomerAddressDetails completed for customerPoid={} found {} address details", 
                                 customerPoid, addressDetails != null ? addressDetails.size() : 0);
@@ -306,10 +305,9 @@ public class SalesQuotationSchController {
         @PostMapping("/{transactionPoid}/import-items")
         @AllowedAction(UserRolesRightsEnum.CREATE)
         public ResponseEntity<?> importItems(
-                        @PathVariable Long transactionPoid,
-                        @RequestHeader("X-Login-User") String loginUser) {
+                        @PathVariable Long transactionPoid) {
                 log.info("importItems started for transactionPoid={} companyPoid={}", transactionPoid, UserContext.getCompanyPoid());
-                ImportItemsRequest request = new ImportItemsRequest(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), transactionPoid, loginUser);
+                ImportItemsRequest request = new ImportItemsRequest(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), transactionPoid, UserContext.getUserId());
                 StoredProcedureResponse response = quotationSchService.importItems(request);
                 log.info("importItems completed for transactionPoid={}", transactionPoid);
                 if (response.isSuccess()) {
@@ -328,13 +326,12 @@ public class SalesQuotationSchController {
         @AllowedAction(UserRolesRightsEnum.CREATE)
         public ResponseEntity<?> importItemsFromExcel(
                         @PathVariable Long transactionPoid,
-                        @RequestHeader("X-Company-Poid") Long companyPoid,
                         @RequestParam("file") MultipartFile file) {
                 log.info("importItemsFromExcel started for transactionPoid={} companyPoid={} fileName={}", 
-                        transactionPoid, companyPoid, file != null ? file.getOriginalFilename() : "null");
+                        transactionPoid, UserContext.getCompanyPoid(), file != null ? file.getOriginalFilename() : "null");
                 try {
                         ExcelImportResponse response = quotationSchService.importItemsFromExcel(
-                                transactionPoid, companyPoid, UserContext.getUserId(), file);
+                                transactionPoid, UserContext.getCompanyPoid(), UserContext.getUserId(), file);
                         log.info("importItemsFromExcel completed for transactionPoid={} successfulRows={} failedRows={}", 
                                 transactionPoid, response.getSuccessfulRows(), response.getFailedRows());
                         if (response.isSuccess()) {
@@ -468,13 +465,12 @@ public class SalesQuotationSchController {
         @PostMapping("/{transactionPoid}/update-quantity")
         @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> updateQuantity(
-                        @PathVariable Long transactionPoid,
-                        @RequestHeader("X-Login-User") String loginUser) {
+                        @PathVariable Long transactionPoid) {
                 log.info("updateQuantity started for transactionPoid={} companyPoid={} user={}",
                                 transactionPoid, UserContext.getCompanyPoid(), UserContext.getUserId());
-                Long userId = Long.parseLong(UserContext.getUserId());
+
                 UpdateQuantityRequest request = new UpdateQuantityRequest(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), transactionPoid,
-                                userId, loginUser);
+                                UserContext.getUserPoid(), UserContext.getUserId());
                 StoredProcedureResponse response = quotationSchService.updateQuantity(request);
                 log.info("updateQuantity completed for transactionPoid={}", transactionPoid);
                 if (response.isSuccess()) {
