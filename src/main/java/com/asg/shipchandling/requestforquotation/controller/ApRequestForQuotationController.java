@@ -175,18 +175,18 @@ public class ApRequestForQuotationController {
         // return success("Item detail deleted successfully", null);
         // }
 
-        @Operation(summary = "Get Item Details", description = "Returns a list of item details for a specific RFQ.", responses = {
-                        @ApiResponse(responseCode = "200", description = "Item details fetched successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnItemDtlDto.class)))
-        })
-        @AllowedAction(UserRolesRightsEnum.VIEW)
-        @GetMapping("/{transactionPoid}/item-details")
-        public ResponseEntity<?> getItemDetails(
-                        @PathVariable Long transactionPoid) {
+        // @Operation(summary = "Get Item Details", description = "Returns a list of item details for a specific RFQ.", responses = {
+        //                 @ApiResponse(responseCode = "200", description = "Item details fetched successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnItemDtlDto.class)))
+        // })
+        // @AllowedAction(UserRolesRightsEnum.VIEW)
+        // @GetMapping("/{transactionPoid}/item-details")
+        // public ResponseEntity<?> getItemDetails(
+        //                 @PathVariable Long transactionPoid) {
 
-                List<ApRequestForQtnItemDtlDto> itemDetails = rfqService.getItemDetails(
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
-                return success("Item details fetched successfully", itemDetails);
-        }
+        //         List<ApRequestForQtnItemDtlDto> itemDetails = rfqService.getItemDetails(
+        //                         transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
+        //         return success("Item details fetched successfully", itemDetails);
+        // }
 
         // DEPRECATED: Use POST/PUT /api/ap/request-for-quotations/{transactionPoid} with action field in supplierDetails
         // @Operation(summary = "Add Supplier Detail", description = "Adds a new supplier detail to RFQ. Auto-populates last price and default unit if applicable.", tags = "RFQ's Supplier Details", responses = {
@@ -238,18 +238,18 @@ public class ApRequestForQuotationController {
         //         return success("Supplier detail deleted successfully", null);
         // }
 
-        @Operation(summary = "Get Supplier Details", description = "Returns a list of supplier details for a specific RFQ.", responses = {
-                        @ApiResponse(responseCode = "200", description = "Supplier details fetched successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnSupDtlDto.class)))
-        })
-        @AllowedAction(UserRolesRightsEnum.VIEW)
-        @GetMapping("/{transactionPoid}/supplier-details")
-        public ResponseEntity<?> getSupplierDetails(
-                        @PathVariable Long transactionPoid) {
+        // @Operation(summary = "Get Supplier Details", description = "Returns a list of supplier details for a specific RFQ.", responses = {
+        //                 @ApiResponse(responseCode = "200", description = "Supplier details fetched successfully", content = @Content(schema = @Schema(implementation = ApRequestForQtnSupDtlDto.class)))
+        // })
+        // @AllowedAction(UserRolesRightsEnum.VIEW)
+        // @GetMapping("/{transactionPoid}/supplier-details")
+        // public ResponseEntity<?> getSupplierDetails(
+        //                 @PathVariable Long transactionPoid) {
 
-                List<ApRequestForQtnSupDtlDto> supplierDetails = rfqService.getSupplierDetails(
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
-                return success("Supplier details fetched successfully", supplierDetails);
-        }
+        //         List<ApRequestForQtnSupDtlDto> supplierDetails = rfqService.getSupplierDetails(
+        //                         transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
+        //         return success("Supplier details fetched successfully", supplierDetails);
+        // }
 
         // Business Logic APIs
         @Operation(summary = "Add Related Suppliers", description = "Automatically adds suppliers to RFQ based on item details. Calls PROC_AP_RFQ_ADD_SUPPLIERS.", responses = {
@@ -365,14 +365,14 @@ public class ApRequestForQuotationController {
                 return success("Tax percentage fetched successfully", response);
         }
 
-        @Operation(summary = "Check RFQ Dependencies", description = "Checks if RFQ can be deleted by checking for dependencies (Purchase Orders, etc.)")
-        @AllowedAction(UserRolesRightsEnum.DELETE)
-        @GetMapping("/{transactionPoid}/dependencies")
-        public ResponseEntity<?> checkRfqDependencies(
-                        @PathVariable Long transactionPoid) {
+        // @Operation(summary = "Check RFQ Dependencies", description = "Checks if RFQ can be deleted by checking for dependencies (Purchase Orders, etc.)")
+        // @AllowedAction(UserRolesRightsEnum.DELETE)
+        // @GetMapping("/{transactionPoid}/dependencies")
+        // public ResponseEntity<?> checkRfqDependencies(
+        //                 @PathVariable Long transactionPoid) {
 
-                RfqDependenciesDto dto = rfqService.checkRfqDependencies(
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
-                return success("Dependency check completed", dto);
-        }
+        //         RfqDependenciesDto dto = rfqService.checkRfqDependencies(
+        //                         transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
+        //         return success("Dependency check completed", dto);
+        // }
 }
