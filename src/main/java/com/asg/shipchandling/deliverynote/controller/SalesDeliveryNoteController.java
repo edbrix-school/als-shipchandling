@@ -150,84 +150,84 @@ public class SalesDeliveryNoteController {
 
         // ==================== VALIDATION APIs ====================
 
-        @Operation(summary = "Validate Document Reference", description = "Checks if document reference is unique within the group")
-        @GetMapping("/validate-doc-ref")
-        public ResponseEntity<?> validateDocRef(
-                        @RequestParam String docRef,
-                        @RequestParam(required = false) Long transactionPoid) {
-                log.info("validateDocRef started for  groupPoid={}", UserContext.getGroupPoid());
-                ValidationResponse response = deliveryNoteService.validateDocRef(docRef, transactionPoid);
-                log.info("validateDocRef completed for groupPoid={}", UserContext.getGroupPoid());
-                return success("Validation completed", response);
-        }
+        // @Operation(summary = "Validate Document Reference", description = "Checks if document reference is unique within the group")
+        // @GetMapping("/validate-doc-ref")
+        // public ResponseEntity<?> validateDocRef(
+        //                 @RequestParam String docRef,
+        //                 @RequestParam(required = false) Long transactionPoid) {
+        //         log.info("validateDocRef started for  groupPoid={}", UserContext.getGroupPoid());
+        //         ValidationResponse response = deliveryNoteService.validateDocRef(docRef, transactionPoid);
+        //         log.info("validateDocRef completed for groupPoid={}", UserContext.getGroupPoid());
+        //         return success("Validation completed", response);
+        // }
 
         // ==================== ITEM DETAILS APIs ====================
 
-        @Operation(summary = "Add Item Detail", description = "Adds a new item detail to the delivery note. Recalculates totals.")
-        @PostMapping("/{transactionPoid}/item-details")
-        public ResponseEntity<?> addItemDetail(
-                        @PathVariable Long transactionPoid,
-                        @Valid @RequestBody CreateSalesDeliveryNoteItemDtlRequest request) {
+        // @Operation(summary = "Add Item Detail", description = "Adds a new item detail to the delivery note. Recalculates totals.")
+        // @PostMapping("/{transactionPoid}/item-details")
+        // public ResponseEntity<?> addItemDetail(
+        //                 @PathVariable Long transactionPoid,
+        //                 @Valid @RequestBody CreateSalesDeliveryNoteItemDtlRequest request) {
 
-                log.info("addItemDetail started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                SalesDeliveryNoteItemDtlDto dto = deliveryNoteService.addItemDetail(
-                                transactionPoid, request, UserContext.getCompanyPoid(), UserContext.getUserId());
-                log.info("addItemDetail completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                return success("Item detail added successfully", dto);
-        }
+        //         log.info("addItemDetail started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
+        //         SalesDeliveryNoteItemDtlDto dto = deliveryNoteService.addItemDetail(
+        //                         transactionPoid, request, UserContext.getCompanyPoid(), UserContext.getUserId());
+        //         log.info("addItemDetail completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
+        //         return success("Item detail added successfully", dto);
+        // }
 
-        @Operation(summary = "Update Item Detail", description = "Updates an existing item detail. StockPoid and Quantity are read-only if item is loaded from quotation. Recalculates totals.")
-        @PutMapping("/{transactionPoid}/item-details/{detRowId}")
-        public ResponseEntity<?> updateItemDetail(
-                        @PathVariable Long transactionPoid,
-                        @PathVariable Long detRowId,
-                        @Valid @RequestBody CreateSalesDeliveryNoteItemDtlRequest request) {
+        // @Operation(summary = "Update Item Detail", description = "Updates an existing item detail. StockPoid and Quantity are read-only if item is loaded from quotation. Recalculates totals.")
+        // @PutMapping("/{transactionPoid}/item-details/{detRowId}")
+        // public ResponseEntity<?> updateItemDetail(
+        //                 @PathVariable Long transactionPoid,
+        //                 @PathVariable Long detRowId,
+        //                 @Valid @RequestBody CreateSalesDeliveryNoteItemDtlRequest request) {
 
-                log.info("updateItemDetail started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                SalesDeliveryNoteItemDtlDto dto = deliveryNoteService.updateItemDetail(
-                                transactionPoid, detRowId, request, UserContext.getCompanyPoid(), UserContext.getUserId());
-                log.info("updateItemDetail completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                return success("Item detail updated successfully", dto);
-        }
+        //         log.info("updateItemDetail started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
+        //         SalesDeliveryNoteItemDtlDto dto = deliveryNoteService.updateItemDetail(
+        //                         transactionPoid, detRowId, request, UserContext.getCompanyPoid(), UserContext.getUserId());
+        //         log.info("updateItemDetail completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
+        //         return success("Item detail updated successfully", dto);
+        // }
 
-        @Operation(summary = "Delete Item Detail", description = "Deletes an item detail. Recalculates totals.")
-        @DeleteMapping("/{transactionPoid}/item-details/{detRowId}")
-        public ResponseEntity<?> deleteItemDetail(
-                        @PathVariable Long transactionPoid,
-                        @PathVariable Long detRowId) {
+        // @Operation(summary = "Delete Item Detail", description = "Deletes an item detail. Recalculates totals.")
+        // @DeleteMapping("/{transactionPoid}/item-details/{detRowId}")
+        // public ResponseEntity<?> deleteItemDetail(
+        //                 @PathVariable Long transactionPoid,
+        //                 @PathVariable Long detRowId) {
 
-                log.info("deleteItemDetail started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                deliveryNoteService.deleteItemDetail(transactionPoid, detRowId, UserContext.getCompanyPoid());
-                log.info("deleteItemDetail completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                return success("Item detail deleted successfully", null);
-        }
+        //         log.info("deleteItemDetail started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
+        //         deliveryNoteService.deleteItemDetail(transactionPoid, detRowId, UserContext.getCompanyPoid());
+        //         log.info("deleteItemDetail completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
+        //         return success("Item detail deleted successfully", null);
+        // }
 
-        @Operation(summary = "Get Item Details", description = "Retrieves all item details for a delivery note.")
-        @GetMapping("/{transactionPoid}/item-details")
-        public ResponseEntity<?> getItemDetails(
-                        @PathVariable Long transactionPoid) {
+        // @Operation(summary = "Get Item Details", description = "Retrieves all item details for a delivery note.")
+        // @GetMapping("/{transactionPoid}/item-details")
+        // public ResponseEntity<?> getItemDetails(
+        //                 @PathVariable Long transactionPoid) {
 
-                log.info("getItemDetails started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                List<SalesDeliveryNoteItemDtlDto> itemDetails = deliveryNoteService.getItemDetails(
-                                transactionPoid, UserContext.getCompanyPoid());
-                log.info("getItemDetails completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                return success("Item details fetched successfully", itemDetails);
-        }
+        //         log.info("getItemDetails started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
+        //         List<SalesDeliveryNoteItemDtlDto> itemDetails = deliveryNoteService.getItemDetails(
+        //                         transactionPoid, UserContext.getCompanyPoid());
+        //         log.info("getItemDetails completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
+        //         return success("Item details fetched successfully", itemDetails);
+        // }
 
         // ==================== BUSINESS LOGIC APIs ====================
 
-        @Operation(summary = "Validate Customer Change", description = "Validates if customer can be changed. Calls PROC_SALES_SCDN_CUST_VALIDATE.")
-        @GetMapping("/{transactionPoid}/validate-customer-change")
-        public ResponseEntity<?> validateCustomerChange(
-                        @PathVariable Long transactionPoid,
-                        @RequestHeader("X-Customer-Poid") Long customerPoid) {
+        // @Operation(summary = "Validate Customer Change", description = "Validates if customer can be changed. Calls PROC_SALES_SCDN_CUST_VALIDATE.")
+        // @GetMapping("/{transactionPoid}/validate-customer-change")
+        // public ResponseEntity<?> validateCustomerChange(
+        //                 @PathVariable Long transactionPoid,
+        //                 @RequestHeader("X-Customer-Poid") Long customerPoid) {
 
-                log.info("validateCustomerChange started for customerPoid={} groupPoid={}", customerPoid, UserContext.getGroupPoid());
-                ValidateCustomerChangeResponse response = deliveryNoteService.validateCustomerChange(
-                                transactionPoid, customerPoid);
-                log.info("validateCustomerChange completed for customerPoid={} groupPoid={}", customerPoid, UserContext.getGroupPoid());
-                return success(response.getMessage(), response);
-        }
+        //         log.info("validateCustomerChange started for customerPoid={} groupPoid={}", customerPoid, UserContext.getGroupPoid());
+        //         ValidateCustomerChangeResponse response = deliveryNoteService.validateCustomerChange(
+        //                         transactionPoid, customerPoid);
+        //         log.info("validateCustomerChange completed for customerPoid={} groupPoid={}", customerPoid, UserContext.getGroupPoid());
+        //         return success(response.getMessage(), response);
+        // }
 
         @Operation(summary = "Load Quotation Items", description = "Loads items from quotation into delivery note. Requires QtnRefNo to be set. Removes items with CheckAll='N' before loading. Calls PROC_DN_LOAD_QUOTATION_DETAIL.")
         @GetMapping("/{transactionPoid}/load-quotation-items")
@@ -241,17 +241,17 @@ public class SalesDeliveryNoteController {
                 return success(response.getMessage(), response);
         }
 
-        @Operation(summary = "Check Delivery Note Dependencies", description = "Checks if delivery note can be deleted by checking for dependencies (sales invoices, etc.)")
-        @GetMapping("/{transactionPoid}/dependencies")
-        public ResponseEntity<?> checkDeliveryNoteDependencies(
-                        @PathVariable Long transactionPoid) {
+        // @Operation(summary = "Check Delivery Note Dependencies", description = "Checks if delivery note can be deleted by checking for dependencies (sales invoices, etc.)")
+        // @GetMapping("/{transactionPoid}/dependencies")
+        // public ResponseEntity<?> checkDeliveryNoteDependencies(
+        //                 @PathVariable Long transactionPoid) {
 
-                log.info("checkDeliveryNoteDependencies started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(),
-                                UserContext.getGroupPoid());
-                SalesDeliveryNoteDependenciesDto dto = deliveryNoteService.checkDeliveryNoteDependencies(
-                                transactionPoid, UserContext.getCompanyPoid());
-                log.info("checkDeliveryNoteDependencies completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(),
-                                UserContext.getGroupPoid());
-                return success("Dependency check completed", dto);
-        }
+        //         log.info("checkDeliveryNoteDependencies started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(),
+        //                         UserContext.getGroupPoid());
+        //         SalesDeliveryNoteDependenciesDto dto = deliveryNoteService.checkDeliveryNoteDependencies(
+        //                         transactionPoid, UserContext.getCompanyPoid());
+        //         log.info("checkDeliveryNoteDependencies completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(),
+        //                         UserContext.getGroupPoid());
+        //         return success("Dependency check completed", dto);
+        // }
 }

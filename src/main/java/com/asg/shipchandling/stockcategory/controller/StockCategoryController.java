@@ -199,133 +199,133 @@ public class StockCategoryController {
         return success("Stock category deleted successfully", null);
     }
 
-    @Operation(
-            summary = "Get stock category tree",
-            description = "Returns parent categories in tree structure format. Only returns categories where PARENT_CATEGORY_POID IS NULL.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Successfully retrieved stock category tree",
-                            content = @Content(
-                                    mediaType = "application/json",
-                                    schema = @Schema(implementation = StockCategoryTreeDto.class)
-                            )
-                    ),
-                    @ApiResponse(
-                            responseCode = "401",
-                            description = "Unauthorized - Authentication required",
-                            content = @Content(mediaType = "application/json")
-                    )
-            },
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
-    @GetMapping("/tree")
-    public ResponseEntity<?> getStockCategoryTree(
-            @Parameter(description = "Filter by category type (GROUP/SUB_GROUP)", required = false)
-            @RequestParam(required = false) String categoryType,
-            @Parameter(description = "Filter by active status (Y/N)", required = false)
-            @RequestParam(required = false) String active) {
+//     @Operation(
+//             summary = "Get stock category tree",
+//             description = "Returns parent categories in tree structure format. Only returns categories where PARENT_CATEGORY_POID IS NULL.",
+//             responses = {
+//                     @ApiResponse(
+//                             responseCode = "200",
+//                             description = "Successfully retrieved stock category tree",
+//                             content = @Content(
+//                                     mediaType = "application/json",
+//                                     schema = @Schema(implementation = StockCategoryTreeDto.class)
+//                             )
+//                     ),
+//                     @ApiResponse(
+//                             responseCode = "401",
+//                             description = "Unauthorized - Authentication required",
+//                             content = @Content(mediaType = "application/json")
+//                     )
+//             },
+//             security = @SecurityRequirement(name = "bearerAuth")
+//     )
+//     @GetMapping("/tree")
+//     public ResponseEntity<?> getStockCategoryTree(
+//             @Parameter(description = "Filter by category type (GROUP/SUB_GROUP)", required = false)
+//             @RequestParam(required = false) String categoryType,
+//             @Parameter(description = "Filter by active status (Y/N)", required = false)
+//             @RequestParam(required = false) String active) {
 
-        log.info("getStockCategoryTree started for groupPoid={} categoryType={} active={}", UserContext.getGroupPoid(), categoryType, active);
-        List<StockCategoryTreeDto> tree = stockCategoryService.getStockCategoryTree(UserContext.getGroupPoid(), categoryType, active);
-        log.info("getStockCategoryTree completed for groupPoid={} nodeCount={}",
-                UserContext.getGroupPoid(), tree != null ? tree.size() : 0);
-        return success("Stock category tree fetched successfully", tree);
-    }
+//         log.info("getStockCategoryTree started for groupPoid={} categoryType={} active={}", UserContext.getGroupPoid(), categoryType, active);
+//         List<StockCategoryTreeDto> tree = stockCategoryService.getStockCategoryTree(UserContext.getGroupPoid(), categoryType, active);
+//         log.info("getStockCategoryTree completed for groupPoid={} nodeCount={}",
+//                 UserContext.getGroupPoid(), tree != null ? tree.size() : 0);
+//         return success("Stock category tree fetched successfully", tree);
+//     }
 
-    @Operation(
-            summary = "Get all stock categories (flat list)",
-            description = "Returns all stock categories in flat list format. Used for LOVs and dropdowns.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Successfully retrieved stock categories",
-                            content = @Content(
-                                    mediaType = "application/json",
-                                    schema = @Schema(implementation = StockCategoryMasterDto.class)
-                            )
-                    ),
-                    @ApiResponse(
-                            responseCode = "401",
-                            description = "Unauthorized - Authentication required",
-                            content = @Content(mediaType = "application/json")
-                    )
-            },
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
-    @GetMapping
-    public ResponseEntity<?> getAllStockCategories(
-            @Parameter(description = "Filter by category type (GROUP/SUB_GROUP)", required = false)
-            @RequestParam(required = false) String categoryType,
-            @Parameter(description = "Filter by active status (Y/N)", required = false)
-            @RequestParam(required = false) String active) {
+//     @Operation(
+//             summary = "Get all stock categories (flat list)",
+//             description = "Returns all stock categories in flat list format. Used for LOVs and dropdowns.",
+//             responses = {
+//                     @ApiResponse(
+//                             responseCode = "200",
+//                             description = "Successfully retrieved stock categories",
+//                             content = @Content(
+//                                     mediaType = "application/json",
+//                                     schema = @Schema(implementation = StockCategoryMasterDto.class)
+//                             )
+//                     ),
+//                     @ApiResponse(
+//                             responseCode = "401",
+//                             description = "Unauthorized - Authentication required",
+//                             content = @Content(mediaType = "application/json")
+//                     )
+//             },
+//             security = @SecurityRequirement(name = "bearerAuth")
+//     )
+//     @GetMapping
+//     public ResponseEntity<?> getAllStockCategories(
+//             @Parameter(description = "Filter by category type (GROUP/SUB_GROUP)", required = false)
+//             @RequestParam(required = false) String categoryType,
+//             @Parameter(description = "Filter by active status (Y/N)", required = false)
+//             @RequestParam(required = false) String active) {
 
-        log.info("getAllStockCategories started for groupPoid={} categoryType={} active={}", UserContext.getGroupPoid(), categoryType, active);
-        List<StockCategoryMasterDto> categories = stockCategoryService.getAllStockCategories(
-                UserContext.getGroupPoid(), categoryType, active);
-        log.info("getAllStockCategories completed for groupPoid={} count={}",
-                UserContext.getGroupPoid(), categories != null ? categories.size() : 0);
-        return success("Stock categories fetched successfully", categories);
-    }
+//         log.info("getAllStockCategories started for groupPoid={} categoryType={} active={}", UserContext.getGroupPoid(), categoryType, active);
+//         List<StockCategoryMasterDto> categories = stockCategoryService.getAllStockCategories(
+//                 UserContext.getGroupPoid(), categoryType, active);
+//         log.info("getAllStockCategories completed for groupPoid={} count={}",
+//                 UserContext.getGroupPoid(), categories != null ? categories.size() : 0);
+//         return success("Stock categories fetched successfully", categories);
+//     }
 
-    @Operation(
-            summary = "Get child categories",
-            description = "Returns all child/sub-categories for a given parent category. Used for lazy loading of tree structure.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Successfully retrieved child categories",
-                            content = @Content(
-                                    mediaType = "application/json",
-                                    schema = @Schema(implementation = StockCategoryMasterDto.class)
-                            )
-                    ),
-                    @ApiResponse(
-                            responseCode = "401",
-                            description = "Unauthorized - Authentication required",
-                            content = @Content(mediaType = "application/json")
-                    ),
-                    @ApiResponse(
-                            responseCode = "404",
-                            description = "Parent category not found",
-                            content = @Content(mediaType = "application/json")
-                    )
-            },
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
-    @GetMapping("/{parentCategoryPoid}/children")
-    public ResponseEntity<?> getChildCategories(
-            @Parameter(description = "Parent category POID", required = true)
-            @PathVariable Long parentCategoryPoid) {
+//     @Operation(
+//             summary = "Get child categories",
+//             description = "Returns all child/sub-categories for a given parent category. Used for lazy loading of tree structure.",
+//             responses = {
+//                     @ApiResponse(
+//                             responseCode = "200",
+//                             description = "Successfully retrieved child categories",
+//                             content = @Content(
+//                                     mediaType = "application/json",
+//                                     schema = @Schema(implementation = StockCategoryMasterDto.class)
+//                             )
+//                     ),
+//                     @ApiResponse(
+//                             responseCode = "401",
+//                             description = "Unauthorized - Authentication required",
+//                             content = @Content(mediaType = "application/json")
+//                     ),
+//                     @ApiResponse(
+//                             responseCode = "404",
+//                             description = "Parent category not found",
+//                             content = @Content(mediaType = "application/json")
+//                     )
+//             },
+//             security = @SecurityRequirement(name = "bearerAuth")
+//     )
+//     @GetMapping("/{parentCategoryPoid}/children")
+//     public ResponseEntity<?> getChildCategories(
+//             @Parameter(description = "Parent category POID", required = true)
+//             @PathVariable Long parentCategoryPoid) {
 
-        log.info("getChildCategories started for parentCategoryPoid={} groupPoid={}", parentCategoryPoid, UserContext.getGroupPoid());
-        // Validate parent exists
-        stockCategoryService.getStockCategoryByPoid(parentCategoryPoid, UserContext.getGroupPoid());
+//         log.info("getChildCategories started for parentCategoryPoid={} groupPoid={}", parentCategoryPoid, UserContext.getGroupPoid());
+//         // Validate parent exists
+//         stockCategoryService.getStockCategoryByPoid(parentCategoryPoid, UserContext.getGroupPoid());
 
-        List<StockCategoryMasterDto> children = stockCategoryService.getChildCategories(
-                parentCategoryPoid, UserContext.getGroupPoid());
-        log.info("getChildCategories completed for parentCategoryPoid={} childCount={}",
-                parentCategoryPoid, children != null ? children.size() : 0);
-        return success("Child categories fetched successfully", children);
-    }
+//         List<StockCategoryMasterDto> children = stockCategoryService.getChildCategories(
+//                 parentCategoryPoid, UserContext.getGroupPoid());
+//         log.info("getChildCategories completed for parentCategoryPoid={} childCount={}",
+//                 parentCategoryPoid, children != null ? children.size() : 0);
+//         return success("Child categories fetched successfully", children);
+//     }
 
-    @Operation(
-            summary = "Validate category code uniqueness",
-            description = "Validates if a category code is unique. Used for real-time validation in UI.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Validation result",
-                            content = @Content(mediaType = "application/json")
-                    ),
-                    @ApiResponse(
-                            responseCode = "401",
-                            description = "Unauthorized - Authentication required",
-                            content = @Content(mediaType = "application/json")
-                    )
-            },
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
+//     @Operation(
+//             summary = "Validate category code uniqueness",
+//             description = "Validates if a category code is unique. Used for real-time validation in UI.",
+//             responses = {
+//                     @ApiResponse(
+//                             responseCode = "200",
+//                             description = "Validation result",
+//                             content = @Content(mediaType = "application/json")
+//                     ),
+//                     @ApiResponse(
+//                             responseCode = "401",
+//                             description = "Unauthorized - Authentication required",
+//                             content = @Content(mediaType = "application/json")
+//                     )
+//             },
+//             security = @SecurityRequirement(name = "bearerAuth")
+//     )
     @GetMapping("/validate-code")
     public ResponseEntity<?> validateCategoryCode(
             @Parameter(description = "Category code to validate", required = true)
@@ -383,122 +383,122 @@ public class StockCategoryController {
         }
     }
 
-    @Operation(
-            summary = "Get parent category GL values",
-            description = "Returns GL account values (Stock, Sales, Cost of Sales) from a parent category. Used to inherit GL values when creating SUB_GROUP categories.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Successfully retrieved parent category GL values",
-                            content = @Content(
-                                    mediaType = "application/json",
-                                    schema = @Schema(implementation = StockCategoryGlValuesDto.class)
-                            )
-                    ),
-                    @ApiResponse(
-                            responseCode = "401",
-                            description = "Unauthorized - Authentication required",
-                            content = @Content(mediaType = "application/json")
-                    ),
-                    @ApiResponse(
-                            responseCode = "404",
-                            description = "Parent category not found",
-                            content = @Content(mediaType = "application/json")
-                    )
-            },
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
-    @GetMapping("/{parentCategoryPoid}/gl-values")
-    public ResponseEntity<?> getParentCategoryGlValues(
-            @Parameter(description = "Parent category POID", required = true)
-            @PathVariable Long parentCategoryPoid) {
+//     @Operation(
+//             summary = "Get parent category GL values",
+//             description = "Returns GL account values (Stock, Sales, Cost of Sales) from a parent category. Used to inherit GL values when creating SUB_GROUP categories.",
+//             responses = {
+//                     @ApiResponse(
+//                             responseCode = "200",
+//                             description = "Successfully retrieved parent category GL values",
+//                             content = @Content(
+//                                     mediaType = "application/json",
+//                                     schema = @Schema(implementation = StockCategoryGlValuesDto.class)
+//                             )
+//                     ),
+//                     @ApiResponse(
+//                             responseCode = "401",
+//                             description = "Unauthorized - Authentication required",
+//                             content = @Content(mediaType = "application/json")
+//                     ),
+//                     @ApiResponse(
+//                             responseCode = "404",
+//                             description = "Parent category not found",
+//                             content = @Content(mediaType = "application/json")
+//                     )
+//             },
+//             security = @SecurityRequirement(name = "bearerAuth")
+//     )
+//     @GetMapping("/{parentCategoryPoid}/gl-values")
+//     public ResponseEntity<?> getParentCategoryGlValues(
+//             @Parameter(description = "Parent category POID", required = true)
+//             @PathVariable Long parentCategoryPoid) {
 
-        log.info("getParentCategoryGlValues started for parentCategoryPoid={} groupPoid={}", parentCategoryPoid, UserContext.getGroupPoid());
-        StockCategoryGlValuesDto glValues = stockCategoryService.getParentCategoryGlValues(
-                parentCategoryPoid, UserContext.getGroupPoid());
-        log.info("getParentCategoryGlValues completed for parentCategoryPoid={} stockGlPoid={}",
-                parentCategoryPoid, glValues != null ? glValues.getStockGlPoid() : null);
-        return success("Parent category GL values fetched successfully", glValues);
-    }
+//         log.info("getParentCategoryGlValues started for parentCategoryPoid={} groupPoid={}", parentCategoryPoid, UserContext.getGroupPoid());
+//         StockCategoryGlValuesDto glValues = stockCategoryService.getParentCategoryGlValues(
+//                 parentCategoryPoid, UserContext.getGroupPoid());
+//         log.info("getParentCategoryGlValues completed for parentCategoryPoid={} stockGlPoid={}",
+//                 parentCategoryPoid, glValues != null ? glValues.getStockGlPoid() : null);
+//         return success("Parent category GL values fetched successfully", glValues);
+//     }
 
-    @Operation(
-            summary = "Check category dependencies",
-            description = "Checks if a category can be deleted by checking for dependencies (child categories, stock items, etc.).",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Dependency check result",
-                            content = @Content(
-                                    mediaType = "application/json",
-                                    schema = @Schema(implementation = CategoryDependenciesDto.class)
-                            )
-                    ),
-                    @ApiResponse(
-                            responseCode = "401",
-                            description = "Unauthorized - Authentication required",
-                            content = @Content(mediaType = "application/json")
-                    ),
-                    @ApiResponse(
-                            responseCode = "404",
-                            description = "Category not found",
-                            content = @Content(mediaType = "application/json")
-                    )
-            },
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
-    @GetMapping("/{categoryPoid}/dependencies")
-    public ResponseEntity<?> checkCategoryDependencies(
-            @Parameter(description = "Category POID", required = true)
-            @PathVariable Long categoryPoid) {
+//     @Operation(
+//             summary = "Check category dependencies",
+//             description = "Checks if a category can be deleted by checking for dependencies (child categories, stock items, etc.).",
+//             responses = {
+//                     @ApiResponse(
+//                             responseCode = "200",
+//                             description = "Dependency check result",
+//                             content = @Content(
+//                                     mediaType = "application/json",
+//                                     schema = @Schema(implementation = CategoryDependenciesDto.class)
+//                             )
+//                     ),
+//                     @ApiResponse(
+//                             responseCode = "401",
+//                             description = "Unauthorized - Authentication required",
+//                             content = @Content(mediaType = "application/json")
+//                     ),
+//                     @ApiResponse(
+//                             responseCode = "404",
+//                             description = "Category not found",
+//                             content = @Content(mediaType = "application/json")
+//                     )
+//             },
+//             security = @SecurityRequirement(name = "bearerAuth")
+//     )
+//     @GetMapping("/{categoryPoid}/dependencies")
+//     public ResponseEntity<?> checkCategoryDependencies(
+//             @Parameter(description = "Category POID", required = true)
+//             @PathVariable Long categoryPoid) {
 
-        log.info("checkCategoryDependencies started for categoryPoid={} groupPoid={}", categoryPoid, UserContext.getGroupPoid());
-        CategoryDependenciesDto dependencies = stockCategoryService.checkCategoryDependencies(
-                categoryPoid, UserContext.getGroupPoid());
-        log.info("checkCategoryDependencies completed for categoryPoid={} canDelete={} childCount={} stockItemCount={}",
-                categoryPoid,
-                dependencies != null ? dependencies.getCanDelete() : null,
-                dependencies != null ? dependencies.getChildCategoryCount() : null,
-                dependencies != null ? dependencies.getStockItemCount() : null);
-        return success("Dependency check completed", dependencies);
-    }
+//         log.info("checkCategoryDependencies started for categoryPoid={} groupPoid={}", categoryPoid, UserContext.getGroupPoid());
+//         CategoryDependenciesDto dependencies = stockCategoryService.checkCategoryDependencies(
+//                 categoryPoid, UserContext.getGroupPoid());
+//         log.info("checkCategoryDependencies completed for categoryPoid={} canDelete={} childCount={} stockItemCount={}",
+//                 categoryPoid,
+//                 dependencies != null ? dependencies.getCanDelete() : null,
+//                 dependencies != null ? dependencies.getChildCategoryCount() : null,
+//                 dependencies != null ? dependencies.getStockItemCount() : null);
+//         return success("Dependency check completed", dependencies);
+//     }
 
-    @Operation(
-            summary = "Get category hierarchy",
-            description = "Returns the full hierarchy path for a category (parent → grandparent → etc.). Used for breadcrumb navigation.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Successfully retrieved category hierarchy",
-                            content = @Content(
-                                    mediaType = "application/json",
-                                    schema = @Schema(implementation = StockCategoryHierarchyDto.class)
-                            )
-                    ),
-                    @ApiResponse(
-                            responseCode = "401",
-                            description = "Unauthorized - Authentication required",
-                            content = @Content(mediaType = "application/json")
-                    ),
-                    @ApiResponse(
-                            responseCode = "404",
-                            description = "Category not found",
-                            content = @Content(mediaType = "application/json")
-                    )
-            },
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
-    @GetMapping("/{categoryPoid}/hierarchy")
-    public ResponseEntity<?> getCategoryHierarchy(
-            @Parameter(description = "Category POID", required = true)
-            @PathVariable Long categoryPoid) {
+//     @Operation(
+//             summary = "Get category hierarchy",
+//             description = "Returns the full hierarchy path for a category (parent → grandparent → etc.). Used for breadcrumb navigation.",
+//             responses = {
+//                     @ApiResponse(
+//                             responseCode = "200",
+//                             description = "Successfully retrieved category hierarchy",
+//                             content = @Content(
+//                                     mediaType = "application/json",
+//                                     schema = @Schema(implementation = StockCategoryHierarchyDto.class)
+//                             )
+//                     ),
+//                     @ApiResponse(
+//                             responseCode = "401",
+//                             description = "Unauthorized - Authentication required",
+//                             content = @Content(mediaType = "application/json")
+//                     ),
+//                     @ApiResponse(
+//                             responseCode = "404",
+//                             description = "Category not found",
+//                             content = @Content(mediaType = "application/json")
+//                     )
+//             },
+//             security = @SecurityRequirement(name = "bearerAuth")
+//     )
+//     @GetMapping("/{categoryPoid}/hierarchy")
+//     public ResponseEntity<?> getCategoryHierarchy(
+//             @Parameter(description = "Category POID", required = true)
+//             @PathVariable Long categoryPoid) {
 
-        log.info("getCategoryHierarchy started for categoryPoid={} groupPoid={}", categoryPoid, UserContext.getGroupPoid());
-        List<StockCategoryHierarchyDto> hierarchy = stockCategoryService.getCategoryHierarchy(
-                categoryPoid, UserContext.getGroupPoid());
-        log.info("getCategoryHierarchy completed for categoryPoid={} levelsReturned={}",
-                categoryPoid, hierarchy != null ? hierarchy.size() : 0);
-        return success("Category hierarchy fetched successfully", hierarchy);
-    }
+//         log.info("getCategoryHierarchy started for categoryPoid={} groupPoid={}", categoryPoid, UserContext.getGroupPoid());
+//         List<StockCategoryHierarchyDto> hierarchy = stockCategoryService.getCategoryHierarchy(
+//                 categoryPoid, UserContext.getGroupPoid());
+//         log.info("getCategoryHierarchy completed for categoryPoid={} levelsReturned={}",
+//                 categoryPoid, hierarchy != null ? hierarchy.size() : 0);
+//         return success("Category hierarchy fetched successfully", hierarchy);
+//     }
 
     @Operation(
             summary = "Get stock categories list",
