@@ -245,15 +245,7 @@ public class StockMasterController {
     @PostMapping("/create")
     @AllowedAction(UserRolesRightsEnum.CREATE)
     public ResponseEntity<?> createStockMaster(
-        @RequestParam(required = true) String documentId,
-        @RequestParam(required = true) String actionRequired,
         @Valid @RequestBody CreateStockMasterRequest request) {
-
-        // Validate actionRequired - this endpoint only supports CREATE
-        if (!"CREATE".equalsIgnoreCase(actionRequired)) {
-            return com.asg.shipchandling.common.ApiResponse.badRequest("Invalid actionRequired. This endpoint only supports CREATE operation.");
-        }
-
         // Use documentId for logging/context (can be used for audit trail or validation)
         // documentId is available for use in service layer if needed
         
