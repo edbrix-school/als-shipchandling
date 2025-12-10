@@ -185,12 +185,15 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     dtl.setDetRowId(detRowId);
                     dtl.setDnPoidFk(dnDtl.getDnPoidFk());
                     dtl.setQuotationPoidFk(dnDtl.getQuotationPoidFk());
-                    dtl.setRemarks(request.getRemarks());
+                    dtl.setRemarks(dnDtl.getRemarks());
                     dtl.setCreatedBy(userId);
                     dtl.setLastmodifiedBy(userId);
 
+                    log.debug("Creating delivery note detail with detRowId: {}, remarks: {}", detRowId, dnDtl.getRemarks());
                     SalesDnDtl savedDtl = dnDtlRepository.save(dtl);
                 }
+                // Flush to ensure all delivery note detail changes are persisted
+                dnDtlRepository.flush();
             }
 
             // Call stored procedure AFTER SAVE for authorization
@@ -915,6 +918,9 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                         .orElseThrow(() -> new ResourceNotFoundException("Delivery Note Detail", "detRowId",
                                 dnDtlRequest.getDetRowId()));
 
+                log.debug("Updating delivery note detail with detRowId: {}, old remarks: {}, new remarks: {}", 
+                        dnDtlRequest.getDetRowId(), dtl.getRemarks(), dnDtlRequest.getRemarks());
+
                 // Update fields
                 dtl.setDnPoidFk(dnDtlRequest.getDnPoidFk());
                 dtl.setQuotationPoidFk(dnDtlRequest.getQuotationPoidFk());
@@ -922,8 +928,11 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 dtl.setLastmodifiedBy(userId);
 
                 dnDtlRepository.save(dtl);
-                log.debug("Updated delivery note detail with detRowId: {}", dnDtlRequest.getDetRowId());
+                log.debug("Updated delivery note detail with detRowId: {}, remarks: {}", 
+                        dnDtlRequest.getDetRowId(), dnDtlRequest.getRemarks());
             }
+            // Flush to ensure all delivery note detail changes are persisted
+            dnDtlRepository.flush();
         }
         // Save
         SalesInvoiceHdr savedInvoice = invoiceHdrRepository.save(invoice);
@@ -1277,7 +1286,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dtl.setCreatedBy(userId);
         dtl.setLastmodifiedBy(userId);
 
+        log.debug("Creating delivery note detail with detRowId: {}, remarks: {}", detRowId, request.getRemarks());
         SalesDnDtl savedDtl = dnDtlRepository.save(dtl);
+        dnDtlRepository.flush();
+        log.debug("Successfully created delivery note detail with detRowId: {}, remarks: {}", detRowId, savedDtl.getRemarks());
         return convertDnDtlToDto(savedDtl);
     }
 
@@ -1304,6 +1316,9 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 .findById(new SalesDnDtlId(transactionPoid, detRowId))
                 .orElseThrow(() -> new ResourceNotFoundException("Delivery Note Detail", "detRowId", detRowId));
 
+        log.debug("Updating delivery note detail with detRowId: {}, old remarks: {}, new remarks: {}", 
+                detRowId, dtl.getRemarks(), request.getRemarks());
+
         // Update fields
         dtl.setDnPoidFk(request.getDnPoidFk());
         dtl.setQuotationPoidFk(request.getQuotationPoidFk());
@@ -1311,6 +1326,8 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dtl.setLastmodifiedBy(userId);
 
         SalesDnDtl savedDtl = dnDtlRepository.save(dtl);
+        dnDtlRepository.flush();
+        log.debug("Successfully updated delivery note detail with detRowId: {}, remarks: {}", detRowId, savedDtl.getRemarks());
         return convertDnDtlToDto(savedDtl);
     }
 
