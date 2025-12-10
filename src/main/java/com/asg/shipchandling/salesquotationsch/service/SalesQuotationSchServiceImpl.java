@@ -79,6 +79,12 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Validate required fields
         validateQuotationSchRequest(request);
 
+        // Set transactionDate to current date if not provided
+        if (request.getTransactionDate() == null) {
+            request.setTransactionDate(new Timestamp(System.currentTimeMillis()));
+            log.info("createSalesQuotationSch set transactionDate to current timestamp");
+        }
+
         // Handle new address creation if newAddressYN is true
         Long addressPoid = request.getAddressPoid();
         if (request.isNewAddressYN() && request.getAddressDetails() != null) {
@@ -196,7 +202,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
         // Update fields (excluding read-only fields)
         BeanUtils.copyProperties(request, quotationSch, "transactionPoid", "docRef", "createdBy",
-                "createdDate");
+                "createdDate", "transactionDate");
         quotationSch.setLastmodifiedBy(userId);
         // Set the addressPoid (either from request or newly created)
         if (addressPoid != null) {
@@ -694,20 +700,12 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             log.warn("Validation failed : Customer is required");
             throw new CustomException("Customer is required");
         }
-        if (request.getTransactionDate() == null) {
-            log.warn("Validation failed : Transaction date is required");
-            throw new CustomException("Transaction date is required");
-        }
     }
 
     private void validateQuotationSchRequest(UpdateSalesQuotationSchRequest request) {
         if (request.getCustomerPoid() == null) {
             log.warn("Validation failed : Customer is required");
             throw new CustomException("Customer is required");
-        }
-        if (request.getTransactionDate() == null) {
-            log.warn("Validation failed : Transaction date is required");
-            throw new CustomException("Transaction date is required");
         }
     }
 

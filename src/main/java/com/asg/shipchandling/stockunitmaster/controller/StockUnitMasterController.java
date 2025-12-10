@@ -188,33 +188,33 @@ public class StockUnitMasterController {
                 }
         }
 
-        @Operation(summary = "Check stock unit dependencies", description = "Checks if a stock unit can be deleted by checking for dependencies (stock items, etc.).", responses = {
-                        @ApiResponse(responseCode = "200", description = "Dependency check result", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UnitDependenciesDto.class))),
-                        @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json")),
-                        @ApiResponse(responseCode = "404", description = "Stock unit not found", content = @Content(mediaType = "application/json"))
-        }, security = @SecurityRequirement(name = "bearerAuth"))
-        @GetMapping("/{stockUnitPoid}/dependencies")
-        @AllowedAction(UserRolesRightsEnum.VIEW)
-        public ResponseEntity<?> checkUnitDependencies(
-                        @Parameter(description = "Stock unit POID", required = true) @PathVariable Long stockUnitPoid) {
+        // @Operation(summary = "Check stock unit dependencies", description = "Checks if a stock unit can be deleted by checking for dependencies (stock items, etc.).", responses = {
+        //                 @ApiResponse(responseCode = "200", description = "Dependency check result", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UnitDependenciesDto.class))),
+        //                 @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json")),
+        //                 @ApiResponse(responseCode = "404", description = "Stock unit not found", content = @Content(mediaType = "application/json"))
+        // }, security = @SecurityRequirement(name = "bearerAuth"))
+        // @GetMapping("/{stockUnitPoid}/dependencies")
+        // @AllowedAction(UserRolesRightsEnum.VIEW)
+        // public ResponseEntity<?> checkUnitDependencies(
+        //                 @Parameter(description = "Stock unit POID", required = true) @PathVariable Long stockUnitPoid) {
 
-                UnitDependenciesDto dependencies = stockUnitService.checkUnitDependencies(stockUnitPoid, UserContext.getGroupPoid());
-                return success("Dependency check completed", dependencies);
-        }
+        //         UnitDependenciesDto dependencies = stockUnitService.checkUnitDependencies(stockUnitPoid, UserContext.getGroupPoid());
+        //         return success("Dependency check completed", dependencies);
+        // }
 
-        @Operation(summary = "Get active stock units only", description = "Returns only active stock units. Commonly used for dropdowns and LOVs where only active units should be shown.", responses = {
-                        @ApiResponse(responseCode = "200", description = "Successfully retrieved active stock units", content = @Content(mediaType = "application/json", schema = @Schema(implementation = StockUnitMasterDto.class))),
-                        @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json"))
-        }, security = @SecurityRequirement(name = "bearerAuth"))
+        // @Operation(summary = "Get active stock units only", description = "Returns only active stock units. Commonly used for dropdowns and LOVs where only active units should be shown.", responses = {
+        //                 @ApiResponse(responseCode = "200", description = "Successfully retrieved active stock units", content = @Content(mediaType = "application/json", schema = @Schema(implementation = StockUnitMasterDto.class))),
+        //                 @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json"))
+        // }, security = @SecurityRequirement(name = "bearerAuth"))
 
-        @GetMapping("/active")
-        @AllowedAction(UserRolesRightsEnum.VIEW)
-        public ResponseEntity<?> getActiveStockUnits(
-                        @RequestParam(required = false) String classified,
-                        @RequestParam(required = false) String search) {
+        // @GetMapping("/active")
+        // @AllowedAction(UserRolesRightsEnum.VIEW)
+        // public ResponseEntity<?> getActiveStockUnits(
+        //                 @RequestParam(required = false) String classified,
+        //                 @RequestParam(required = false) String search) {
 
-                List<StockUnitMasterDto> units = stockUnitService.getActiveStockUnits(UserContext.getGroupPoid(), classified, search);
-                return success("Active stock units fetched successfully", units);
-        }
+        //         List<StockUnitMasterDto> units = stockUnitService.getActiveStockUnits(UserContext.getGroupPoid(), classified, search);
+        //         return success("Active stock units fetched successfully", units);
+        // }
 
 }

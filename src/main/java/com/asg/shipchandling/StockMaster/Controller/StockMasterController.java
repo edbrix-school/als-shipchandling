@@ -160,33 +160,33 @@ public class StockMasterController {
         return com.asg.shipchandling.common.ApiResponse.success("Validation completed", response);
     }
 
-    @Operation(summary = "Validate Stock Name", description = "Checks if a stock name is unique within the group. Used for real-time validation in UI.", responses = {
-            @ApiResponse(responseCode = "200", description = "Validation result", content = @Content(mediaType = "application/json")),
-            @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json"))
-    }, security = @SecurityRequirement(name = "bearerAuth"))
-    @GetMapping("/validate-name")
-    @AllowedAction(UserRolesRightsEnum.VIEW)
-    public ResponseEntity<?> validateStockName(
-            @Parameter(description = "Stock name to validate", required = true) @RequestParam String stockName,
+    // @Operation(summary = "Validate Stock Name", description = "Checks if a stock name is unique within the group. Used for real-time validation in UI.", responses = {
+    //         @ApiResponse(responseCode = "200", description = "Validation result", content = @Content(mediaType = "application/json")),
+    //         @ApiResponse(responseCode = "401", description = "Unauthorized - Authentication required", content = @Content(mediaType = "application/json"))
+    // }, security = @SecurityRequirement(name = "bearerAuth"))
+    // @GetMapping("/validate-name")
+    // @AllowedAction(UserRolesRightsEnum.VIEW)
+    // public ResponseEntity<?> validateStockName(
+    //         @Parameter(description = "Stock name to validate", required = true) @RequestParam String stockName,
 
-            @Parameter(description = "Stock Master POID to exclude (for update scenarios)", required = false) @RequestParam(required = false) Long excludeStockPoid) {
+    //         @Parameter(description = "Stock Master POID to exclude (for update scenarios)", required = false) @RequestParam(required = false) Long excludeStockPoid) {
 
-        ValidationResponse response = stockMasterService.validateStockName(stockName, UserContext.getGroupPoid(), excludeStockPoid);
+    //     ValidationResponse response = stockMasterService.validateStockName(stockName, UserContext.getGroupPoid(), excludeStockPoid);
 
-        return com.asg.shipchandling.common.ApiResponse.success("Validation completed", response);
-    }
+    //     return com.asg.shipchandling.common.ApiResponse.success("Validation completed", response);
+    // }
 
 
-    @Operation(summary = "Check Stock Master Dependencies", 
-               description = "Checks if stock item can be deleted by checking for dependencies (stock balance, transactions, etc.)")
-    @GetMapping("/{stockPoid}/dependencies")
-    @AllowedAction(UserRolesRightsEnum.VIEW)
-    public ResponseEntity<?> checkStockMasterDependencies(
-            @PathVariable Long stockPoid) {
+    // @Operation(summary = "Check Stock Master Dependencies", 
+    //            description = "Checks if stock item can be deleted by checking for dependencies (stock balance, transactions, etc.)")
+    // @GetMapping("/{stockPoid}/dependencies")
+    // @AllowedAction(UserRolesRightsEnum.VIEW)
+    // public ResponseEntity<?> checkStockMasterDependencies(
+    //         @PathVariable Long stockPoid) {
         
-        StockMasterDependenciesDto dto = stockMasterService.checkStockMasterDependencies(stockPoid, UserContext.getGroupPoid());
-        return com.asg.shipchandling.common.ApiResponse.success("Dependency check completed", dto);
-    }
+    //     StockMasterDependenciesDto dto = stockMasterService.checkStockMasterDependencies(stockPoid, UserContext.getGroupPoid());
+    //     return com.asg.shipchandling.common.ApiResponse.success("Dependency check completed", dto);
+    // }
 
 
      @Operation(summary = "Delete stock master")
@@ -200,37 +200,37 @@ public class StockMasterController {
     }
 
 
-    @Operation(
-            summary = "Create or Update stock master",
-            description = "Creates a new stock item or updates existing one based on actionRequired. StockCode is auto-generated. Calls stored procedures for validation.",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Successfully created/updated stock item"),
-                    @ApiResponse(responseCode = "400", description = "Invalid input or validation error"),
-                    @ApiResponse(responseCode = "401", description = "Unauthorized")
-            },
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
-    @PostMapping
-    @AllowedAction(UserRolesRightsEnum.CREATE)
-    public ResponseEntity<?> createOrUpdateStockMaster(
-            @RequestParam(required = true) String documentId,
-            @RequestParam(required = true) String actionRequired,
-            @Valid @RequestBody CreateStockMasterRequest request) {
+    // @Operation(
+    //         summary = "Create or Update stock master",
+    //         description = "Creates a new stock item or updates existing one based on actionRequired. StockCode is auto-generated. Calls stored procedures for validation.",
+    //         responses = {
+    //                 @ApiResponse(responseCode = "200", description = "Successfully created/updated stock item"),
+    //                 @ApiResponse(responseCode = "400", description = "Invalid input or validation error"),
+    //                 @ApiResponse(responseCode = "401", description = "Unauthorized")
+    //         },
+    //         security = @SecurityRequirement(name = "bearerAuth")
+    // )
+    // @PostMapping
+    // @AllowedAction(UserRolesRightsEnum.CREATE)
+    // public ResponseEntity<?> createOrUpdateStockMaster(
+    //         @RequestParam(required = true) String documentId,
+    //         @RequestParam(required = true) String actionRequired,
+    //         @Valid @RequestBody CreateStockMasterRequest request) {
 
-        if ("CREATE".equalsIgnoreCase(actionRequired)) {
-            StockMasterDto dto = stockMasterService.createStockMaster(request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
-            return com.asg.shipchandling.common.ApiResponse.success("Stock item created successfully", dto);
-        } else if ("UPDATE".equalsIgnoreCase(actionRequired)) {
-            if (request.getStockPoid() == null) {
-                return com.asg.shipchandling.common.ApiResponse.badRequest("stockPoid is required for UPDATE operation");
-            }
-            UpdateStockMasterRequest updateRequest = convertToUpdateRequest(request);
-            StockMasterDto dto = stockMasterService.updateStockMaster(request.getStockPoid(), updateRequest, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
-            return com.asg.shipchandling.common.ApiResponse.success("Stock Master Updated Successfully", dto);
-        } else {
-            return com.asg.shipchandling.common.ApiResponse.badRequest("Invalid actionRequired. Must be CREATE or UPDATE");
-        }
-    }
+    //     if ("CREATE".equalsIgnoreCase(actionRequired)) {
+    //         StockMasterDto dto = stockMasterService.createStockMaster(request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+    //         return com.asg.shipchandling.common.ApiResponse.success("Stock item created successfully", dto);
+    //     } else if ("UPDATE".equalsIgnoreCase(actionRequired)) {
+    //         if (request.getStockPoid() == null) {
+    //             return com.asg.shipchandling.common.ApiResponse.badRequest("stockPoid is required for UPDATE operation");
+    //         }
+    //         UpdateStockMasterRequest updateRequest = convertToUpdateRequest(request);
+    //         StockMasterDto dto = stockMasterService.updateStockMaster(request.getStockPoid(), updateRequest, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+    //         return com.asg.shipchandling.common.ApiResponse.success("Stock Master Updated Successfully", dto);
+    //     } else {
+    //         return com.asg.shipchandling.common.ApiResponse.badRequest("Invalid actionRequired. Must be CREATE or UPDATE");
+    //     }
+    // }
 
     @Operation(
             summary = "Create stock master",
@@ -242,20 +242,22 @@ public class StockMasterController {
             },
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    @PostMapping("/Create")
+    @PostMapping("/create")
     @AllowedAction(UserRolesRightsEnum.CREATE)
     public ResponseEntity<?> createStockMaster(
-            @Valid @RequestBody CreateStockMasterRequest request) {
-
+        @Valid @RequestBody CreateStockMasterRequest request) {
+        // Use documentId for logging/context (can be used for audit trail or validation)
+        // documentId is available for use in service layer if needed
+        
         StockMasterDto dto = stockMasterService.createStockMaster(request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
         return com.asg.shipchandling.common.ApiResponse.success("Stock item created successfully", dto);
     }
 
-    private UpdateStockMasterRequest convertToUpdateRequest(CreateStockMasterRequest request) {
-        UpdateStockMasterRequest updateRequest = new UpdateStockMasterRequest();
-        BeanUtils.copyProperties(request, updateRequest);
-        return updateRequest;
-    }
+    // private UpdateStockMasterRequest convertToUpdateRequest(CreateStockMasterRequest request) {
+    //     UpdateStockMasterRequest updateRequest = new UpdateStockMasterRequest();
+    //     BeanUtils.copyProperties(request, updateRequest);
+    //     return updateRequest;
+    // }
 
 
 
@@ -282,122 +284,122 @@ public ResponseEntity<?> updateStockMaster(
 }
 
 
-    @Operation(summary = "Add Supplier Detail")
-    @PostMapping("/{stockPoid}/supplier-details")
-    @AllowedAction(UserRolesRightsEnum.CREATE)
-    public ResponseEntity<?> addSupplierDetail(
-            @PathVariable Long stockPoid,
-            @Valid @RequestBody CreateStockMasterDtlRequest request) {
+    // @Operation(summary = "Add Supplier Detail")
+    // @PostMapping("/{stockPoid}/supplier-details")
+    // @AllowedAction(UserRolesRightsEnum.CREATE)
+    // public ResponseEntity<?> addSupplierDetail(
+    //         @PathVariable Long stockPoid,
+    //         @Valid @RequestBody CreateStockMasterDtlRequest request) {
         
-        StockMasterDtlDto dto = stockMasterService.addSupplierDetail(
-                stockPoid, request, UserContext.getGroupPoid(), UserContext.getUserId());
-        return com.asg.shipchandling.common.ApiResponse.success("Supplier detail added successfully", dto);
-    }
+    //     StockMasterDtlDto dto = stockMasterService.addSupplierDetail(
+    //             stockPoid, request, UserContext.getGroupPoid(), UserContext.getUserId());
+    //     return com.asg.shipchandling.common.ApiResponse.success("Supplier detail added successfully", dto);
+    // }
 
 
-    @Operation(summary = "Update Supplier Detail")
-    @PutMapping("/{stockPoid}/supplier-details/{detRowId}")
-    @AllowedAction(UserRolesRightsEnum.EDIT)
-    public ResponseEntity<?> updateSupplierDetail(
-            @PathVariable Long stockPoid,
-            @PathVariable Long detRowId,
-            @Valid @RequestBody CreateStockMasterDtlRequest request){
+    // @Operation(summary = "Update Supplier Detail")
+    // @PutMapping("/{stockPoid}/supplier-details/{detRowId}")
+    // @AllowedAction(UserRolesRightsEnum.EDIT)
+    // public ResponseEntity<?> updateSupplierDetail(
+    //         @PathVariable Long stockPoid,
+    //         @PathVariable Long detRowId,
+    //         @Valid @RequestBody CreateStockMasterDtlRequest request){
         
-        StockMasterDtlDto dto = stockMasterService.updateSupplierDetail(
-                stockPoid, detRowId, request, UserContext.getGroupPoid(), UserContext.getUserId());
-        return com.asg.shipchandling.common.ApiResponse.success("Supplier detail updated successfully", dto);
-    }
+    //     StockMasterDtlDto dto = stockMasterService.updateSupplierDetail(
+    //             stockPoid, detRowId, request, UserContext.getGroupPoid(), UserContext.getUserId());
+    //     return com.asg.shipchandling.common.ApiResponse.success("Supplier detail updated successfully", dto);
+    // }
 
 
-     @Operation(summary = "Delete Supplier Detail")
-    @DeleteMapping("/{stockPoid}/supplier-details/{detRowId}")
-    @AllowedAction(UserRolesRightsEnum.DELETE)
-    public ResponseEntity<?> deleteSupplierDetail(
-            @PathVariable Long stockPoid,
-            @PathVariable Long detRowId) {
+    //  @Operation(summary = "Delete Supplier Detail")
+    // @DeleteMapping("/{stockPoid}/supplier-details/{detRowId}")
+    // @AllowedAction(UserRolesRightsEnum.DELETE)
+    // public ResponseEntity<?> deleteSupplierDetail(
+    //         @PathVariable Long stockPoid,
+    //         @PathVariable Long detRowId) {
         
-        stockMasterService.deleteSupplierDetail(stockPoid, detRowId, UserContext.getGroupPoid());
-        return com.asg.shipchandling.common.ApiResponse.success("Supplier detail deleted successfully", null);
-    }
+    //     stockMasterService.deleteSupplierDetail(stockPoid, detRowId, UserContext.getGroupPoid());
+    //     return com.asg.shipchandling.common.ApiResponse.success("Supplier detail deleted successfully", null);
+    // }
 
-    @Operation(summary = "Get Supplier Details")
-    @GetMapping("/{stockPoid}/supplier-details")
-    @AllowedAction(UserRolesRightsEnum.VIEW)
-    public ResponseEntity<?> getSupplierDetails(
-            @PathVariable Long stockPoid) {
+    // @Operation(summary = "Get Supplier Details")
+    // @GetMapping("/{stockPoid}/supplier-details")
+    // @AllowedAction(UserRolesRightsEnum.VIEW)
+    // public ResponseEntity<?> getSupplierDetails(
+    //         @PathVariable Long stockPoid) {
         
-        List<StockMasterDtlDto> supplierDetails = stockMasterService.getSupplierDetails(stockPoid, UserContext.getGroupPoid());
-        return com.asg.shipchandling.common.ApiResponse.success("Supplier details fetched successfully", supplierDetails);
-    }
+    //     List<StockMasterDtlDto> supplierDetails = stockMasterService.getSupplierDetails(stockPoid, UserContext.getGroupPoid());
+    //     return com.asg.shipchandling.common.ApiResponse.success("Supplier details fetched successfully", supplierDetails);
+    // }
 
 
-     @Operation(summary = "Add Warehouse Detail")
-    @PostMapping("/{stockPoid}/warehouse-details")
-    @AllowedAction(UserRolesRightsEnum.CREATE)
-    public ResponseEntity<?> addWarehouseDetail(
-            @PathVariable Long stockPoid,
-            @Valid @RequestBody CreateStockMasterWarehouseDtlRequest request) {
+    //  @Operation(summary = "Add Warehouse Detail")
+    // @PostMapping("/{stockPoid}/warehouse-details")
+    // @AllowedAction(UserRolesRightsEnum.CREATE)
+    // public ResponseEntity<?> addWarehouseDetail(
+    //         @PathVariable Long stockPoid,
+    //         @Valid @RequestBody CreateStockMasterWarehouseDtlRequest request) {
         
-        StockMasterWarehouseDtlDto dto = stockMasterService.addWarehouseDetail(
-                stockPoid, request, UserContext.getGroupPoid(), UserContext.getUserId());
-        return com.asg.shipchandling.common.ApiResponse.success("Warehouse detail added successfully", dto);
-    }
+    //     StockMasterWarehouseDtlDto dto = stockMasterService.addWarehouseDetail(
+    //             stockPoid, request, UserContext.getGroupPoid(), UserContext.getUserId());
+    //     return com.asg.shipchandling.common.ApiResponse.success("Warehouse detail added successfully", dto);
+    // }
 
 
-    @Operation(summary = "Update Warehouse Detail")
-    @PutMapping("/{stockPoid}/warehouse-details/{detRowId}")
-    @AllowedAction(UserRolesRightsEnum.EDIT)
-    public ResponseEntity<?> updateWarehouseDetail(
-            @PathVariable Long stockPoid,
-            @PathVariable Long detRowId,
-            @Valid @RequestBody CreateStockMasterWarehouseDtlRequest request) {
+    // @Operation(summary = "Update Warehouse Detail")
+    // @PutMapping("/{stockPoid}/warehouse-details/{detRowId}")
+    // @AllowedAction(UserRolesRightsEnum.EDIT)
+    // public ResponseEntity<?> updateWarehouseDetail(
+    //         @PathVariable Long stockPoid,
+    //         @PathVariable Long detRowId,
+    //         @Valid @RequestBody CreateStockMasterWarehouseDtlRequest request) {
         
-        StockMasterWarehouseDtlDto dto = stockMasterService.updateWarehouseDetail(
-                stockPoid, detRowId, request, UserContext.getGroupPoid(), UserContext.getUserId());
-        return com.asg.shipchandling.common.ApiResponse.success("Warehouse detail updated successfully", dto);
-    }
+    //     StockMasterWarehouseDtlDto dto = stockMasterService.updateWarehouseDetail(
+    //             stockPoid, detRowId, request, UserContext.getGroupPoid(), UserContext.getUserId());
+    //     return com.asg.shipchandling.common.ApiResponse.success("Warehouse detail updated successfully", dto);
+    // }
 
-    @Operation(summary = "Delete Warehouse Detail")
-    @DeleteMapping("/{stockPoid}/warehouse-details/{detRowId}")
-    @AllowedAction(UserRolesRightsEnum.DELETE)
-    public ResponseEntity<?> deleteWarehouseDetail(
-            @PathVariable Long stockPoid,
-            @PathVariable Long detRowId) {
+    // @Operation(summary = "Delete Warehouse Detail")
+    // @DeleteMapping("/{stockPoid}/warehouse-details/{detRowId}")
+    // @AllowedAction(UserRolesRightsEnum.DELETE)
+    // public ResponseEntity<?> deleteWarehouseDetail(
+    //         @PathVariable Long stockPoid,
+    //         @PathVariable Long detRowId) {
         
-        stockMasterService.deleteWarehouseDetail(stockPoid, detRowId, UserContext.getGroupPoid());
-        return com.asg.shipchandling.common.ApiResponse.success("Warehouse detail deleted successfully", null);
-    }
+    //     stockMasterService.deleteWarehouseDetail(stockPoid, detRowId, UserContext.getGroupPoid());
+    //     return com.asg.shipchandling.common.ApiResponse.success("Warehouse detail deleted successfully", null);
+    // }
 
-    @Operation(summary = "Get Warehouse Details")
-    @GetMapping("/{stockPoid}/warehouse-details")
-    @AllowedAction(UserRolesRightsEnum.VIEW)
-    public ResponseEntity<?> getWarehouseDetails(
-            @PathVariable Long stockPoid) {
+    // @Operation(summary = "Get Warehouse Details")
+    // @GetMapping("/{stockPoid}/warehouse-details")
+    // @AllowedAction(UserRolesRightsEnum.VIEW)
+    // public ResponseEntity<?> getWarehouseDetails(
+    //         @PathVariable Long stockPoid) {
         
-        List<StockMasterWarehouseDtlDto> warehouseDetails = stockMasterService.getWarehouseDetails(stockPoid, UserContext.getGroupPoid());
-        return com.asg.shipchandling.common.ApiResponse.success("Warehouse details fetched successfully", warehouseDetails);
-    }
+    //     List<StockMasterWarehouseDtlDto> warehouseDetails = stockMasterService.getWarehouseDetails(stockPoid, UserContext.getGroupPoid());
+    //     return com.asg.shipchandling.common.ApiResponse.success("Warehouse details fetched successfully", warehouseDetails);
+    // }
 
-    @GetMapping("/by-barcode/{barcode}")
-    @AllowedAction(UserRolesRightsEnum.VIEW)
-    public ResponseEntity<StockMasterDto> getStockByBarcode(
-            @PathVariable String barcode) {
+    // @GetMapping("/by-barcode/{barcode}")
+    // @AllowedAction(UserRolesRightsEnum.VIEW)
+    // public ResponseEntity<StockMasterDto> getStockByBarcode(
+    //         @PathVariable String barcode) {
 
-        StockMasterDto stock = stockMasterService.getStockMasterByBarcode(barcode, UserContext.getGroupPoid());
-        return ResponseEntity.ok(stock);
-    }
+    //     StockMasterDto stock = stockMasterService.getStockMasterByBarcode(barcode, UserContext.getGroupPoid());
+    //     return ResponseEntity.ok(stock);
+    // }
 
-    @Operation(summary = "Get Stock Details", description = "Retrieves stock details including category, tax, and unit information for a given stock POID.", responses = {
-                    @ApiResponse(responseCode = "200", description = "Successfully retrieved stock details"),
-                    @ApiResponse(responseCode = "404", description = "Stock not found"),
-                    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    }, security = @SecurityRequirement(name = "bearerAuth"))
-    @GetMapping("/{stockPoid}/details")
-    @AllowedAction(UserRolesRightsEnum.VIEW)
-    public ResponseEntity<?> getStockDetails(
-                    @PathVariable Long stockPoid) {
-            StockDetailsResponse response = stockMasterService.getStockDetails(stockPoid, UserContext.getCompanyPoid());
-            return com.asg.shipchandling.common.ApiResponse.success("Stock details fetched successfully", response);
-    }
+    // @Operation(summary = "Get Stock Details", description = "Retrieves stock details including category, tax, and unit information for a given stock POID.", responses = {
+    //                 @ApiResponse(responseCode = "200", description = "Successfully retrieved stock details"),
+    //                 @ApiResponse(responseCode = "404", description = "Stock not found"),
+    //                 @ApiResponse(responseCode = "401", description = "Unauthorized")
+    // }, security = @SecurityRequirement(name = "bearerAuth"))
+    // @GetMapping("/{stockPoid}/details")
+    // @AllowedAction(UserRolesRightsEnum.VIEW)
+    // public ResponseEntity<?> getStockDetails(
+    //                 @PathVariable Long stockPoid) {
+    //         StockDetailsResponse response = stockMasterService.getStockDetails(stockPoid, UserContext.getCompanyPoid());
+    //         return com.asg.shipchandling.common.ApiResponse.success("Stock details fetched successfully", response);
+    // }
 
 }

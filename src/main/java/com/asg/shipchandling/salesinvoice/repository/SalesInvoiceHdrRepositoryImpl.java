@@ -192,6 +192,12 @@ public class SalesInvoiceHdrRepositoryImpl {
             case "PARTYTYPE":
             case "PARTY_TYPE":
                 return "inv.PARTY_TYPE = :" + paramName;
+            case "GLOBALSEARCH":
+                return "(LOWER(inv.DOC_REF) LIKE '%' || LOWER(:" + paramName + ") || '%' OR " +
+                       "LOWER(inv.VESSEL_NAME) LIKE '%' || LOWER(:" + paramName + ") || '%' OR " +
+                       "LOWER(inv.PORT_NAME) LIKE '%' || LOWER(:" + paramName + ") || '%' OR " +
+                       "LOWER(scm.CUSTOMER_NAME) LIKE '%' || LOWER(:" + paramName + ") || '%' OR " +
+                       "LOWER(pr.PRINCIPAL_NAME) LIKE '%' || LOWER(:" + paramName + ") || '%')";
             default:
                 return null;
         }

@@ -16,7 +16,6 @@ import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsRespon
 @AllArgsConstructor
 public class CreateSalesQuotationSchRequest {
 
-    @NotNull(message = "Transaction date is required")
     private Timestamp transactionDate;
 
     @NotNull(message = "Customer is required")

@@ -355,14 +355,16 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             sqlBuilder.append("AND TRUNC(r.TRANSACTION_DATE) <= TO_DATE(:toDate, 'YYYY-MM-DD') ");
         }
 
-        // Build filter conditions
+        // Build filter conditions with sequential parameter indexing
         List<String> filterConditions = new java.util.ArrayList<>();
+        List<GetAllRfqFilterRequest.FilterItem> validFilters = new java.util.ArrayList<>();
         if (filterRequest.getFilters() != null && !filterRequest.getFilters().isEmpty()) {
-            for (int i = 0; i < filterRequest.getFilters().size(); i++) {
-                GetAllRfqFilterRequest.FilterItem filter = filterRequest.getFilters().get(i);
+            for (GetAllRfqFilterRequest.FilterItem filter : filterRequest.getFilters()) {
                 if (StringUtils.hasText(filter.getSearchField()) && StringUtils.hasText(filter.getSearchValue())) {
+                    validFilters.add(filter);
                     String columnName = mapSearchFieldToColumn(filter.getSearchField());
-                    filterConditions.add("LOWER(" + columnName + ") LIKE LOWER(:filterValue" + i + ")");
+                    int paramIndex = validFilters.size() - 1;
+                    filterConditions.add("LOWER(" + columnName + ") LIKE LOWER(:filterValue" + paramIndex + ")");
                 }
             }
         }
@@ -397,15 +399,13 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             countQuery.setParameter("toDate", filterRequest.getTo());
         }
 
-        // Set filter parameters
-        if (filterRequest.getFilters() != null && !filterRequest.getFilters().isEmpty()) {
-            for (int i = 0; i < filterRequest.getFilters().size(); i++) {
-                GetAllRfqFilterRequest.FilterItem filter = filterRequest.getFilters().get(i);
-                if (StringUtils.hasText(filter.getSearchField()) && StringUtils.hasText(filter.getSearchValue())) {
-                    String paramValue = "%" + filter.getSearchValue() + "%";
-                    query.setParameter("filterValue" + i, paramValue);
-                    countQuery.setParameter("filterValue" + i, paramValue);
-                }
+        // Set filter parameters using sequential indexing
+        if (!validFilters.isEmpty()) {
+            for (int i = 0; i < validFilters.size(); i++) {
+                GetAllRfqFilterRequest.FilterItem filter = validFilters.get(i);
+                String paramValue = "%" + filter.getSearchValue() + "%";
+                query.setParameter("filterValue" + i, paramValue);
+                countQuery.setParameter("filterValue" + i, paramValue);
             }
         }
 
@@ -430,15 +430,42 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     }
 
     private String mapSearchFieldToColumn(String searchField) {
-        switch (searchField.toUpperCase()) {
-            case "DOC_REF":
+        if (searchField == null) {
+            return null;
+        }
+        // Normalize the field name by removing underscores and converting to uppercase
+        String normalizedField = searchField.toUpperCase().replace("_", "");
+        
+        switch (normalizedField) {
+            case "DOCREF":
                 return "r.DOC_REF";
-            case "TASK_DESCRIPTION":
+            case "TASKDESCRIPTION":
+            case "DESCRIPTION":
                 return "r.DESCRIPTION";
-            case "SALES_QTN_REF":
+            case "SALESQTNREF":
+            case "SALESQTN":
                 return "SQH.DOC_REF";
+            case "STATUS":
+                return "r.STATUS";
+            case "TYPE":
+                return "r.TYPE";
+            case "EXPECTEDDATE":
+            case "EXPECTED":
+                return "r.EXPECTED_DATE";
+            case "REMARKS":
+                return "r.REMARKS";
+            case "DESCRIPTIONPRINTYN":
+            case "DESCRIPTIONPRINT":
+                return "r.DESCRIPTION_PRINT_YN";
+            case "SALESINVDOCREF":
+            case "SALESINV":
+            case "INVOICEREF":
+                return "r.SALES_INV_DOC_REF";
             default:
-                return "r." + searchField;
+                // Fallback: assume it's a direct column name from r table
+                // Convert to uppercase and replace spaces/underscores with underscores
+                String columnName = searchField.toUpperCase().replace(" ", "_");
+                return "r." + columnName;
         }
     }
 

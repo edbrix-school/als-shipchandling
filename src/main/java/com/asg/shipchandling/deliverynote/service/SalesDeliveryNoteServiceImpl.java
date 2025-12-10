@@ -369,14 +369,16 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
             sqlBuilder.append("AND TRUNC(dn.TRANSACTION_DATE) <= TO_DATE(:toDate, 'YYYY-MM-DD') ");
         }
 
-        // Build filter conditions
+        // Build filter conditions with sequential parameter indexing
         List<String> filterConditions = new java.util.ArrayList<>();
+        List<GetAllDeliveryNoteFilterRequest.FilterItem> validFilters = new java.util.ArrayList<>();
         if (filterRequest.getFilters() != null && !filterRequest.getFilters().isEmpty()) {
-            for (int i = 0; i < filterRequest.getFilters().size(); i++) {
-                GetAllDeliveryNoteFilterRequest.FilterItem filter = filterRequest.getFilters().get(i);
+            for (GetAllDeliveryNoteFilterRequest.FilterItem filter : filterRequest.getFilters()) {
                 if (StringUtils.hasText(filter.getSearchField()) && StringUtils.hasText(filter.getSearchValue())) {
+                    validFilters.add(filter);
                     String columnName = mapSearchFieldToColumn(filter.getSearchField());
-                    filterConditions.add("LOWER(" + columnName + ") LIKE LOWER(:filterValue" + i + ")");
+                    int paramIndex = validFilters.size() - 1;
+                    filterConditions.add("LOWER(" + columnName + ") LIKE LOWER(:filterValue" + paramIndex + ")");
                 }
             }
         }
@@ -409,15 +411,13 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
             countQuery.setParameter("toDate", filterRequest.getTo());
         }
 
-        // Set filter parameters
-        if (filterRequest.getFilters() != null && !filterRequest.getFilters().isEmpty()) {
-            for (int i = 0; i < filterRequest.getFilters().size(); i++) {
-                GetAllDeliveryNoteFilterRequest.FilterItem filter = filterRequest.getFilters().get(i);
-                if (StringUtils.hasText(filter.getSearchField()) && StringUtils.hasText(filter.getSearchValue())) {
-                    String paramValue = "%" + filter.getSearchValue() + "%";
-                    query.setParameter("filterValue" + i, paramValue);
-                    countQuery.setParameter("filterValue" + i, paramValue);
-                }
+        // Set filter parameters using sequential indexing
+        if (!validFilters.isEmpty()) {
+            for (int i = 0; i < validFilters.size(); i++) {
+                GetAllDeliveryNoteFilterRequest.FilterItem filter = validFilters.get(i);
+                String paramValue = "%" + filter.getSearchValue() + "%";
+                query.setParameter("filterValue" + i, paramValue);
+                countQuery.setParameter("filterValue" + i, paramValue);
             }
         }
 
@@ -442,15 +442,45 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     }
 
     private String mapSearchFieldToColumn(String searchField) {
-        switch (searchField.toUpperCase()) {
-            case "DOC_REF":
+        if (searchField == null) {
+            return null;
+        }
+        // Normalize the field name by removing underscores and converting to uppercase
+        String normalizedField = searchField.toUpperCase().replace("_", "");
+        
+        switch (normalizedField) {
+            case "DOCREF":
                 return "dn.DOC_REF";
-            case "CUSTOMER_NAME":
+            case "CUSTOMERNAME":
                 return "scm.CUSTOMER_NAME";
-            case "QTN_REF_NO":
+            case "QTNREFNO":
+            case "QTNREF":
                 return "dn.QTN_REF_NO";
+            case "DELIVERYSTATUS":
+                return "dn.DELIVERY_STATUS";
+            case "DELIVERYTERMS":
+                return "dn.DELIVERY_TERMS";
+            case "PAYMENTMODE":
+                return "dn.PAYMENT_MODE";
+            case "REMARKS":
+                return "dn.REMARKS";
+            case "VOYAGEREF":
+                return "dn.VOYAGE_REF";
+            case "VESSELNAME":
+                return "dn.VESSEL_NAME";
+            case "PORTDESCRIPTION":
+                return "dn.PORT_DESCRIPTION";
+            case "DELIVERYTOADDRESS":
+            case "DELIVERYTO":
+                return "dn.DELIVERY_TO_ADDRESS";
+            case "DESCRIPTIONPRINTYN":
+            case "DESCRIPTIONPRINT":
+                return "dn.DESCRIPTION_PRINT_YN";
             default:
-                return "dn." + searchField;
+                // Fallback: assume it's a direct column name from dn table
+                // Convert to uppercase and replace spaces/underscores with underscores
+                String columnName = searchField.toUpperCase().replace(" ", "_");
+                return "dn." + columnName;
         }
     }
 
