@@ -8,8 +8,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @SpringBootApplication
 @ComponentScan(basePackages = {"com.asg"})
-@EnableJpaRepositories(basePackages = {"com.asg.common.lib.repository", "com.asg.shipchandling"})
-@EntityScan(basePackages = {"com.asg.common.lib.entity", "com.asg.shipchandling"})
+@EnableJpaRepositories(basePackages = "com.asg")
+@EntityScan(basePackages = "com.asg")
 public class ShipchandlingApplication {
 
 	public static void main(String[] args) {
