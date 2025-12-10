@@ -494,21 +494,21 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                     "SELECT CATEGORY_POID, CATEGORY_CODE, CATEGORY_NAME FROM STOCK_CATEGORY_MASTER WHERE CATEGORY_POID = :poid",
                     category.getParentCategoryPoid()));
         }
-        if (category.getStockGlPoid() != null) {
-            dto.setStockGlPoidDetails(fetchPoidDetails(
-                    "SELECT GL_POID, GL_CODE, GL_DESCRIPTION FROM GL_ACCOUNT_MASTER WHERE GL_POID = :poid",
-                    category.getStockGlPoid()));
-        }
-        if (category.getSalesGlPoid() != null) {
-            dto.setSalesGlPoidDetails(fetchPoidDetails(
-                    "SELECT GL_POID, GL_CODE, GL_DESCRIPTION FROM GL_ACCOUNT_MASTER WHERE GL_POID = :poid",
-                    category.getSalesGlPoid()));
-        }
-        if (category.getCostOfSalesGlPoid() != null) {
-            dto.setCostOfSalesGlPoidDetails(fetchPoidDetails(
-                    "SELECT GL_POID, GL_CODE, GL_DESCRIPTION FROM GL_ACCOUNT_MASTER WHERE GL_POID = :poid",
-                    category.getCostOfSalesGlPoid()));
-        }
+        // if (category.getStockGlPoid() != null) {
+        //     dto.setStockGlPoidDetails(fetchPoidDetails(
+        //             "SELECT GL_POID, GL_CODE, GL_DESCRIPTION FROM GL_ACCOUNT_MASTER WHERE GL_POID = :poid",
+        //             category.getStockGlPoid()));
+        // }
+        // if (category.getSalesGlPoid() != null) {
+        //     dto.setSalesGlPoidDetails(fetchPoidDetails(
+        //             "SELECT GL_POID, GL_CODE, GL_DESCRIPTION FROM GL_ACCOUNT_MASTER WHERE GL_POID = :poid",
+        //             category.getSalesGlPoid()));
+        // }
+        // if (category.getCostOfSalesGlPoid() != null) {
+        //     dto.setCostOfSalesGlPoidDetails(fetchPoidDetails(
+        //             "SELECT GL_POID, GL_CODE, GL_DESCRIPTION FROM GL_ACCOUNT_MASTER WHERE GL_POID = :poid",
+        //             category.getCostOfSalesGlPoid()));
+        // }
         if (category.getOutputTaxPoid() != null) {
             dto.setOutputTaxPoidDetails(fetchPoidDetails(
                     "SELECT TAX_POID, TAX_CODE, TAX_NAME FROM GLOBAL_TAX_MASTER WHERE TAX_POID = :poid",
