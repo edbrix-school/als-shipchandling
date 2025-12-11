@@ -26,6 +26,8 @@ import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsRespon
 import com.asg.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.CurrencyRateResponse;
 import com.asg.shipchandling.salesquotationsch.service.SalesQuotationSchService;
+import com.asg.shipchandling.StockMaster.service.StockMasterService;
+import com.asg.shipchandling.StockMaster.dto.StockDetailsResponse;
 import com.asg.common.lib.security.util.UserContext;
 import com.asg.common.lib.annotation.AllowedAction;
 import com.asg.common.lib.enums.UserRolesRightsEnum;
@@ -45,6 +47,7 @@ import static com.asg.shipchandling.common.ApiResponse.badRequest;
 public class SalesQuotationSchController {
 
         private final SalesQuotationSchService quotationSchService;
+        private final StockMasterService stockMasterService;
 
         // ==================== BASIC CRUD OPERATIONS ====================
 
@@ -534,6 +537,23 @@ public class SalesQuotationSchController {
                 log.info("getLatestCurrencyRate completed for currencyPoid={} currencyCode={}", 
                                 currencyPoid, response.getCurrencyCode());
                 return success("Currency rate fetched successfully", response);
+        }
+
+        @Operation(summary = "Get Stock Details", description = "Retrieves stock details including category, tax, and unit information for a given stock POID.", responses = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved stock details"),
+                        @ApiResponse(responseCode = "404", description = "Stock not found"),
+                        @ApiResponse(responseCode = "400", description = "Invalid input"),
+                        @ApiResponse(responseCode = "401", description = "Unauthorized")
+        }, security = @SecurityRequirement(name = "bearerAuth"))
+        @GetMapping("/stock-details")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
+        public ResponseEntity<?> getStockDetails(
+                        @RequestParam Long stockPoid) {
+                log.info("getStockDetails started for stockPoid={} companyPoid={} groupPoid={}", 
+                                stockPoid, UserContext.getCompanyPoid(), UserContext.getGroupPoid());
+                StockDetailsResponse response = stockMasterService.getStockDetails(stockPoid, UserContext.getCompanyPoid());
+                log.info("getStockDetails completed for stockPoid={}", stockPoid);
+                return success("Stock details fetched successfully", response);
         }
 
 }
