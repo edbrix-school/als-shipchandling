@@ -116,6 +116,9 @@ public class StockUnitServiceImpl implements StockUnitService {
         groupRepository.findById(stockUnitMasterDto.getGroupPoid()).orElseThrow(
                 () -> new ResourceNotFoundException("Group", "groupPoid", stockUnitMasterDto.getGroupPoid()));
 
+        // Note: stockUnitCode is immutable after creation and cannot be updated
+        // It is validated above to ensure it matches the existing value
+
         if (stockUnitMasterDto.getStockUnitName() != null) {
             existingStockUnit.setStockUnitName(stockUnitMasterDto.getStockUnitName());
         }
@@ -130,6 +133,9 @@ public class StockUnitServiceImpl implements StockUnitService {
         }
         if (stockUnitMasterDto.getSeqNo() != null) {
             existingStockUnit.setSeqNo(stockUnitMasterDto.getSeqNo());
+        }
+        if (stockUnitMasterDto.getClassified() != null) {
+            existingStockUnit.setClassified(stockUnitMasterDto.getClassified());
         }
         existingStockUnit.setLastModifiedDate(LocalDateTime.now());
 

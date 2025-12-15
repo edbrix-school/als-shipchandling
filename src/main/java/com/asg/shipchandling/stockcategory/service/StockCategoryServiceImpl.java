@@ -575,6 +575,8 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                 groupPoid, parentPoid, filterValue, includeDeleted, tree);
         
         List<Map<String, Object>> result = new ArrayList<>();
+        boolean hasFilter = filterValue != null && !filterValue.trim().isEmpty();
+        String searchPattern = hasFilter ? filterValue.toLowerCase() : null;
         
         // Fetch all categories for the group to build category map
         List<StockCategoryMaster> allCategories;
@@ -596,15 +598,6 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                 rootCategories = stockCategoryRepository.findParentCategoriesByGroupPoid(groupPoid);
             }
             
-            // Apply filter if provided
-            if (filterValue != null && !filterValue.trim().isEmpty()) {
-                String searchPattern = filterValue.toLowerCase();
-                rootCategories = rootCategories.stream()
-                        .filter(c -> (c.getCategoryCode() != null && c.getCategoryCode().toLowerCase().contains(searchPattern)) ||
-                                (c.getCategoryName() != null && c.getCategoryName().toLowerCase().contains(searchPattern)))
-                        .collect(Collectors.toList());
-            }
-            
             for (StockCategoryMaster category : rootCategories) {
                 // Check if this category has child categories
                 Long childCount = stockCategoryRepository.countChildrenByParentCategoryPoid(category.getCategoryPoid());
@@ -616,17 +609,14 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                     // Add children for tree structure only if it has children
                     List<Map<String, Object>> children = getChildrenForCategory(category.getCategoryPoid(), groupPoid, 1, includeDeleted, filterValue, categoryMap, tree);
                     item.put("children", children);
-                    
-                    // If filterValue is provided and this category doesn't match, but has matching children, still include it
-                    if (filterValue != null && !filterValue.trim().isEmpty() && children.isEmpty()) {
-                        String searchPattern = filterValue.toLowerCase();
-                        boolean categoryMatches = (category.getCategoryCode() != null && category.getCategoryCode().toLowerCase().contains(searchPattern)) ||
-                                (category.getCategoryName() != null && category.getCategoryName().toLowerCase().contains(searchPattern));
-                        if (!categoryMatches) {
-                            // Category doesn't match and has no matching children, skip it
-                            continue;
-                        }
+
+                    // If filtering, keep node when it matches or has matching descendants
+                    if (hasFilter && children.isEmpty() && !matchesCategory(category, searchPattern)) {
+                        continue;
                     }
+                } else if (hasFilter && !matchesCategory(category, searchPattern)) {
+                    // Tree disabled: only include nodes that match filter
+                    continue;
                 }
                 result.add(item);
             }
@@ -647,15 +637,6 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                     childCategories = stockCategoryRepository.findChildrenByParentCategoryPoidAndGroupPoid(parentPoid, groupPoid);
                 }
                 
-                // Apply filter if provided
-                if (filterValue != null && !filterValue.trim().isEmpty()) {
-                    String searchPattern = filterValue.toLowerCase();
-                    childCategories = childCategories.stream()
-                            .filter(c -> (c.getCategoryCode() != null && c.getCategoryCode().toLowerCase().contains(searchPattern)) ||
-                                    (c.getCategoryName() != null && c.getCategoryName().toLowerCase().contains(searchPattern)))
-                            .collect(Collectors.toList());
-                }
-                
                 for (StockCategoryMaster category : childCategories) {
                     // Check if this category has child categories
                     Long childCount = stockCategoryRepository.countChildrenByParentCategoryPoid(category.getCategoryPoid());
@@ -667,6 +648,12 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                         // Add children for tree structure only if it has children
                         List<Map<String, Object>> children = getChildrenForCategory(category.getCategoryPoid(), groupPoid, level + 1, includeDeleted, filterValue, categoryMap, tree);
                         item.put("children", children);
+
+                        if (hasFilter && children.isEmpty() && !matchesCategory(category, searchPattern)) {
+                            continue;
+                        }
+                    } else if (hasFilter && !matchesCategory(category, searchPattern)) {
+                        continue;
                     }
                     result.add(item);
                 }
@@ -686,15 +673,9 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         } else {
             childCategories = stockCategoryRepository.findChildrenByParentCategoryPoidAndGroupPoid(categoryPoid, groupPoid);
         }
-        
-        // Apply filter if provided
-        if (filterValue != null && !filterValue.trim().isEmpty()) {
-            String searchPattern = filterValue.toLowerCase();
-            childCategories = childCategories.stream()
-                    .filter(c -> (c.getCategoryCode() != null && c.getCategoryCode().toLowerCase().contains(searchPattern)) ||
-                            (c.getCategoryName() != null && c.getCategoryName().toLowerCase().contains(searchPattern)))
-                    .collect(Collectors.toList());
-        }
+
+        boolean hasFilter = filterValue != null && !filterValue.trim().isEmpty();
+        String searchPattern = hasFilter ? filterValue.toLowerCase() : null;
         
         for (StockCategoryMaster category : childCategories) {
             // Check if this category has child categories
@@ -709,20 +690,25 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                 item.put("children", grandChildren);
                 
                 // If filterValue is provided and this category doesn't match, but has matching children, still include it
-                if (filterValue != null && !filterValue.trim().isEmpty() && grandChildren.isEmpty()) {
-                    String searchPattern = filterValue.toLowerCase();
-                    boolean categoryMatches = (category.getCategoryCode() != null && category.getCategoryCode().toLowerCase().contains(searchPattern)) ||
-                            (category.getCategoryName() != null && category.getCategoryName().toLowerCase().contains(searchPattern));
-                    if (!categoryMatches) {
-                        // Category doesn't match and has no matching children, skip it
-                        continue;
-                    }
+                if (hasFilter && grandChildren.isEmpty() && !matchesCategory(category, searchPattern)) {
+                    // Category doesn't match and has no matching children, skip it
+                    continue;
                 }
+            } else if (hasFilter && !matchesCategory(category, searchPattern)) {
+                // Tree disabled: only include nodes that match filter
+                continue;
             }
             children.add(item);
         }
         
         return children;
+    }
+
+    private boolean matchesCategory(StockCategoryMaster category, String searchPattern) {
+        return searchPattern != null && (
+                (category.getCategoryCode() != null && category.getCategoryCode().toLowerCase().contains(searchPattern)) ||
+                (category.getCategoryName() != null && category.getCategoryName().toLowerCase().contains(searchPattern))
+        );
     }
     
     private int calculateCategoryLevel(StockCategoryMaster category, Long groupPoid) {
