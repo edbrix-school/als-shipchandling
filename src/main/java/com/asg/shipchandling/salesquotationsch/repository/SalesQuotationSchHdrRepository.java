@@ -106,8 +106,10 @@ public interface SalesQuotationSchHdrRepository extends JpaRepository<SalesQuota
                         "NULL as divPoid, NULL as divCode, NULL as divDescription, " +
                         // Principal Details - NULL since field doesn't exist in table
                         "NULL as prPoid, NULL as prCode, NULL as prName, " +
-                        // Address Details (from GLOBAL_ADDRESS_DETAILS)
-                        "addr.ADDRESS_POID as addrPoid, addr.CONTACT_PERSON as addrContactPerson, " +
+                        // Address Details
+                        // NOTE: SALES_QUOTATION_HDR.ADDRESS_POID stores ADDRESS_MASTER_POID (not GLOBAL_ADDRESS_DETAILS.ADDRESS_POID).
+                        // GLOBAL_ADDRESS_DETAILS may have multiple rows per master; pick one row (rn=1).
+                        "qtn.ADDRESS_POID as addrPoid, addr.CONTACT_PERSON as addrContactPerson, " +
                         "addr.EMAIL1 as addrEmail1, addr.MOBILE as addrMobile " +
                         "FROM SALES_QUOTATION_HDR qtn " +
                         "LEFT JOIN SALES_CUSTOMER_MASTER cust ON qtn.CUSTOMER_POID = cust.CUSTOMER_POID " +
@@ -115,7 +117,22 @@ public interface SalesQuotationSchHdrRepository extends JpaRepository<SalesQuota
                         "LEFT JOIN SHIP_LINE_MASTER lm ON qtn.LINE_POID = lm.LINE_POID " +
                         "LEFT JOIN SHIP_PORT_MASTER pm ON qtn.PORT_POID = pm.PORT_POID " +
                         "LEFT JOIN SHIP_VESSEL_MASTER vm ON qtn.VESSEL_POID = TO_CHAR(vm.VESSEL_POID) " +
-                        "LEFT JOIN GLOBAL_ADDRESS_DETAILS addr ON qtn.ADDRESS_POID = addr.ADDRESS_POID " +
+                        "LEFT JOIN ( " +
+                        "  SELECT address_master_poid, contact_person, email1, mobile " +
+                        "  FROM ( " +
+                        "    SELECT d.*, ROW_NUMBER() OVER ( " +
+                        "      PARTITION BY d.address_master_poid " +
+                        "      ORDER BY " +
+                        "        CASE WHEN UPPER(d.address_type) = 'SALES' THEN 0 ELSE 1 END, " +
+                        "        CASE WHEN d.contact_person IS NOT NULL AND TRIM(d.contact_person) IS NOT NULL THEN 0 ELSE 1 END, " +
+                        "        CASE WHEN d.email1 IS NOT NULL AND TRIM(d.email1) IS NOT NULL THEN 0 ELSE 1 END, " +
+                        "        CASE WHEN d.mobile IS NOT NULL AND TRIM(d.mobile) IS NOT NULL THEN 0 ELSE 1 END, " +
+                        "        d.address_poid " +
+                        "    ) rn " +
+                        "    FROM global_address_details d " +
+                        "  ) " +
+                        "  WHERE rn = 1 " +
+                        ") addr ON qtn.ADDRESS_POID = addr.address_master_poid " +
                         "WHERE qtn.TRANSACTION_POID = :transactionPoid AND qtn.COMPANY_POID = :companyPoid", nativeQuery = true)
         List<Object[]> findSalesQuotationSchWithDetails(@Param("transactionPoid") Long transactionPoid,
                         @Param("companyPoid") Long companyPoid);

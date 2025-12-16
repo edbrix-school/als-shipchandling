@@ -547,16 +547,32 @@ public class StockCategoryController {
         Long groupPoid = UserContext.getGroupPoid();
         String documentId = UserContext.getDocumentId();
 
-        // When parentPoid is provided or documentId is present, return hierarchical structure
+        boolean hasFilter = filterValue != null && !filterValue.trim().isEmpty();
+
+        // Tree structure (similar to Stock Master tree): return plain array as data
+        if (tree && (documentId != null || hasFilter)) {
+            List<Map<String, Object>> treeStructure = stockCategoryService.getStockCategoriesHierarchical(
+                    groupPoid, parentPoid, filterValue, includeDeleted, true);
+            return success("Stock Category tree structure retrieved successfully", treeStructure);
+        }
+
+        // Hierarchical list (flat, pagination-like): wrap in { content, totalElements }
         if (parentPoid != null || documentId != null) {
             List<Map<String, Object>> hierarchicalList = stockCategoryService.getStockCategoriesHierarchical(
                     groupPoid, parentPoid, filterValue, includeDeleted, tree);
-            
+
             Map<String, Object> data = Map.of(
                     "content", hierarchicalList,
                     "totalElements", hierarchicalList.size());
-            
+
             return success("Stock Category list retrieved successfully", data);
+        }
+
+        // When only filterValue is provided (no parentPoid / documentId) in non-tree mode, return plain array as data
+        if (hasFilter) {
+            List<Map<String, Object>> hierarchicalList = stockCategoryService.getStockCategoriesHierarchical(
+                    groupPoid, null, filterValue, includeDeleted, tree);
+            return success("Stock Category list retrieved successfully", hierarchicalList);
         }
 
         // Default behavior: return flat list or tree based on tree parameter
