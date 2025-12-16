@@ -1,5 +1,6 @@
 package com.asg.shipchandling.requestforquotation.dto.request;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -16,6 +17,7 @@ public class CreateApRequestForQtnRequest {
     
     private Timestamp transactionDate;
 
+    @NotBlank(message = "Description is required")
     @Size(max = 500, message = "Description must not exceed 500 characters")
     private String description;
 
