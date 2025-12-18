@@ -2,6 +2,8 @@ package com.asg.shipchandling.StockMaster.service;
 
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -163,6 +165,9 @@ public class StockMasterServiceImpl implements StockMasterService {
             setEmptyDetails(response);
         }
 
+        response.setCategoryDetail(fetchCategoryDetail(entity.getCategoryPoid()));
+        response.setCurrencyDetail(fetchCurrencyDetail(entity.getCurrencyCode()));
+
         // Always fetch supplier and warehouse details (they are core details of stock master)
         List<StockMasterDTLEntity> supplierEntities = dtlRepository.findByStockPoid(stockPoid);
         List<StockMasterDtlDto> supplierDetails = supplierEntities.stream()
@@ -199,8 +204,7 @@ public class StockMasterServiceImpl implements StockMasterService {
         response.setPurchaseStockUnitDetails(createLovDetailFromRow(row, index));
         index += 3;
         
-        // Consumption Unit Details (su3: index 62-64)
-        response.setConsumptionUnitDetails(createLovDetailFromRow(row, index));
+        // Skip Consumption Unit Details (su3: index 62-64) - not exposed in response
         index += 3;
         
         // Tax Details - Output Tax (tax1: index 65-67)
@@ -265,7 +269,6 @@ public class StockMasterServiceImpl implements StockMasterService {
     private void setEmptyDetails(StockMasterViewResponse response) {
         response.setStockUnitDetails(createEmptyLovDetail());
         response.setPurchaseStockUnitDetails(createEmptyLovDetail());
-        response.setConsumptionUnitDetails(createEmptyLovDetail());
         response.setTaxDetails(createEmptyLovDetail());
         response.setInputTaxDetails(createEmptyLovDetail());
         response.setStockGlDetails(createEmptyLovDetail());
@@ -544,6 +547,7 @@ public class StockMasterServiceImpl implements StockMasterService {
     private StockMasterDtlDto convertDtlToDto(StockMasterDTLEntity dtl) {
         StockMasterDtlDto dto = new StockMasterDtlDto();
         BeanUtils.copyProperties(dtl, dto);
+        dto.setSupplierName(fetchSupplierName(dtl.getSupplierPoid()));
         return dto;
     }
 
@@ -551,6 +555,79 @@ public class StockMasterServiceImpl implements StockMasterService {
         StockMasterWarehouseDtlDto dto = new StockMasterWarehouseDtlDto();
         BeanUtils.copyProperties(dtl, dto);
         return dto;
+    }
+
+    private String fetchSupplierName(Long supplierPoid) {
+        if (supplierPoid == null) {
+            return null;
+        }
+
+        final String sql = "SELECT SUPPLIER_NAME FROM AP_SUPPLIER_MASTER " +
+                "WHERE SUPPLIER_POID = ? AND NVL(ACTIVE, 'Y') = 'Y' AND NVL(DELETED, 'N') = 'N'";
+
+        try {
+            return jdbcTemplate.queryForObject(sql, String.class, supplierPoid);
+        } catch (EmptyResultDataAccessException ex) {
+            return null;
+        }
+    }
+
+    private LovDetailDto fetchCategoryDetail(Long categoryPoid) {
+        if (categoryPoid == null) {
+            return createEmptyLovDetail();
+        }
+
+        final String sql = "SELECT T1.CATEGORY_POID AS POID, T1.CATEGORY_CODE AS CODE, " +
+                "T1.CATEGORY_NAME || CASE WHEN T2.CATEGORY_NAME IS NULL THEN '' ELSE '(' || T2.CATEGORY_NAME || ')' END AS DESCRIPTION " +
+                "FROM STOCK_CATEGORY_MASTER T1 " +
+                "LEFT JOIN STOCK_CATEGORY_MASTER T2 ON T1.PARENT_CATEGORY_POID = T2.CATEGORY_POID " +
+                "WHERE T1.CATEGORY_POID = ? AND NVL(T1.DELETED, 'N') = 'N'";
+
+        try {
+            return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> {
+                LovDetailDto detail = new LovDetailDto();
+                Long poid = rs.getLong("POID");
+                if (!rs.wasNull()) {
+                    detail.setPoid(poid);
+                }
+                detail.setCode(rs.getString("CODE"));
+                detail.setDescription(rs.getString("DESCRIPTION"));
+                return detail;
+            }, categoryPoid);
+        } catch (EmptyResultDataAccessException ex) {
+            return createEmptyLovDetail();
+        } catch (DataAccessException ex) {
+            logger.warn("Failed to load category detail for categoryPoid {}", categoryPoid, ex);
+            return createEmptyLovDetail();
+        }
+    }
+
+    private LovDetailDto fetchCurrencyDetail(String currencyCode) {
+        if (StringUtils.isBlank(currencyCode)) {
+            return createEmptyLovDetail();
+        }
+
+        final String sql = "SELECT CURRENCY_POID AS POID, CURRENCY_CODE AS CODE, CURRENCY_NAME AS DESCRIPTION " +
+                "FROM GLOBAL_CURRENCY_MASTER " +
+                "WHERE CURRENCY_CODE = ? AND NVL(ACTIVE, 'Y') = 'Y' AND NVL(DELETED, 'N') = 'N'";
+
+        try {
+            return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> {
+                LovDetailDto detail = new LovDetailDto();
+                Long poid = rs.getLong("POID");
+                if (!rs.wasNull()) {
+                    detail.setPoid(poid);
+                }
+                detail.setCode(rs.getString("CODE"));
+                detail.setDescription(rs.getString("DESCRIPTION"));
+                return detail;
+            }, currencyCode);
+        } catch (EmptyResultDataAccessException ex) {
+            return createEmptyLovDetail();
+        } catch (DataAccessException ex) {
+            logger.warn("Failed to load currency detail for currencyCode {}", currencyCode, ex);
+            return createEmptyLovDetail();
+        }
     }
 
     @Override
@@ -1606,8 +1683,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         item.put("id", "row-" + stock.getStockPoid());
         item.put("isExpanded", false);
         item.put("isRowGroup", true);
-        item.put("children", new ArrayList<>()); // LEDGER items have no children
-        
         // Add companyPoid and userPoid for tracking (if provided)
         if (companyPoid != null) {
             item.put("companyPoid", companyPoid);

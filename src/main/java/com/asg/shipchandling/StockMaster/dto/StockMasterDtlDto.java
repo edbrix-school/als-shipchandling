@@ -14,6 +14,7 @@ public class StockMasterDtlDto {
     private Long detRowId;
     private Long supplierPoid;
     private String supplierStockCode;
+    private String supplierName;
     private String remarks;
     private String createdBy;
     private Timestamp createdDate;

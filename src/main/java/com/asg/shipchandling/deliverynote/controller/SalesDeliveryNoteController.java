@@ -236,7 +236,7 @@ public class SalesDeliveryNoteController {
 
                 log.info("loadQuotationItems started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 LoadQuotationItemsResponse response = deliveryNoteService.loadQuotationItems(
-                                UserContext.getGroupPoid(), transactionPoid, UserContext.getCompanyPoid(), UserContext.getUserId());
+                                UserContext.getGroupPoid(), transactionPoid, UserContext.getCompanyPoid(), UserContext.getUserPoid().toString());
                 log.info("loadQuotationItems completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success(response.getMessage(), response);
         }

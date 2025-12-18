@@ -78,7 +78,8 @@ public class StockMasterViewResponse {
     // Detail objects from LOV
     private LovDetailDto stockUnitDetails;
     private LovDetailDto purchaseStockUnitDetails;
-    private LovDetailDto consumptionUnitDetails;
+    private LovDetailDto categoryDetail;
+    private LovDetailDto currencyDetail;
     private LovDetailDto taxDetails;
     private LovDetailDto inputTaxDetails;
     private LovDetailDto stockGlDetails;
