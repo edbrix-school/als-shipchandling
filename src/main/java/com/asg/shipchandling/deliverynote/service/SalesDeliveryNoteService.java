@@ -9,51 +9,35 @@ import java.util.List;
 
 public interface SalesDeliveryNoteService {
 
-        // Basic CRUD Operations
-        SalesDeliveryNoteHdrDto createDeliveryNote(CreateSalesDeliveryNoteRequest request, Long groupPoid,
-                                                   Long companyPoid, String userId);
+    // Basic CRUD Operations
+    SalesDeliveryNoteHdrDto createDeliveryNote(CreateSalesDeliveryNoteRequest request, Long groupPoid, Long companyPoid, String userId);
 
-        SalesDeliveryNoteHdrDto getDeliveryNoteByPoid(Long transactionPoid, Long groupPoid,
-                        Long companyPoid, Boolean includeDetails);
+    SalesDeliveryNoteHdrDto getDeliveryNoteByPoid(Long transactionPoid, Long groupPoid, Long companyPoid, Boolean includeDetails);
 
-        SalesDeliveryNoteHdrDto updateDeliveryNote(Long groupPoid, Long transactionPoid,
-                        UpdateSalesDeliveryNoteRequest request,
-                        Long companyPoid, String userId);
+    SalesDeliveryNoteHdrDto updateDeliveryNote(Long groupPoid, Long transactionPoid, UpdateSalesDeliveryNoteRequest request, Long companyPoid, String userId);
 
-        void deleteDeliveryNote(Long groupPoid, Long transactionPoid, Long companyPoid);
+    void deleteDeliveryNote(Long groupPoid, Long transactionPoid, Long companyPoid);
 
-        PaginatedResponse<SalesDeliveryNoteHdrDto> getAllDeliveryNotes(Long groupPoid, Long companyPoid,
-                                                                       String deliveryStatus, Long customerPoid,
-                                                                       Long salesmanPoid, String qtnRefNo,
-                                                                       Timestamp fromDate, Timestamp toDate,
-                                                                       String search, Integer page, Integer size);
+    PaginatedResponse<SalesDeliveryNoteHdrDto> getAllDeliveryNotes(Long groupPoid, Long companyPoid, String deliveryStatus, Long customerPoid, Long salesmanPoid, String qtnRefNo, Timestamp fromDate, Timestamp toDate, String search, Integer page, Integer size);
 
-        Page<SalesDeliveryNoteHdrDto> getAllDeliveryNotesWithFilters(Long groupPoid, Long companyPoid,
-                                                                     GetAllDeliveryNoteFilterRequest filterRequest,
-                                                                     int page, int size);
+    Page<SalesDeliveryNoteHdrDto> getAllDeliveryNotesWithFilters(Long groupPoid, Long companyPoid, GetAllDeliveryNoteFilterRequest filterRequest, int page, int size);
 
-        // Validation APIs
-        ValidationResponse validateDocRef(String docRef, Long transactionPoid);
+    // Validation APIs
+    ValidationResponse validateDocRef(String docRef, Long transactionPoid);
 
-        // Item Details APIs
-        SalesDeliveryNoteItemDtlDto addItemDetail(Long transactionPoid, CreateSalesDeliveryNoteItemDtlRequest request,
-                        Long companyPoid, String userId);
+    // Item Details APIs
+    SalesDeliveryNoteItemDtlDto addItemDetail(Long transactionPoid, CreateSalesDeliveryNoteItemDtlRequest request, Long companyPoid, String userId);
 
-        SalesDeliveryNoteItemDtlDto updateItemDetail(Long transactionPoid, Long detRowId,
-                        CreateSalesDeliveryNoteItemDtlRequest request,
-                        Long companyPoid, String userId);
+    SalesDeliveryNoteItemDtlDto updateItemDetail(Long transactionPoid, Long detRowId, CreateSalesDeliveryNoteItemDtlRequest request, Long companyPoid, String userId);
 
-        void deleteItemDetail(Long transactionPoid, Long detRowId, Long companyPoid);
+    void deleteItemDetail(Long transactionPoid, Long detRowId, Long companyPoid);
 
-        List<SalesDeliveryNoteItemDtlDto> getItemDetails(Long transactionPoid, Long companyPoid);
+    List<SalesDeliveryNoteItemDtlDto> getItemDetails(Long transactionPoid, Long companyPoid);
 
-        // Business Logic APIs
-        ValidateCustomerChangeResponse validateCustomerChange(Long transactionPoid,
-                        Long customerPoid);
+    // Business Logic APIs
+    ValidateCustomerChangeResponse validateCustomerChange(Long transactionPoid, Long customerPoid);
 
-        LoadQuotationItemsResponse loadQuotationItems(Long groupPoid, Long transactionPoid,
-                                                      Long companyPoid, String userId);
+    List<QuotationItemDto> loadQuotationItems(Long groupPoid, Long transactionPoid, Long companyPoid, Long userPoid);
 
-        SalesDeliveryNoteDependenciesDto checkDeliveryNoteDependencies(Long transactionPoid,
-                                                                       Long companyPoid);
+    SalesDeliveryNoteDependenciesDto checkDeliveryNoteDependencies(Long transactionPoid, Long companyPoid);
 }
