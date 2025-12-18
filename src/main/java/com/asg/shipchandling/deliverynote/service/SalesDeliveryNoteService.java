@@ -1,11 +1,12 @@
 package com.asg.shipchandling.deliverynote.service;
 
+import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.deliverynote.dto.*;
-import com.asg.shipchandling.deliverynote.dto.request.GetAllDeliveryNoteFilterRequest;
-import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.sql.Timestamp;
 import java.util.List;
+import java.util.Map;
 
 public interface SalesDeliveryNoteService {
 
@@ -20,7 +21,7 @@ public interface SalesDeliveryNoteService {
 
     PaginatedResponse<SalesDeliveryNoteHdrDto> getAllDeliveryNotes(Long groupPoid, Long companyPoid, String deliveryStatus, Long customerPoid, Long salesmanPoid, String qtnRefNo, Timestamp fromDate, Timestamp toDate, String search, Integer page, Integer size);
 
-    Page<SalesDeliveryNoteHdrDto> getAllDeliveryNotesWithFilters(Long groupPoid, Long companyPoid, GetAllDeliveryNoteFilterRequest filterRequest, int page, int size);
+//    Page<SalesDeliveryNoteHdrDto> getAllDeliveryNotesWithFilters(Long groupPoid, Long companyPoid, GetAllDeliveryNoteFilterRequest filterRequest, int page, int size);
 
     // Validation APIs
     ValidationResponse validateDocRef(String docRef, Long transactionPoid);
@@ -40,4 +41,6 @@ public interface SalesDeliveryNoteService {
     List<QuotationItemDto> loadQuotationItems(Long groupPoid, Long transactionPoid, Long companyPoid, Long userPoid);
 
     SalesDeliveryNoteDependenciesDto checkDeliveryNoteDependencies(Long transactionPoid, Long companyPoid);
+
+    Map<String, Object> listDeliveryNotes(String docId, FilterRequestDto request, Pageable pageable);
 }

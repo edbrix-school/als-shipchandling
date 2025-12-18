@@ -1,5 +1,10 @@
 package com.asg.shipchandling.requestforquotation.service;
 
+import com.asg.common.lib.dto.FilterDto;
+import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.commonlov.dto.LovItem;
 import com.asg.shipchandling.exceptions.CustomException;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
@@ -9,25 +14,17 @@ import com.asg.shipchandling.requestforquotation.dto.request.*;
 import com.asg.shipchandling.requestforquotation.dto.response.*;
 import com.asg.shipchandling.requestforquotation.entity.*;
 import com.asg.shipchandling.requestforquotation.repository.*;
-import com.asg.shipchandling.requestforquotation.dto.request.*;
-import com.asg.shipchandling.requestforquotation.dto.response.*;
-import com.asg.shipchandling.requestforquotation.entity.*;
-import com.asg.shipchandling.requestforquotation.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import jakarta.persistence.Query;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
@@ -35,11 +32,7 @@ import java.math.RoundingMode;
 import java.sql.*;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -53,6 +46,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
     private final GlobalTaxMasterRepository globalTaxMasterRepository;
     private final CurrencyRateUploadTempRepository currencyRateUploadTempRepository;
+    private final DocumentSearchService documentService;
 
     @Autowired
     private DataSource dataSource;
@@ -296,212 +290,18 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ApRequestForQtnHdrDto> getAllRequestForQuotations(Long groupPoid, Long companyPoid,
-                                                                  String status, Long divisionPoid,
-                                                                  Long salesQtnPoid, String search,
-                                                                  LocalDate fromDate, LocalDate toDate,
-                                                                  int page, int size) {
+    public Map<String, Object> listRequestForQuotations(String docId, FilterRequestDto request, Pageable pageable) {
+        String operator = documentService.resolveOperator(request);
+        String isDeleted = documentService.resolveIsDeleted(request);
+        List<FilterDto> filters = documentService.resolveFilters(request);
 
-        // Convert LocalDate to Timestamp for query
-        Timestamp fromDateTimestamp = fromDate != null ? Timestamp.valueOf(fromDate.atStartOfDay()) : null;
-        Timestamp toDateTimestamp = toDate != null ? Timestamp.valueOf(toDate.atTime(23, 59, 59)) : null;
+        RawSearchResult raw = documentService.search(docId, filters, operator, pageable, isDeleted,
+                "DOC_REF",   // label
+                "TRANSACTION_POID");    // value);
 
-        // Normalize status and search
-        String normalizedStatus = hasText(status) ? status.trim().toUpperCase(Locale.ROOT) : null;
-        String normalizedSearch = hasText(search) ? search.trim() : null;
+        Page<Map<String, Object>> page = new PageImpl<>(raw.records(), pageable, raw.totalRecords());
 
-        // Create Pageable with sorting (already sorted in query, but explicit for
-        // clarity)
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "transactionDate"));
-
-        // Execute query with filters at database level
-        Page<ApRequestForQtnHdr> rfqPage = rfqHdrRepository.findAllWithFilters(
-                groupPoid, companyPoid, normalizedStatus, divisionPoid,
-                salesQtnPoid, fromDateTimestamp, toDateTimestamp, normalizedSearch, pageable);
-
-        // Convert to DTO page
-        return rfqPage.map(r -> convertToDto(r, false));
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<ApRequestForQtnListResponseDto> getAllRequestForQuotationsWithFilters(
-            Long groupPoid, Long companyPoid,
-            GetAllRfqFilterRequest filterRequest,
-            int page, int size) {
-
-        // Build dynamic SQL query
-        StringBuilder sqlBuilder = new StringBuilder();
-        sqlBuilder.append("SELECT r.TRANSACTION_POID, r.DOC_REF, r.TRANSACTION_DATE, r.DESCRIPTION, ");
-        sqlBuilder.append("r.STATUS, r.TYPE, r.EXPECTED_DATE, r.REMARKS, r.DESCRIPTION_PRINT_YN, ");
-        sqlBuilder.append("SQH.DOC_REF AS SALES_QTN_REF, r.SALES_INV_DOC_REF, r.DELETED, ");
-        sqlBuilder.append("r.CREATED_DATE, r.LASTMODIFIED_DATE ");
-        sqlBuilder.append("FROM AP_REQUEST_FOR_QTN_HDR r ");
-        sqlBuilder.append("LEFT JOIN SALES_QUOTATION_HDR SQH ON SQH.TRANSACTION_POID = r.SALES_QTN_POID ");
-        sqlBuilder.append("WHERE r.GROUP_POID = :groupPoid AND r.COMPANY_POID = :companyPoid ");
-
-        // Apply isDeleted filter
-        if (filterRequest.getIsDeleted() != null && "N".equalsIgnoreCase(filterRequest.getIsDeleted())) {
-            sqlBuilder.append("AND (r.DELETED IS NULL OR r.DELETED != 'Y') ");
-        } else if (filterRequest.getIsDeleted() != null && "Y".equalsIgnoreCase(filterRequest.getIsDeleted())) {
-            sqlBuilder.append("AND r.DELETED = 'Y' ");
-        }
-
-        // Apply date range filters
-        if (StringUtils.hasText(filterRequest.getFrom())) {
-            sqlBuilder.append("AND TRUNC(r.TRANSACTION_DATE) >= TO_DATE(:fromDate, 'YYYY-MM-DD') ");
-        }
-        if (StringUtils.hasText(filterRequest.getTo())) {
-            sqlBuilder.append("AND TRUNC(r.TRANSACTION_DATE) <= TO_DATE(:toDate, 'YYYY-MM-DD') ");
-        }
-
-        // Build filter conditions with sequential parameter indexing
-        List<String> filterConditions = new java.util.ArrayList<>();
-        List<GetAllRfqFilterRequest.FilterItem> validFilters = new java.util.ArrayList<>();
-        if (filterRequest.getFilters() != null && !filterRequest.getFilters().isEmpty()) {
-            for (GetAllRfqFilterRequest.FilterItem filter : filterRequest.getFilters()) {
-                if (StringUtils.hasText(filter.getSearchField()) && StringUtils.hasText(filter.getSearchValue())) {
-                    validFilters.add(filter);
-                    String columnName = mapSearchFieldToColumn(filter.getSearchField());
-                    int paramIndex = validFilters.size() - 1;
-                    filterConditions.add("LOWER(" + columnName + ") LIKE LOWER(:filterValue" + paramIndex + ")");
-                }
-            }
-        }
-
-        // Add filter conditions with operator
-        if (!filterConditions.isEmpty()) {
-            String operator = "AND".equalsIgnoreCase(filterRequest.getOperator()) ? " AND " : " OR ";
-            sqlBuilder.append("AND (").append(String.join(operator, filterConditions)).append(") ");
-        }
-
-        sqlBuilder.append("ORDER BY r.TRANSACTION_DATE DESC");
-
-        // Create count query
-        String countSql = "SELECT COUNT(*) FROM (" + sqlBuilder.toString() + ")";
-
-        // Create query
-        Query query = entityManager.createNativeQuery(sqlBuilder.toString());
-        Query countQuery = entityManager.createNativeQuery(countSql);
-
-        // Set parameters
-        query.setParameter("groupPoid", groupPoid);
-        query.setParameter("companyPoid", companyPoid);
-        countQuery.setParameter("groupPoid", groupPoid);
-        countQuery.setParameter("companyPoid", companyPoid);
-
-        if (StringUtils.hasText(filterRequest.getFrom())) {
-            query.setParameter("fromDate", filterRequest.getFrom());
-            countQuery.setParameter("fromDate", filterRequest.getFrom());
-        }
-        if (StringUtils.hasText(filterRequest.getTo())) {
-            query.setParameter("toDate", filterRequest.getTo());
-            countQuery.setParameter("toDate", filterRequest.getTo());
-        }
-
-        // Set filter parameters using sequential indexing
-        if (!validFilters.isEmpty()) {
-            for (int i = 0; i < validFilters.size(); i++) {
-                GetAllRfqFilterRequest.FilterItem filter = validFilters.get(i);
-                String paramValue = "%" + filter.getSearchValue() + "%";
-                query.setParameter("filterValue" + i, paramValue);
-                countQuery.setParameter("filterValue" + i, paramValue);
-            }
-        }
-
-        // Get total count
-        Long totalCount = ((Number) countQuery.getSingleResult()).longValue();
-
-        // Apply pagination
-        int offset = page * size;
-        query.setFirstResult(offset);
-        query.setMaxResults(size);
-
-        // Execute query and map results
-        @SuppressWarnings("unchecked")
-        List<Object[]> results = query.getResultList();
-        List<ApRequestForQtnListResponseDto> dtos = results.stream()
-                .map(this::mapToResponseDto)
-                .collect(Collectors.toList());
-
-        // Create page
-        Pageable pageable = PageRequest.of(page, size);
-        return new PageImpl<>(dtos, pageable, totalCount);
-    }
-
-    private String mapSearchFieldToColumn(String searchField) {
-        if (searchField == null) {
-            return null;
-        }
-        // Normalize the field name by removing underscores and converting to uppercase
-        String normalizedField = searchField.toUpperCase().replace("_", "");
-
-        switch (normalizedField) {
-            case "DOCREF":
-                return "r.DOC_REF";
-            case "TASKDESCRIPTION":
-            case "DESCRIPTION":
-                return "r.DESCRIPTION";
-            case "SALESQTNREF":
-            case "SALESQTN":
-                return "SQH.DOC_REF";
-            case "STATUS":
-                return "r.STATUS";
-            case "TYPE":
-                return "r.TYPE";
-            case "EXPECTEDDATE":
-            case "EXPECTED":
-                return "r.EXPECTED_DATE";
-            case "REMARKS":
-                return "r.REMARKS";
-            case "DESCRIPTIONPRINTYN":
-            case "DESCRIPTIONPRINT":
-                return "r.DESCRIPTION_PRINT_YN";
-            case "SALESINVDOCREF":
-            case "SALESINV":
-            case "INVOICEREF":
-                return "r.SALES_INV_DOC_REF";
-            default:
-                // Fallback: assume it's a direct column name from r table
-                // Convert to uppercase and replace spaces/underscores with underscores
-                String columnName = searchField.toUpperCase().replace(" ", "_");
-                return "r." + columnName;
-        }
-    }
-
-    private ApRequestForQtnListResponseDto mapToResponseDto(Object[] row) {
-        ApRequestForQtnListResponseDto dto =
-                new ApRequestForQtnListResponseDto();
-
-        dto.setTransactionPoid(row[0] != null ? ((Number) row[0]).longValue() : null);
-        dto.setDocRef(convertToString(row[1]));
-        dto.setTransactionDate((Timestamp) row[2]);
-        dto.setDescription(convertToString(row[3]));
-        dto.setStatus(convertToString(row[4]));
-        dto.setType(convertToString(row[5]));
-        dto.setExpectedDate((Timestamp) row[6]);
-        dto.setRemarks(convertToString(row[7]));
-        dto.setDescriptionPrintYn(convertToString(row[8]));
-        dto.setSalesQtnRef(convertToString(row[9]));
-        dto.setSalesInvDocRef(convertToString(row[10]));
-        dto.setDeleted(convertToString(row[11]));
-        dto.setCreatedDate((Timestamp) row[12]);
-        dto.setLastmodifiedDate((Timestamp) row[13]);
-
-        return dto;
-    }
-
-    private String convertToString(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof String) {
-            return (String) value;
-        }
-        if (value instanceof Character) {
-            return String.valueOf((Character) value);
-        }
-        return value.toString();
+        return PaginationUtil.wrapPage(page, raw.displayFields());
     }
 
     private void callItemsWithoutSupplierProcedure(Long groupPoid, Long companyPoid, String userId,

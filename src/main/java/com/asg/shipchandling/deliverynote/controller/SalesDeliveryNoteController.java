@@ -1,5 +1,6 @@
 package com.asg.shipchandling.deliverynote.controller;
 
+import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.deliverynote.dto.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -10,14 +11,14 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.asg.shipchandling.deliverynote.dto.request.GetAllDeliveryNoteFilterRequest;
 import com.asg.shipchandling.deliverynote.service.SalesDeliveryNoteService;
 import com.asg.common.lib.security.util.UserContext;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -106,39 +107,8 @@ public class SalesDeliveryNoteController {
             @ApiResponse(responseCode = "401", description = "Unauthorized")
     }, security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping("/list")
-    public ResponseEntity<?> getAllDeliveryNotes(
-            @RequestBody(required = false) GetAllDeliveryNoteFilterRequest filterRequest,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-
-        // If filterRequest is null, create a default one
-        if (filterRequest == null) {
-            filterRequest = new GetAllDeliveryNoteFilterRequest();
-            filterRequest.setIsDeleted("N");
-            filterRequest.setOperator("AND");
-            filterRequest.setFilters(new java.util.ArrayList<>());
-        }
-
-        Page<SalesDeliveryNoteHdrDto> deliveryNotePage = deliveryNoteService
-                .getAllDeliveryNotesWithFilters(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), filterRequest, page, size);
-
-        // Create displayFields
-        Map<String, String> displayFields = new HashMap<>();
-        displayFields.put("docRef", "text");
-        displayFields.put("customerName", "text");
-        displayFields.put("qtnRefNo", "text");
-
-        // Create paginated response with new structure
-        Map<String, Object> response = new HashMap<>();
-        response.put("content", deliveryNotePage.getContent());
-        response.put("pageNumber", deliveryNotePage.getNumber());
-        response.put("displayFields", displayFields);
-        response.put("pageSize", deliveryNotePage.getSize());
-        response.put("totalElements", deliveryNotePage.getTotalElements());
-        response.put("totalPages", deliveryNotePage.getTotalPages());
-        response.put("last", deliveryNotePage.isLast());
-
-        return success("Delivery notes fetched successfully", response);
+    public ResponseEntity<?> getAllDeliveryNotes(@ParameterObject Pageable pageable, @RequestBody(required = false) FilterRequestDto filters) {
+        return success("Delivery notes fetched successfully", deliveryNoteService.listDeliveryNotes(UserContext.getDocumentId(), filters, pageable));
     }
 
     // ==================== VALIDATION APIs ====================
