@@ -1,5 +1,6 @@
 package com.asg.shipchandling.deliverynote.service;
 
+import com.asg.shipchandling.commonlov.service.LovService;
 import com.asg.shipchandling.deliverynote.dto.*;
 import com.asg.shipchandling.deliverynote.dto.request.GetAllDeliveryNoteFilterRequest;
 import com.asg.shipchandling.deliverynote.entity.SalesDeliveryNoteHdr;
@@ -60,6 +61,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     private final SalesDnDtlRepository salesDnDtlRepository;
     private final StockMasterRepository stockMasterRepository;
     private final StockUnitRepository stockUnitRepository;
+    private final LovService lovService;
 
     // Add OracleDataSource or DataSource injection for stored procedure calls
     private final DataSource dataSource;
@@ -1298,9 +1300,11 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
                         Object stockPoidObj = rs.getObject("STOCK_POID");
                         dto.setStockPoid(stockPoidObj != null ? ((Number) stockPoidObj).longValue() : null);
+                        dto.setStockDet(lovService.getLovItemByPoid(dto.getStockPoid(), "STOCK_MASTER", groupPoid, companyPoid, userPoid));
 
                         Object stockUnitPoidObj = rs.getObject("STOCK_UNIT_POID");
                         dto.setStockUnitPoid(stockUnitPoidObj != null ? ((Number) stockUnitPoidObj).longValue() : null);
+                        dto.setStockUnitDet(lovService.getLovItemByPoid(dto.getStockUnitPoid(), "STOCK_UNIT", groupPoid, companyPoid, userPoid));
 
                         Long qty = rs.getLong("QUANTITY");
                         dto.setQuantity(qty);

@@ -1,5 +1,6 @@
 package com.asg.shipchandling.commonlov.controller;
 
+import com.asg.common.lib.security.util.UserContext;
 import com.asg.shipchandling.commonlov.dto.LovResponse;
 import com.asg.shipchandling.commonlov.service.LovServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,7 +34,7 @@ public class LovController {
             @Parameter(description = "Additional filter value") @RequestParam(value = "filterValue", required = false) String filterValue,
 
             @Parameter(description = "Additional filter field") @RequestParam(value = "filterField", required = false) String filterField) {
-        LovResponse lovResponse = lovService.getLovList(lovName, docKeyPoid, filterValue, filterField);
+        LovResponse lovResponse = lovService.getLovList(lovName, docKeyPoid, filterValue, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid());
         return success("Task fetched successfully", lovResponse);
 
     }
