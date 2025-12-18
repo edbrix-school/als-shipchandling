@@ -51,8 +51,8 @@ public interface SalesDeliveryNoteService {
         ValidateCustomerChangeResponse validateCustomerChange(Long transactionPoid,
                         Long customerPoid);
 
-        LoadQuotationItemsResponse loadQuotationItems(Long groupPoid, Long transactionPoid,
-                                                      Long companyPoid, String userId);
+        List<QuotationItemDto> loadQuotationItems(Long groupPoid, Long transactionPoid,
+                                                      Long companyPoid, Long userPoid);
 
         SalesDeliveryNoteDependenciesDto checkDeliveryNoteDependencies(Long transactionPoid,
                                                                        Long companyPoid);
