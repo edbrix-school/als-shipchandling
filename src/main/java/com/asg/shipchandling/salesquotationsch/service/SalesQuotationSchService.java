@@ -1,5 +1,6 @@
 package com.asg.shipchandling.salesquotationsch.service;
 
+import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.salesquotationsch.dto.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.*;
 import com.asg.shipchandling.salesquotationsch.dto.response.SalesQuotationSchListResponse;
@@ -13,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 public interface SalesQuotationSchService {
 
@@ -33,7 +35,7 @@ public interface SalesQuotationSchService {
         SalesQuotationSchListResponse search(SalesQuotationSchFilter filter, String userId);
         
         // Filter method with dynamic filters (similar to stock unit)
-        SalesQuotationSchListResponse listSalesQuotationSchWithFilters(FilterRequestDto filterRequest, Long companyPoid, Pageable pageable);
+        Map<String, Object> listSalesQuotationSch(String docId, FilterRequestDto request, Pageable pageable);
 
         // Validation APIs
         ValidationResponse validateDocRef(String docRef, Long transactionPoid);

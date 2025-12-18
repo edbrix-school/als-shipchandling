@@ -1,13 +1,14 @@
 package com.asg.shipchandling.requestforquotation.service;
 
+import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.requestforquotation.dto.RfqDependenciesDto;
 import com.asg.shipchandling.requestforquotation.dto.request.*;
 import com.asg.shipchandling.requestforquotation.dto.response.*;
-import com.asg.shipchandling.requestforquotation.dto.request.*;
-import com.asg.shipchandling.requestforquotation.dto.response.*;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 public interface ApRequestForQtnService {
     
@@ -21,18 +22,9 @@ public interface ApRequestForQtnService {
                                                      Long groupPoid, Long companyPoid, String userId);
     
     void deleteRequestForQuotation(Long transactionPoid, Long groupPoid, Long companyPoid);
-    
-    org.springframework.data.domain.Page<ApRequestForQtnHdrDto> getAllRequestForQuotations(Long groupPoid, Long companyPoid,
-                                                            String status, Long divisionPoid,
-                                                            Long salesQtnPoid, String search,
-                                                            java.time.LocalDate fromDate, java.time.LocalDate toDate,
-                                                            int page, int size);
-    
-    org.springframework.data.domain.Page<ApRequestForQtnListResponseDto> getAllRequestForQuotationsWithFilters(
-                                                            Long groupPoid, Long companyPoid,
-                                                            GetAllRfqFilterRequest filterRequest,
-                                                            int page, int size);
-    
+
+    Map<String, Object> listRequestForQuotations(String docId, FilterRequestDto request, Pageable pageable);
+
     // Detail Table APIs
     ApRequestForQtnItemDtlDto addItemDetail(Long transactionPoid, CreateApRequestForQtnItemDtlRequest request,
                                             Long groupPoid, Long companyPoid, String userId);
