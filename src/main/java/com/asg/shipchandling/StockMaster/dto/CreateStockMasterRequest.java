@@ -112,9 +112,7 @@ public class CreateStockMasterRequest {
     @Size(max = 200, message = "Product tags must not exceed 200 characters")
     private String productTags;
 
-    @NotNull(message = "Stock GL is required")
     private BigDecimal stockGlPoid;
-    @NotNull(message = "Sales GL is required")
     private BigDecimal salesGlPoid;
     private BigDecimal costOfSalesGlPoid;
     
