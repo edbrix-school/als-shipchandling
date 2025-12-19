@@ -1,6 +1,6 @@
 package com.asg.shipchandling.requestforquotation.controller;
 
-import com.asg.shipchandling.requestforquotation.dto.RfqDependenciesDto;
+import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.requestforquotation.dto.request.*;
 import com.asg.shipchandling.requestforquotation.dto.response.*;
 import com.asg.shipchandling.requestforquotation.service.ApRequestForQtnService;
@@ -12,15 +12,16 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.util.HashMap;
-import java.util.List;
+import java.time.LocalDate;
 import java.util.Map;
 
 import static com.asg.shipchandling.common.ApiResponse.success;
@@ -36,83 +37,12 @@ public class ApRequestForQuotationController {
                         @ApiResponse(responseCode = "200", description = "Task list fetched successfully", content = @Content(schema = @Schema(implementation = Page.class)))
         })
         @AllowedAction(UserRolesRightsEnum.VIEW)
-        @PostMapping("/search")
-        public ResponseEntity<?> getAllRequestForQuotations(
-                        @RequestBody(required = false) GetAllRfqFilterRequest filterRequest,
-                        @RequestParam(defaultValue = "0") int page,
-                        @RequestParam(defaultValue = "20") int size) {
-
-                // If filterRequest is null, create a default one
-                if (filterRequest == null) {
-                        filterRequest = new GetAllRfqFilterRequest();
-                        filterRequest.setIsDeleted("N");
-                        filterRequest.setOperator("AND");
-                        filterRequest.setFilters(new java.util.ArrayList<>());
-                }
-
-                org.springframework.data.domain.Page<ApRequestForQtnListResponseDto> rfqPage = rfqService
-                                .getAllRequestForQuotationsWithFilters(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), filterRequest, page, size);
-
-                // Create displayFields
-                Map<String, String> displayFields = new HashMap<>();
-                displayFields.put("TRANSACTION_DATE", "date");
-                displayFields.put("DOC_REF", "text");
-                displayFields.put("SALES_QTN_REF", "text");
-                displayFields.put("TRANSACTION_POID", "text");
-
-                // Create paginated response with new structure
-                Map<String, Object> response = new HashMap<>();
-                response.put("content", rfqPage.getContent());
-                response.put("pageNumber", rfqPage.getNumber());
-                response.put("displayFields", displayFields);
-                response.put("pageSize", rfqPage.getSize());
-                response.put("totalElements", rfqPage.getTotalElements());
-                response.put("totalPages", rfqPage.getTotalPages());
-                response.put("last", rfqPage.isLast());
-
-                return success("Task list fetched successfully", response);
-        }
-
-        @Operation(summary = "Get All Request For Quotations", description = "Returns paginated list of RFQs with optional filters. Supports pagination with page and size parameters.", responses = {
-                        @ApiResponse(responseCode = "200", description = "Request for quotations fetched successfully", content = @Content(schema = @Schema(implementation = Page.class))),
-                        @ApiResponse(responseCode = "401", description = "Unauthorized")
-        }, security = @SecurityRequirement(name = "bearerAuth"))
-        @AllowedAction(UserRolesRightsEnum.VIEW)
         @PostMapping("/list")
-        public ResponseEntity<?> getAllRequestForQuotationsList(
-                        @RequestBody(required = false) GetAllRfqFilterRequest filterRequest,
-                        @RequestParam(defaultValue = "0") int page,
-                        @RequestParam(defaultValue = "20") int size) {
-
-                // If filterRequest is null, create a default one
-                if (filterRequest == null) {
-                        filterRequest = new GetAllRfqFilterRequest();
-                        filterRequest.setIsDeleted("N");
-                        filterRequest.setOperator("AND");
-                        filterRequest.setFilters(new java.util.ArrayList<>());
-                }
-
-                org.springframework.data.domain.Page<ApRequestForQtnListResponseDto> rfqPage = rfqService
-                                .getAllRequestForQuotationsWithFilters(UserContext.getGroupPoid(), UserContext.getCompanyPoid(), filterRequest, page, size);
-
-                // Create displayFields
-                Map<String, String> displayFields = new HashMap<>();
-                displayFields.put("TRANSACTION_DATE", "date");
-                displayFields.put("DOC_REF", "text");
-                displayFields.put("SALES_QTN_REF", "text");
-                displayFields.put("TRANSACTION_POID", "text");
-
-                // Create paginated response with new structure
-                Map<String, Object> response = new HashMap<>();
-                response.put("content", rfqPage.getContent());
-                response.put("pageNumber", rfqPage.getNumber());
-                response.put("displayFields", displayFields);
-                response.put("pageSize", rfqPage.getSize());
-                response.put("totalElements", rfqPage.getTotalElements());
-                response.put("totalPages", rfqPage.getTotalPages());
-                response.put("last", rfqPage.isLast());
-
-                return success("Request for quotations fetched successfully", response);
+        public ResponseEntity<?> listRequestForQuotations(@ParameterObject Pageable pageable,
+                                                          @RequestBody(required = false) FilterRequestDto filters,
+                                                          @RequestParam(required = false) LocalDate startDate,
+                                                          @RequestParam(required = false) LocalDate endDate) {
+                return success("RFQs fetched successfully", rfqService.listRequestForQuotations(UserContext.getDocumentId(), filters, startDate, endDate, pageable));
         }
 
         @Operation(summary = "Create Request For Quotation", description = "Creates a new RFQ document. DocRef is auto-generated. Calls stored procedure after save.", responses = {

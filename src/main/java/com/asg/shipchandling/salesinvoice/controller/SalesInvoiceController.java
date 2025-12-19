@@ -1,6 +1,6 @@
 package com.asg.shipchandling.salesinvoice.controller;
 
-import com.asg.shipchandling.salesinvoice.dto.*;
+import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.salesinvoice.dto.*;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.CreateSalesDnDtlRequest;
@@ -33,10 +33,13 @@ import lombok.extern.slf4j.Slf4j;
 import com.asg.common.lib.annotation.AllowedAction;
 import com.asg.common.lib.enums.UserRolesRightsEnum;
 
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.List;
 
 import static com.asg.shipchandling.common.ApiResponse.success;
@@ -130,20 +133,11 @@ public class SalesInvoiceController {
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @PostMapping("/list")
         @AllowedAction(UserRolesRightsEnum.VIEW)
-        public ResponseEntity<?> getAllSalesInvoices(
-                        @Valid @RequestBody FilterRequestDto filterRequest,
-                        @RequestParam(required = false, defaultValue = "0") Integer page,
-                        @RequestParam(required = false, defaultValue = "10") Integer size,
-                        @RequestParam(required = false) String sortBy,
-                        @RequestParam(required = false) String sortDir) {
-
-                log.info("Fetching all sales invoices with companyId: {} userPoid: {} page: {} size: {} sortBy: {} sortDir: {}",
-                                UserContext.getCompanyPoid(), UserContext.getUserId(), page, size, sortBy, sortDir);
-                PaginatedResponse<SalesInvoiceListDto> invoices = invoiceService.getAllSalesInvoices(
-                                UserContext.getCompanyPoid(), filterRequest, page, size, sortBy, sortDir);
-                log.info("Fetched {} sales invoices (page {} of {}) with companyId: {}",
-                                invoices.getContent().size(), invoices.getPageNumber() + 1, invoices.getTotalPages(), UserContext.getCompanyPoid());
-                return success("Sales invoices fetched successfully", invoices);
+        public ResponseEntity<?> listSalesInvoices(@ParameterObject Pageable pageable,
+                                                   @RequestBody(required = false) FilterRequestDto filters,
+                                                   @RequestParam(required = false) LocalDate startDate,
+                                                   @RequestParam(required = false) LocalDate endDate) {
+                return success("Sales invoices fetched successfully", invoiceService.listSalesInvoices(UserContext.getDocumentId(), filters, startDate, endDate, pageable));
         }
 
         // ==================== INVOICE DETAILS (ITEM DETAILS) APIs ====================

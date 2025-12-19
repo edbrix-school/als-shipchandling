@@ -1,12 +1,12 @@
 package com.asg.shipchandling.stockunitmaster.service;
 
+import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.stockunitmaster.dto.CreateStockUnitMasterRequest;
-import com.asg.shipchandling.stockunitmaster.dto.FilterRequestDto;
-import com.asg.shipchandling.stockunitmaster.dto.StockUnitListResponse;
 import com.asg.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
 import com.asg.shipchandling.stockunitmaster.dto.UnitDependenciesDto;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -38,7 +38,7 @@ public interface StockUnitService {
 
      List<StockUnitMasterDto> getActiveStockUnits(Long groupPoid, String classified, String search);
 
-     StockUnitListResponse listStockUnitsWithFilters(FilterRequestDto filterRequest, Pageable pageable);
+     Map<String, Object> listStockUnits(String docId, FilterRequestDto request, Pageable pageable);
 
      List<StockUnitMasterDto> getStockUnitsByCode(String stockUnitCode);
 

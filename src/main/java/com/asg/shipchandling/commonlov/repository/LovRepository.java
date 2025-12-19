@@ -20,17 +20,23 @@ import java.util.List;
 public class LovRepository {
     @Autowired
     private JdbcTemplate jdbcTemplate;
-    public LovResponse getLovList(String lovName, Long docKeyPoid, String filterValue, String filterField) {
+    public LovResponse getLovList(String lovName, Long docKeyPoid, String filterValue, Long groupPoid, Long companyPoid, Long userPoid) {
         try {
             final String sql = "BEGIN PROC_LOV_GETLIST(?,?,?,?,?,?,?); END;";
-            log.info("Executing PROC_LOV_GETLIST for lovName={} docKeyPoid={} filterValue={} filterField={}", lovName, docKeyPoid, filterValue, filterField);
+            log.info("Executing PROC_LOV_GETLIST for lovName={} docKeyPoid={} filterValue={} groupPoid={} companyPoid={} userId={}",
+                    lovName, docKeyPoid, filterValue, groupPoid, companyPoid, userPoid);
             return jdbcTemplate.execute((Connection con) -> {
                 try (CallableStatement cs = con.prepareCall(sql)) {
-                    cs.setLong(1, 1);
-                    cs.setLong(2, 1);
-                    cs.setLong(3, 1);
+
+                    cs.setLong(1, groupPoid != null ? groupPoid : 1);
+                    cs.setLong(2, companyPoid != null ? companyPoid : 1);
+                    cs.setLong(3, userPoid != null ? userPoid : 1);
                     cs.setString(4, lovName);
-                    cs.setString(5, filterField != null ? filterField : "");
+                    if (docKeyPoid != null) {
+                        cs.setString(5, "");
+                    } else {
+                        cs.setObject(5, null);
+                    }
                     cs.setString(6, filterValue != null ? filterValue : "");
                     cs.registerOutParameter(7, OracleTypes.CURSOR);
                     cs.execute();
@@ -42,7 +48,14 @@ public class LovRepository {
                                 Long poid = rs.getLong("POID");
                                 String code = rs.getString("CODE");
                                 String description = rs.getString("DESCRIPTION");
-                                items.add(new LovItem(poid, code, description));
+                                Integer seqNo;
+
+                                try {
+                                    seqNo = rs.getInt("SEQNO");
+                                } catch (SQLException ignored) {
+                                    seqNo = 0;
+                                }
+                                items.add(new LovItem(poid, code, description, description, poid, seqNo));
                             }
                         }
                     }
@@ -58,7 +71,6 @@ public class LovRepository {
         }catch (Exception e){
             log.error("Unexpected error fetching LOV list for lovName={}", lovName, e);
             throw new RuntimeException();
-
         }
     }
 }

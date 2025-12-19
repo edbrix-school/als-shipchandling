@@ -1,6 +1,6 @@
 package com.asg.shipchandling.salesinvoice.service;
 
-import com.asg.shipchandling.salesinvoice.dto.*;
+import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.salesinvoice.dto.*;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.CreateSalesDnDtlRequest;
@@ -22,9 +22,12 @@ import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationItemsRespons
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.VerifyInvoiceResponse;
+import org.springframework.data.domain.Pageable;
 
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 public interface SalesInvoiceService {
 
@@ -38,8 +41,7 @@ public interface SalesInvoiceService {
 
         void deleteSalesInvoice(Long transactionPoid, Long groupPoid, Long companyPoid);
 
-        PaginatedResponse<SalesInvoiceListDto> getAllSalesInvoices(Long companyPoid,
-                        FilterRequestDto filterRequest, Integer page, Integer size, String sortBy, String sortDir);
+        Map<String, Object> listSalesInvoices(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable);
 
         // Validation APIs
         ValidationResponse validateDocRef(String docRef, Long groupPoid, Long companyPoid, Long transactionPoid);

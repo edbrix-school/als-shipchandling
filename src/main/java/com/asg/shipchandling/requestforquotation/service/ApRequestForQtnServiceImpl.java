@@ -1,5 +1,10 @@
 package com.asg.shipchandling.requestforquotation.service;
 
+import com.asg.common.lib.dto.FilterDto;
+import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.commonlov.dto.LovItem;
 import com.asg.shipchandling.exceptions.CustomException;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
@@ -9,25 +14,17 @@ import com.asg.shipchandling.requestforquotation.dto.request.*;
 import com.asg.shipchandling.requestforquotation.dto.response.*;
 import com.asg.shipchandling.requestforquotation.entity.*;
 import com.asg.shipchandling.requestforquotation.repository.*;
-import com.asg.shipchandling.requestforquotation.dto.request.*;
-import com.asg.shipchandling.requestforquotation.dto.response.*;
-import com.asg.shipchandling.requestforquotation.entity.*;
-import com.asg.shipchandling.requestforquotation.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import jakarta.persistence.Query;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
@@ -35,11 +32,7 @@ import java.math.RoundingMode;
 import java.sql.*;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -53,6 +46,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
     private final GlobalTaxMasterRepository globalTaxMasterRepository;
     private final CurrencyRateUploadTempRepository currencyRateUploadTempRepository;
+    private final DocumentSearchService documentService;
 
     @Autowired
     private DataSource dataSource;
@@ -151,7 +145,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     @Override
     @Transactional(readOnly = true)
     public ApRequestForQtnHdrDto getRequestForQuotationByPoid(Long transactionPoid, Long groupPoid,
-            Long companyPoid, Boolean includeDetails) {
+                                                              Long companyPoid, Boolean includeDetails) {
 
         ApRequestForQtnHdr rfq = rfqHdrRepository
                 .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
@@ -175,7 +169,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     @Override
     @Transactional
     public ApRequestForQtnHdrDto updateRequestForQuotation(Long transactionPoid, UpdateApRequestForQtnRequest request,
-            Long groupPoid, Long companyPoid, String userId) {
+                                                           Long groupPoid, Long companyPoid, String userId) {
         if (request == null) {
             throw new CustomException("Request body cannot be empty");
         }
@@ -296,216 +290,22 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ApRequestForQtnHdrDto> getAllRequestForQuotations(Long groupPoid, Long companyPoid,
-            String status, Long divisionPoid,
-            Long salesQtnPoid, String search,
-            LocalDate fromDate, LocalDate toDate,
-            int page, int size) {
+    public Map<String, Object> listRequestForQuotations(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable) {
+        String operator = documentService.resolveOperator(request);
+        String isDeleted = documentService.resolveIsDeleted(request);
+        List<FilterDto> filters = documentService.resolveDateFilters(request, "TRANSACTION_DATE", startDateValue, endDateValue);
 
-        // Convert LocalDate to Timestamp for query
-        Timestamp fromDateTimestamp = fromDate != null ? Timestamp.valueOf(fromDate.atStartOfDay()) : null;
-        Timestamp toDateTimestamp = toDate != null ? Timestamp.valueOf(toDate.atTime(23, 59, 59)) : null;
+        RawSearchResult raw = documentService.search(docId, filters, operator, pageable, isDeleted,
+                "DOC_REF",   // label
+                "TRANSACTION_POID");    // value);
 
-        // Normalize status and search
-        String normalizedStatus = hasText(status) ? status.trim().toUpperCase(Locale.ROOT) : null;
-        String normalizedSearch = hasText(search) ? search.trim() : null;
+        Page<Map<String, Object>> page = new PageImpl<>(raw.records(), pageable, raw.totalRecords());
 
-        // Create Pageable with sorting (already sorted in query, but explicit for
-        // clarity)
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "transactionDate"));
-
-        // Execute query with filters at database level
-        Page<ApRequestForQtnHdr> rfqPage = rfqHdrRepository.findAllWithFilters(
-                groupPoid, companyPoid, normalizedStatus, divisionPoid,
-                salesQtnPoid, fromDateTimestamp, toDateTimestamp, normalizedSearch, pageable);
-
-        // Convert to DTO page
-        return rfqPage.map(r -> convertToDto(r, false));
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<ApRequestForQtnListResponseDto> getAllRequestForQuotationsWithFilters(
-            Long groupPoid, Long companyPoid,
-            GetAllRfqFilterRequest filterRequest,
-            int page, int size) {
-
-        // Build dynamic SQL query
-        StringBuilder sqlBuilder = new StringBuilder();
-        sqlBuilder.append("SELECT r.TRANSACTION_POID, r.DOC_REF, r.TRANSACTION_DATE, r.DESCRIPTION, ");
-        sqlBuilder.append("r.STATUS, r.TYPE, r.EXPECTED_DATE, r.REMARKS, r.DESCRIPTION_PRINT_YN, ");
-        sqlBuilder.append("SQH.DOC_REF AS SALES_QTN_REF, r.SALES_INV_DOC_REF, r.DELETED, ");
-        sqlBuilder.append("r.CREATED_DATE, r.LASTMODIFIED_DATE ");
-        sqlBuilder.append("FROM AP_REQUEST_FOR_QTN_HDR r ");
-        sqlBuilder.append("LEFT JOIN SALES_QUOTATION_HDR SQH ON SQH.TRANSACTION_POID = r.SALES_QTN_POID ");
-        sqlBuilder.append("WHERE r.GROUP_POID = :groupPoid AND r.COMPANY_POID = :companyPoid ");
-
-        // Apply isDeleted filter
-        if (filterRequest.getIsDeleted() != null && "N".equalsIgnoreCase(filterRequest.getIsDeleted())) {
-            sqlBuilder.append("AND (r.DELETED IS NULL OR r.DELETED != 'Y') ");
-        } else if (filterRequest.getIsDeleted() != null && "Y".equalsIgnoreCase(filterRequest.getIsDeleted())) {
-            sqlBuilder.append("AND r.DELETED = 'Y' ");
-        }
-
-        // Apply date range filters
-        if (StringUtils.hasText(filterRequest.getFrom())) {
-            sqlBuilder.append("AND TRUNC(r.TRANSACTION_DATE) >= TO_DATE(:fromDate, 'YYYY-MM-DD') ");
-        }
-        if (StringUtils.hasText(filterRequest.getTo())) {
-            sqlBuilder.append("AND TRUNC(r.TRANSACTION_DATE) <= TO_DATE(:toDate, 'YYYY-MM-DD') ");
-        }
-
-        // Build filter conditions with sequential parameter indexing
-        List<String> filterConditions = new java.util.ArrayList<>();
-        List<GetAllRfqFilterRequest.FilterItem> validFilters = new java.util.ArrayList<>();
-        if (filterRequest.getFilters() != null && !filterRequest.getFilters().isEmpty()) {
-            for (GetAllRfqFilterRequest.FilterItem filter : filterRequest.getFilters()) {
-                if (StringUtils.hasText(filter.getSearchField()) && StringUtils.hasText(filter.getSearchValue())) {
-                    validFilters.add(filter);
-                    String columnName = mapSearchFieldToColumn(filter.getSearchField());
-                    int paramIndex = validFilters.size() - 1;
-                    filterConditions.add("LOWER(" + columnName + ") LIKE LOWER(:filterValue" + paramIndex + ")");
-                }
-            }
-        }
-
-        // Add filter conditions with operator
-        if (!filterConditions.isEmpty()) {
-            String operator = "AND".equalsIgnoreCase(filterRequest.getOperator()) ? " AND " : " OR ";
-            sqlBuilder.append("AND (").append(String.join(operator, filterConditions)).append(") ");
-        }
-
-        sqlBuilder.append("ORDER BY r.TRANSACTION_DATE DESC");
-
-        // Create count query
-        String countSql = "SELECT COUNT(*) FROM (" + sqlBuilder.toString() + ")";
-
-        // Create query
-        Query query = entityManager.createNativeQuery(sqlBuilder.toString());
-        Query countQuery = entityManager.createNativeQuery(countSql);
-
-        // Set parameters
-        query.setParameter("groupPoid", groupPoid);
-        query.setParameter("companyPoid", companyPoid);
-        countQuery.setParameter("groupPoid", groupPoid);
-        countQuery.setParameter("companyPoid", companyPoid);
-
-        if (StringUtils.hasText(filterRequest.getFrom())) {
-            query.setParameter("fromDate", filterRequest.getFrom());
-            countQuery.setParameter("fromDate", filterRequest.getFrom());
-        }
-        if (StringUtils.hasText(filterRequest.getTo())) {
-            query.setParameter("toDate", filterRequest.getTo());
-            countQuery.setParameter("toDate", filterRequest.getTo());
-        }
-
-        // Set filter parameters using sequential indexing
-        if (!validFilters.isEmpty()) {
-            for (int i = 0; i < validFilters.size(); i++) {
-                GetAllRfqFilterRequest.FilterItem filter = validFilters.get(i);
-                String paramValue = "%" + filter.getSearchValue() + "%";
-                query.setParameter("filterValue" + i, paramValue);
-                countQuery.setParameter("filterValue" + i, paramValue);
-            }
-        }
-
-        // Get total count
-        Long totalCount = ((Number) countQuery.getSingleResult()).longValue();
-
-        // Apply pagination
-        int offset = page * size;
-        query.setFirstResult(offset);
-        query.setMaxResults(size);
-
-        // Execute query and map results
-        @SuppressWarnings("unchecked")
-        List<Object[]> results = query.getResultList();
-        List<ApRequestForQtnListResponseDto> dtos = results.stream()
-                .map(this::mapToResponseDto)
-                .collect(Collectors.toList());
-
-        // Create page
-        Pageable pageable = PageRequest.of(page, size);
-        return new PageImpl<>(dtos, pageable, totalCount);
-    }
-
-    private String mapSearchFieldToColumn(String searchField) {
-        if (searchField == null) {
-            return null;
-        }
-        // Normalize the field name by removing underscores and converting to uppercase
-        String normalizedField = searchField.toUpperCase().replace("_", "");
-        
-        switch (normalizedField) {
-            case "DOCREF":
-                return "r.DOC_REF";
-            case "TASKDESCRIPTION":
-            case "DESCRIPTION":
-                return "r.DESCRIPTION";
-            case "SALESQTNREF":
-            case "SALESQTN":
-                return "SQH.DOC_REF";
-            case "STATUS":
-                return "r.STATUS";
-            case "TYPE":
-                return "r.TYPE";
-            case "EXPECTEDDATE":
-            case "EXPECTED":
-                return "r.EXPECTED_DATE";
-            case "REMARKS":
-                return "r.REMARKS";
-            case "DESCRIPTIONPRINTYN":
-            case "DESCRIPTIONPRINT":
-                return "r.DESCRIPTION_PRINT_YN";
-            case "SALESINVDOCREF":
-            case "SALESINV":
-            case "INVOICEREF":
-                return "r.SALES_INV_DOC_REF";
-            default:
-                // Fallback: assume it's a direct column name from r table
-                // Convert to uppercase and replace spaces/underscores with underscores
-                String columnName = searchField.toUpperCase().replace(" ", "_");
-                return "r." + columnName;
-        }
-    }
-
-    private ApRequestForQtnListResponseDto mapToResponseDto(Object[] row) {
-        ApRequestForQtnListResponseDto dto =
-            new ApRequestForQtnListResponseDto();
-        
-        dto.setTransactionPoid(row[0] != null ? ((Number) row[0]).longValue() : null);
-        dto.setDocRef(convertToString(row[1]));
-        dto.setTransactionDate((Timestamp) row[2]);
-        dto.setDescription(convertToString(row[3]));
-        dto.setStatus(convertToString(row[4]));
-        dto.setType(convertToString(row[5]));
-        dto.setExpectedDate((Timestamp) row[6]);
-        dto.setRemarks(convertToString(row[7]));
-        dto.setDescriptionPrintYn(convertToString(row[8]));
-        dto.setSalesQtnRef(convertToString(row[9]));
-        dto.setSalesInvDocRef(convertToString(row[10]));
-        dto.setDeleted(convertToString(row[11]));
-        dto.setCreatedDate((Timestamp) row[12]);
-        dto.setLastmodifiedDate((Timestamp) row[13]);
-        
-        return dto;
-    }
-
-    private String convertToString(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof String) {
-            return (String) value;
-        }
-        if (value instanceof Character) {
-            return String.valueOf((Character) value);
-        }
-        return value.toString();
+        return PaginationUtil.wrapPage(page, raw.displayFields());
     }
 
     private void callItemsWithoutSupplierProcedure(Long groupPoid, Long companyPoid, String userId,
-            Long transactionPoid) {
+                                                   Long transactionPoid) {
         if (dataSource == null) {
             log.warn("DataSource is not configured; skipping call to PROC_AP_RFQ_ITEMS_WITHOUT_SUP");
             return;
@@ -513,7 +313,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         String sql = "{ call PROC_AP_RFQ_ITEMS_WITHOUT_SUP(?, ?, ?, ?, ?) }";
 
         try (Connection connection = dataSource.getConnection();
-                CallableStatement callableStatement = connection.prepareCall(sql)) {
+             CallableStatement callableStatement = connection.prepareCall(sql)) {
 
             // --- Set IN parameters ---
             callableStatement.setLong(1, groupPoid);
@@ -549,10 +349,10 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     }
 
     private void saveItemDetails(Long transactionPoid,
-            List<CreateApRequestForQtnItemDtlRequest> details,
-            String userId,
-            Long groupPoid,
-            Long companyPoid) {
+                                 List<CreateApRequestForQtnItemDtlRequest> details,
+                                 String userId,
+                                 Long groupPoid,
+                                 Long companyPoid) {
         if (details == null || details.isEmpty()) {
             return;
         }
@@ -601,7 +401,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     }
 
     private void saveSupplierDetails(Long transactionPoid, List<CreateApRequestForQtnSupDtlRequest> details,
-            String userId) {
+                                     String userId) {
         Long maxDetRowId = rfqSupDtlRepository.findMaxDetRowIdByTransactionPoid(transactionPoid);
         Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
 
@@ -618,10 +418,10 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     }
 
     private void updateItemDetails(Long transactionPoid,
-            List<CreateApRequestForQtnItemDtlRequest> details,
-            Long groupPoid,
-            Long companyPoid,
-            String userId) {
+                                   List<CreateApRequestForQtnItemDtlRequest> details,
+                                   Long groupPoid,
+                                   Long companyPoid,
+                                   String userId) {
         // Delete existing
         rfqItemDtlRepository.deleteByTransactionPoid(transactionPoid);
         // Save new
@@ -631,7 +431,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     }
 
     private void updateSupplierDetails(Long transactionPoid, List<CreateApRequestForQtnSupDtlRequest> details,
-            String userId) {
+                                       String userId) {
         // Delete existing
         rfqSupDtlRepository.deleteByTransactionPoid(transactionPoid);
         // Save new
@@ -644,11 +444,11 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
      * Process item details based on action field (isCreated, isUpdated, isDeleted, noChange)
      */
     private void processItemDetailsWithAction(Long transactionPoid,
-            List<CreateApRequestForQtnItemDtlRequest> itemDetails,
-            String userId,
-            Long groupPoid,
-            Long companyPoid,
-            boolean isCreateOperation) {
+                                              List<CreateApRequestForQtnItemDtlRequest> itemDetails,
+                                              String userId,
+                                              Long groupPoid,
+                                              Long companyPoid,
+                                              boolean isCreateOperation) {
         if (itemDetails == null || itemDetails.isEmpty()) {
             return;
         }
@@ -738,9 +538,9 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
      * Process supplier details based on action field (isCreated, isUpdated, isDeleted, noChange)
      */
     private void processSupplierDetailsWithAction(Long transactionPoid,
-            List<CreateApRequestForQtnSupDtlRequest> supplierDetails,
-            String userId,
-            boolean isCreateOperation) {
+                                                  List<CreateApRequestForQtnSupDtlRequest> supplierDetails,
+                                                  String userId,
+                                                  boolean isCreateOperation) {
         if (supplierDetails == null || supplierDetails.isEmpty()) {
             return;
         }
@@ -826,7 +626,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             return false;
         }
         String normalized = action.trim().toLowerCase();
-        return "iscreated".equals(normalized) || "isupdated".equals(normalized) 
+        return "iscreated".equals(normalized) || "isupdated".equals(normalized)
                 || "isdeleted".equals(normalized) || "nochange".equals(normalized);
     }
 
@@ -834,7 +634,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
      * Create a new item detail
      */
     private void createItemDetail(Long transactionPoid, CreateApRequestForQtnItemDtlRequest request,
-            String userId, Long groupPoid, Long companyPoid, Long detRowId) {
+                                  String userId, Long groupPoid, Long companyPoid, Long detRowId) {
         ApRequestForQtnItemDtl itemDtl = new ApRequestForQtnItemDtl();
         itemDtl.setTransactionPoid(transactionPoid);
         itemDtl.setDetRowId(detRowId);
@@ -874,7 +674,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
      * Update an existing item detail by action
      */
     private void updateItemDetailByAction(Long transactionPoid, CreateApRequestForQtnItemDtlRequest request,
-            String userId, Long groupPoid, Long companyPoid) {
+                                          String userId, Long groupPoid, Long companyPoid) {
         // Find existing item detail
         ApRequestForQtnItemDtl itemDtl = rfqItemDtlRepository
                 .findById(new ApRequestForQtnItemDtlId(transactionPoid, request.getDetRowId()))
@@ -956,7 +756,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
      * Create a new supplier detail
      */
     private void createSupplierDetail(Long transactionPoid, CreateApRequestForQtnSupDtlRequest request,
-            String userId, Long detRowId) {
+                                      String userId, Long detRowId) {
         ApRequestForQtnSupDtl supDtl = new ApRequestForQtnSupDtl();
         supDtl.setTransactionPoid(transactionPoid);
         supDtl.setDetRowId(detRowId);
@@ -972,7 +772,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
      * Update an existing supplier detail by action
      */
     private void updateSupplierDetailByAction(Long transactionPoid, CreateApRequestForQtnSupDtlRequest request,
-            String userId) {
+                                              String userId) {
         // Find existing supplier detail
         ApRequestForQtnSupDtl supDtl = rfqSupDtlRepository
                 .findById(new ApRequestForQtnSupDtlId(transactionPoid, request.getDetRowId()))
@@ -1016,9 +816,9 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     }
 
     private void populateTaxDetails(ApRequestForQtnItemDtl itemDtl,
-            Long taxPoid,
-            BigDecimal qty,
-            BigDecimal price) {
+                                    Long taxPoid,
+                                    BigDecimal qty,
+                                    BigDecimal price) {
         if (taxPoid == null) {
             itemDtl.setTaxPoid(null);
             itemDtl.setTaxPercentage(null);
@@ -1149,7 +949,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
         final String sql = "SELECT COUNT(1) FROM CURRENCY_MASTER WHERE UPPER(CURRENCY_CODE) = ?";
         try (Connection connection = dataSource.getConnection();
-                PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+             PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
 
             preparedStatement.setString(1, currencyCode.toUpperCase(Locale.ROOT));
 
@@ -1209,12 +1009,12 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         dto.setStockPoidDetails(getStockPoidDetails(itemDtl.getStockPoid()));
         dto.setStockUnitDetails(getStockUnitDetails(itemDtl.getStockUnitPoid()));
         dto.setTaxPoidDetails(getTaxPoidDetails(itemDtl.getTaxPoid()));
-        
+
         // For supplier in item details, use the special method that checks transaction and excludes cash/cheque suppliers
         if (groupPoid != null) {
             dto.setSupplierPoidDetails(getSupplierPoidDetailsForItem(
-                    itemDtl.getSupplierPoid(), 
-                    itemDtl.getTransactionPoid(), 
+                    itemDtl.getSupplierPoid(),
+                    itemDtl.getTransactionPoid(),
                     groupPoid));
         } else {
             // Fallback: use simple supplier lookup if groupPoid is not available
@@ -1238,7 +1038,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     @Override
     @Transactional
     public ApRequestForQtnItemDtlDto addItemDetail(Long transactionPoid, CreateApRequestForQtnItemDtlRequest request,
-            Long groupPoid, Long companyPoid, String userId) {
+                                                   Long groupPoid, Long companyPoid, String userId) {
         if (request == null) {
             throw new CustomException("Request body cannot be empty");
         }
@@ -1307,8 +1107,8 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     @Override
     @Transactional
     public ApRequestForQtnItemDtlDto updateItemDetail(Long transactionPoid, Long detRowId,
-            CreateApRequestForQtnItemDtlRequest request,
-            Long groupPoid, Long companyPoid, String userId) {
+                                                      CreateApRequestForQtnItemDtlRequest request,
+                                                      Long groupPoid, Long companyPoid, String userId) {
         if (request == null) {
             throw new CustomException("Request body cannot be empty");
         }
@@ -1449,7 +1249,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     @Override
     @Transactional
     public ApRequestForQtnSupDtlDto addSupplierDetail(Long transactionPoid, CreateApRequestForQtnSupDtlRequest request,
-            Long groupPoid, Long companyPoid, String userId) {
+                                                      Long groupPoid, Long companyPoid, String userId) {
         if (request == null) {
             throw new CustomException("Request body cannot be empty");
         }
@@ -1494,8 +1294,8 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     @Override
     @Transactional
     public ApRequestForQtnSupDtlDto updateSupplierDetail(Long transactionPoid, Long detRowId,
-            CreateApRequestForQtnSupDtlRequest request,
-            Long groupPoid, Long companyPoid, String userId) {
+                                                         CreateApRequestForQtnSupDtlRequest request,
+                                                         Long groupPoid, Long companyPoid, String userId) {
         if (request == null) {
             throw new CustomException("Request body cannot be empty");
         }
@@ -1719,7 +1519,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     @Override
     @Transactional
     public UpdateCostResponse updateCost(Long transactionPoid, Boolean confirm,
-            Long groupPoid, Long companyPoid, String userId) {
+                                         Long groupPoid, Long companyPoid, String userId) {
         if (groupPoid == null) {
             throw new CustomException("Group POID header is required");
         }
@@ -1789,7 +1589,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     @Override
     @Transactional(readOnly = true)
     public ItemsWithoutSuppliersResponse getItemsWithoutSuppliers(Long transactionPoid,
-            Long groupPoid, Long companyPoid, String userId) {
+                                                                  Long groupPoid, Long companyPoid, String userId) {
         if (groupPoid == null) {
             throw new CustomException("Group POID header is required");
         }
@@ -1870,7 +1670,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         String sql = "{ call PROC_AP_RFQ_ADD_SUPPLIERS(?, ?, ?, ?, ?) }";
 
         try (Connection connection = dataSource.getConnection();
-                CallableStatement callableStatement = connection.prepareCall(sql)) {
+             CallableStatement callableStatement = connection.prepareCall(sql)) {
 
             // --- Set IN parameters ---
             callableStatement.setLong(1, groupPoid);
@@ -1912,7 +1712,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         String sql = "{ call PROC_AP_RFQ_CREATE_SEND_MAIL(?, ?, ?, ?, ?) }";
 
         try (Connection connection = dataSource.getConnection();
-                CallableStatement callableStatement = connection.prepareCall(sql)) {
+             CallableStatement callableStatement = connection.prepareCall(sql)) {
 
             // --- Set IN parameters ---
             callableStatement.setLong(1, groupPoid);
@@ -1947,7 +1747,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     }
 
     private String callCreatePurchaseOrderProcedure(Long groupPoid, Long companyPoid, String userId,
-            Long transactionPoid, Long supplierPoid) {
+                                                    Long transactionPoid, Long supplierPoid) {
         if (dataSource == null) {
             log.warn("DataSource is not configured; skipping call to PROC_AP_RFQ_CREATE_PO_NEW");
             return null;
@@ -1955,7 +1755,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         String sql = "{ call PROC_AP_RFQ_CREATE_PO_NEW(?, ?, ?, ?, ?, ?) }";
 
         try (Connection connection = dataSource.getConnection();
-                CallableStatement callableStatement = connection.prepareCall(sql)) {
+             CallableStatement callableStatement = connection.prepareCall(sql)) {
 
             // --- Set IN parameters ---
             callableStatement.setLong(1, groupPoid);
@@ -1998,7 +1798,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         String sql = "{ call PROC_AP_RFQ_PRICE_UPDATE(?, ?, ?, ?, ?) }";
 
         try (Connection connection = dataSource.getConnection();
-                CallableStatement callableStatement = connection.prepareCall(sql)) {
+             CallableStatement callableStatement = connection.prepareCall(sql)) {
 
             // --- Set IN parameters ---
             callableStatement.setLong(1, groupPoid);
@@ -2033,7 +1833,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     }
 
     private BigDecimal getLastPriceFromProcedure(Long stockPoid, Long stockUnitPoid, Long supplierPoid,
-            Long groupPoid, Long companyPoid, String userId) {
+                                                 Long groupPoid, Long companyPoid, String userId) {
         if (stockPoid == null || stockUnitPoid == null || supplierPoid == null) {
             return null;
         }
@@ -2044,7 +1844,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
         final String sql = "{ call PROC_AP_RFQ_CREATE_LAST_PRICE(?, ?, ?, ?, ?, ?, ?) }";
         try (Connection connection = dataSource.getConnection();
-                CallableStatement statement = connection.prepareCall(sql)) {
+             CallableStatement statement = connection.prepareCall(sql)) {
 
             statement.setLong(1, groupPoid);
             statement.setLong(2, companyPoid);
@@ -2080,7 +1880,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
         final String sql = "{ call PROC_AP_RFQ_SET_DFLT_DTL(?, ?) }";
         try (Connection connection = dataSource.getConnection();
-                CallableStatement statement = connection.prepareCall(sql)) {
+             CallableStatement statement = connection.prepareCall(sql)) {
 
             statement.setLong(1, stockPoid);
             statement.registerOutParameter(2, Types.NUMERIC);
@@ -2111,7 +1911,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         final String sql = "SELECT DIVISION_POID AS POID, DIVISION_CODE AS CODE, DIVISION_NAME AS DESCRIPTION " +
                 "FROM GLOBAL_DIVISION_MASTER WHERE DIVISION_POID = ?";
         try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(sql)) {
+             PreparedStatement statement = connection.prepareStatement(sql)) {
 
             statement.setLong(1, divisionPoid);
             try (ResultSet rs = statement.executeQuery()) {
@@ -2119,7 +1919,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                     Long poid = rs.getLong("POID");
                     String code = rs.getString("CODE");
                     String description = rs.getString("DESCRIPTION");
-                    return new LovItem(poid, code, description);
+                    return new LovItem(poid, code, description, description, poid, null);
                 }
             }
             return null;
@@ -2146,7 +1946,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                 "INNER JOIN GLOBAL_ADDRESS_MASTER GAM ON GAM.ADDRESS_MASTER_POID = GAD.ADDRESS_MASTER_POID " +
                 "WHERE SQH.TRANSACTION_POID = ?";
         try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(sql)) {
+             PreparedStatement statement = connection.prepareStatement(sql)) {
 
             statement.setLong(1, salesQtnPoid);
             try (ResultSet rs = statement.executeQuery()) {
@@ -2154,7 +1954,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                     Long poid = rs.getLong("POID");
                     String code = rs.getString("CODE");
                     String description = rs.getString("DESCRIPTION");
-                    return new LovItem(poid, code, description);
+                    return new LovItem(poid, code, description, description, poid, null);
                 }
             }
             return null;
@@ -2176,7 +1976,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         final String sql = "SELECT STOCK_POID AS POID, STOCK_CODE AS CODE, STOCK_NAME AS DESCRIPTION " +
                 "FROM STOCK_MASTER WHERE STOCK_POID = ?";
         try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(sql)) {
+             PreparedStatement statement = connection.prepareStatement(sql)) {
 
             statement.setLong(1, stockPoid);
             try (ResultSet rs = statement.executeQuery()) {
@@ -2184,7 +1984,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                     Long poid = rs.getLong("POID");
                     String code = rs.getString("CODE");
                     String description = rs.getString("DESCRIPTION");
-                    return new LovItem(poid, code, description);
+                    return new LovItem(poid, code, description, description, poid, null);
                 }
             }
             return null;
@@ -2206,7 +2006,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         final String sql = "SELECT STOCK_UNIT_POID AS POID, STOCK_UNIT_CODE AS CODE, STOCK_UNIT_CODE AS DESCRIPTION " +
                 "FROM STOCK_UNIT_MASTER WHERE STOCK_UNIT_POID = ?";
         try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(sql)) {
+             PreparedStatement statement = connection.prepareStatement(sql)) {
 
             statement.setLong(1, stockUnitPoid);
             try (ResultSet rs = statement.executeQuery()) {
@@ -2214,7 +2014,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                     Long poid = rs.getLong("POID");
                     String code = rs.getString("CODE");
                     String description = rs.getString("DESCRIPTION");
-                    return new LovItem(poid, code, description);
+                    return new LovItem(poid, code, description, description, poid, null);
                 }
             }
             return null;
@@ -2241,7 +2041,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             Long chequeSupplier = null;
 
             try (PreparedStatement paramStatement = connection.prepareStatement(paramSql);
-                    ResultSet paramRs = paramStatement.executeQuery()) {
+                 ResultSet paramRs = paramStatement.executeQuery()) {
                 if (paramRs.next()) {
                     Object cashObj = paramRs.getObject("CASH_SUPPLIER");
                     Object chequeObj = paramRs.getObject("CHEQUE_SUPPLIER");
@@ -2281,7 +2081,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                         Long poid = rs.getLong("POID");
                         String code = rs.getString("CODE");
                         String description = rs.getString("DESCRIPTION");
-                        return new LovItem(poid, code, description);
+                        return new LovItem(poid, code, description, description, poid, null);
                     }
                 }
             }
@@ -2305,7 +2105,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                 "FROM GLOBAL_TAX_MASTER " +
                 "WHERE TAX_POID = ? AND NVL(ACTIVE, 'Y') = 'Y' AND NVL(DELETED, 'N') = 'N' AND TAX_TYPE = 'INPUT_VAT'";
         try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(sql)) {
+             PreparedStatement statement = connection.prepareStatement(sql)) {
 
             statement.setLong(1, taxPoid);
             try (ResultSet rs = statement.executeQuery()) {
@@ -2313,7 +2113,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                     Long poid = rs.getLong("POID");
                     String code = rs.getString("CODE");
                     String description = rs.getString("DESCRIPTION");
-                    return new LovItem(poid, code, description);
+                    return new LovItem(poid, code, description, description, poid, null);
                 }
             }
             return null;
@@ -2336,7 +2136,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                 "FROM AP_SUPPLIER_MASTER " +
                 "WHERE SUPPLIER_POID = ? AND NVL(ACTIVE, 'Y') = 'Y'";
         try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(sql)) {
+             PreparedStatement statement = connection.prepareStatement(sql)) {
 
             statement.setLong(1, supplierPoid);
             try (ResultSet rs = statement.executeQuery()) {
@@ -2344,7 +2144,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                     Long poid = rs.getLong("POID");
                     String code = rs.getString("CODE");
                     String description = rs.getString("DESCRIPTION");
-                    return new LovItem(poid, code, description);
+                    return new LovItem(poid, code, description, description, poid, null);
                 }
             }
             return null;

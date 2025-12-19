@@ -1,5 +1,6 @@
 package com.asg.shipchandling.salesquotationsch.controller;
 
+import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.salesquotationsch.dto.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.UpdateSalesQuotationSchRequest;
@@ -18,7 +19,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.asg.shipchandling.salesquotationsch.dto.response.SalesQuotationSchListResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
@@ -31,6 +31,7 @@ import com.asg.common.lib.security.util.UserContext;
 import com.asg.common.lib.annotation.AllowedAction;
 import com.asg.common.lib.enums.UserRolesRightsEnum;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -177,16 +178,11 @@ public class SalesQuotationSchController {
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @PostMapping("/list")
         @AllowedAction(UserRolesRightsEnum.VIEW)
-        public ResponseEntity<?> getSalesQuotationSchListWithFilters(
-                        @Valid @RequestBody FilterRequestDto filterRequest,
-                        @ParameterObject Pageable pageable) {
-
-                log.info("getSalesQuotationSchListWithFilters started for companyPoid={}", UserContext.getCompanyPoid());
-                SalesQuotationSchListResponse response = quotationSchService.listSalesQuotationSchWithFilters(
-                                filterRequest, UserContext.getCompanyPoid(), pageable);
-                log.info("getSalesQuotationSchListWithFilters completed for companyPoid={} totalElements={} totalPages={}",
-                                UserContext.getCompanyPoid(), response.getTotalElements(), response.getTotalPages());
-                return success("Sales quotation sch list fetched successfully", response);
+        public ResponseEntity<?> listSalesQuotationSch(@ParameterObject Pageable pageable,
+                                                       @RequestBody(required = false) FilterRequestDto filters,
+                                                       @RequestParam(required = false) LocalDate startDate,
+                                                       @RequestParam(required = false) LocalDate endDate) {
+                return success("Delivery notes fetched successfully", quotationSchService.listSalesQuotationSch(UserContext.getDocumentId(), filters, startDate, endDate, pageable));
         }
 
         // ==================== VALIDATION APIs ====================

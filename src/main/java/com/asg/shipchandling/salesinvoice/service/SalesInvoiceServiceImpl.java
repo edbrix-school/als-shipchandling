@@ -1,6 +1,10 @@
 package com.asg.shipchandling.salesinvoice.service;
 
-import com.asg.shipchandling.salesinvoice.dto.*;
+import com.asg.common.lib.dto.FilterDto;
+import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.salesinvoice.dto.*;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.CreateSalesDnDtlRequest;
@@ -30,23 +34,19 @@ import com.asg.shipchandling.StockMaster.repository.StockMasterRepository;
 import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
 import com.asg.shipchandling.deliverynote.repository.SalesDeliveryNoteHdrRepository;
 import com.asg.shipchandling.deliverynote.entity.SalesDeliveryNoteHdr;
-import com.asg.shipchandling.salesinvoice.entity.*;
-import com.asg.shipchandling.salesinvoice.repository.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -64,6 +64,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
     private final SalesInvoiceStoredProcRepository salesInvoiceStoredProcRepository;
     private final StockMasterRepository stockMasterRepository;
     private final SalesDeliveryNoteHdrRepository deliveryNoteHdrRepository;
+    private final DocumentSearchService documentService;
     
     @PersistenceContext
     private EntityManager entityManager;
@@ -972,107 +973,20 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional(readOnly = true)
-    public PaginatedResponse<SalesInvoiceListDto> getAllSalesInvoices(Long companyPoid,
-            FilterRequestDto filterRequest, Integer page, Integer size, String sortBy, String sortDir) {
-        log.info("getAllSalesInvoices service started for companyPoid={} page={} size={} sortBy={} sortDir={}", 
-                companyPoid, page, size, sortBy, sortDir);
-        
-        // Set default values for pagination
-        int pageNumber = (page != null && page >= 0) ? page : 0;
-        int pageSize = (size != null && size > 0) ? size : 10; // Default page size is 10
-        
-        // Handle sorting
-        Sort sort;
-        if (sortBy != null && !sortBy.trim().isEmpty()) {
-            Sort.Direction direction = "DESC".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-            // Map frontend field names to database field names
-            String dbFieldName = mapSortFieldToDbField(sortBy);
-            sort = Sort.by(direction, dbFieldName);
-        } else {
-            // Default sorting by transaction date descending, then docRef ascending
-            sort = Sort.by("transactionDate").descending().and(Sort.by("docRef").ascending());
-        }
-        
-        Pageable pageable = PageRequest.of(pageNumber, pageSize, sort);
-        
-        // Use the repository implementation method with filters
-        Page<Object[]> invoicesPage = invoiceHdrRepositoryImpl.findAllForList(
-                companyPoid, filterRequest, pageable);
-        
-        // Convert to List DTOs
-        List<SalesInvoiceListDto> content = invoicesPage.getContent().stream()
-                .map(this::convertToListDto)
-                .collect(Collectors.toList());
-        
-        // Build display fields map (keys in uppercase)
-        Map<String, String> displayFields = new HashMap<>();
-        displayFields.put("DATE", "date");
-        displayFields.put("DOC_REF", "text");
-        displayFields.put("QTN_REF", "text");
-        displayFields.put("PARTY_NAME", "text");
-        displayFields.put("VESSEL_NAME", "text");
-        
-        // Create paginated response
-        PaginatedResponse<SalesInvoiceListDto> response = new PaginatedResponse<>();
-        response.setContent(content);
-        response.setPageNumber(invoicesPage.getNumber());
-        response.setPageSize(invoicesPage.getSize());
-        response.setTotalElements(invoicesPage.getTotalElements());
-        response.setTotalPages(invoicesPage.getTotalPages());
-        response.setFirst(invoicesPage.isFirst());
-        response.setLast(invoicesPage.isLast());
-        response.setDisplayFields(displayFields);
-        
-        log.info("getAllSalesInvoices completed for companyPoid={} totalElements={}", 
-                companyPoid, response.getTotalElements());
-        return response;
+    public Map<String, Object> listSalesInvoices(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable) {
+        String operator = documentService.resolveOperator(request);
+        String isDeleted = documentService.resolveIsDeleted(request);
+        List<FilterDto> filters = documentService.resolveDateFilters(request, "TRANSACTION_DATE", startDateValue, endDateValue);
+
+        RawSearchResult raw = documentService.search(docId, filters, operator, pageable, isDeleted,
+                "DOC_REF",   // label
+                "TRANSACTION_POID");    // value);
+
+        Page<Map<String, Object>> page = new PageImpl<>(raw.records(), pageable, raw.totalRecords());
+
+        return PaginationUtil.wrapPage(page, raw.displayFields());
     }
-    
-    private String mapSortFieldToDbField(String sortBy) {
-        // Map frontend field names to database/entity field names
-        switch (sortBy.toUpperCase()) {
-            case "DATE":
-                return "transactionDate";
-            case "DOCREF":
-            case "DOC_REF":
-                return "docRef";
-            case "QTNREF":
-            case "QTN_REF":
-                return "qtnPoid";
-            case "PARTYNAME":
-            case "PARTY_NAME":
-                return "customerName"; // Will be sorted by customer name in query
-            case "VESSELNAME":
-            case "VESSEL_NAME":
-                return "vesselName";
-            case "CREATEDDATE":
-            case "CREATED_DATE":
-                return "createdDate";
-            case "UPDATEDDATE":
-            case "UPDATED_DATE":
-                return "lastmodifiedDate";
-            default:
-                return sortBy; // Use as-is if no mapping found
-        }
-    }
-    
-    private SalesInvoiceListDto convertToListDto(Object[] result) {
-        // Object[] contains: transactionPoid, date, docRef, qtnRef, partyName, vesselName, 
-        // deleted, createdBy, updatedBy, createdDate, updatedDate
-        SalesInvoiceListDto dto = new SalesInvoiceListDto();
-        dto.setTransactionPoid(((Number) result[0]).longValue());
-        dto.setDate((java.sql.Timestamp) result[1]);
-        dto.setDocRef(toStringSafe(result[2]));
-        dto.setQtnRef(toStringSafe(result[3]));
-        dto.setPartyName(toStringSafe(result[4]));
-        dto.setVesselName(toStringSafe(result[5]));
-        dto.setDeleted(toStringSafe(result[6]));
-        dto.setCreatedBy(toStringSafe(result[7]));
-        dto.setUpdatedBy(toStringSafe(result[8]));
-        dto.setCreatedDate((java.sql.Timestamp) result[9]);
-        dto.setUpdatedDate((java.sql.Timestamp) result[10]);
-        return dto;
-    }
+
     
     private String toStringSafe(Object value) {
         if (value == null) {

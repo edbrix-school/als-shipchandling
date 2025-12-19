@@ -1,5 +1,10 @@
 package com.asg.shipchandling.salesquotationsch.service;
 
+import com.asg.common.lib.dto.FilterDto;
+import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.salesquotationsch.dto.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.*;
 import com.asg.shipchandling.salesquotationsch.dto.response.CustomerDetailsResponse;
@@ -29,10 +34,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.BeanUtils;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +46,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -66,6 +69,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private final StockMasterService stockMasterService;
     private final GlobalCurrencyMasterRepository globalCurrencyMasterRepository;
     private final GlobalCurrencyRatesRepository globalCurrencyRatesRepository;
+    private final DocumentSearchService documentService;
 
     @Override
     @Transactional
@@ -449,175 +453,18 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
     @Override
     @Transactional(readOnly = true)
-    public SalesQuotationSchListResponse listSalesQuotationSchWithFilters(FilterRequestDto filterRequest,
-            Long companyPoid, Pageable pageable) {
-        log.info("listSalesQuotationSchWithFilters started for companyPoid={}", companyPoid);
+    public Map<String, Object> listSalesQuotationSch(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable) {
+        String operator = documentService.resolveOperator(request);
+        String isDeleted = documentService.resolveIsDeleted(request);
+        List<FilterDto> filters = documentService.resolveDateFilters(request, "TRANSACTION_DATE", startDateValue, endDateValue);
 
-        Specification<SalesQuotationSchHdr> spec = null;
+        RawSearchResult raw = documentService.search(docId, filters, operator, pageable, isDeleted,
+                "DOC_REF",   // label
+                "TRANSACTION_POID");    // value);
 
-        // Handle isDeleted filter
-        String isDeleted = filterRequest.isDeleted();
-        if (isDeleted != null && !isDeleted.trim().isEmpty()) {
-            if ("Y".equalsIgnoreCase(isDeleted)) {
-                // Show only deleted records
-                spec = (root, query, cb) -> cb.equal(root.get("deleted"), "Y");
-            } else if ("N".equalsIgnoreCase(isDeleted)) {
-                // Show only non-deleted records
-                spec = (root, query, cb) -> cb.or(
-                        cb.isNull(root.get("deleted")),
-                        cb.notEqual(root.get("deleted"), "Y"));
-            }
-        } else {
-            // Default: Show only non-deleted records when isDeleted is not provided
-            spec = (root, query, cb) -> cb.or(
-                    cb.isNull(root.get("deleted")),
-                    cb.notEqual(root.get("deleted"), "Y"));
-        }
+        Page<Map<String, Object>> page = new PageImpl<>(raw.records(), pageable, raw.totalRecords());
 
-        // Company filtering (mandatory for data isolation)
-        Specification<SalesQuotationSchHdr> companySpec = SalesQuotationSchSpecifications.companyIs(companyPoid);
-        if (spec != null) {
-            spec = spec.and(companySpec);
-        } else {
-            spec = companySpec;
-        }
-
-        // Handle operator and filters
-        String operator = filterRequest.operator() != null ? filterRequest.operator().toUpperCase() : "OR";
-        List<FilterDto> filters = filterRequest.filters() != null ? filterRequest.filters() : new ArrayList<>();
-
-        if (!filters.isEmpty()) {
-            boolean isAndOperator = "AND".equals(operator);
-            List<Specification<SalesQuotationSchHdr>> filterSpecs = new ArrayList<>();
-
-            for (FilterDto filter : filters) {
-                String searchField = filter.searchField();
-                String searchValue = filter.searchValue();
-
-                if (searchField == null || searchValue == null || searchValue.trim().isEmpty()) {
-                    continue;
-                }
-
-                Specification<SalesQuotationSchHdr> filterSpec = buildFilterSpecification(searchField, searchValue,
-                        companyPoid);
-
-                if (filterSpec != null) {
-                    filterSpecs.add(filterSpec);
-                }
-            }
-
-            // Combine filters based on operator
-            if (!filterSpecs.isEmpty()) {
-                Specification<SalesQuotationSchHdr> combinedFilterSpec = filterSpecs.get(0);
-                for (int i = 1; i < filterSpecs.size(); i++) {
-                    if (isAndOperator) {
-                        combinedFilterSpec = combinedFilterSpec.and(filterSpecs.get(i));
-                    } else {
-                        combinedFilterSpec = combinedFilterSpec.or(filterSpecs.get(i));
-                    }
-                }
-                if (spec != null) {
-                    spec = spec.and(combinedFilterSpec);
-                } else {
-                    spec = combinedFilterSpec;
-                }
-            }
-        }
-
-        // Execute query
-        Page<SalesQuotationSchHdr> page;
-        if (spec != null) {
-            page = quotationSchHdrRepository.findAll(spec, pageable);
-        } else {
-            page = quotationSchHdrRepository.findAll(pageable);
-        }
-
-        // Convert to DTOs
-        List<SalesQuotationSchSummaryDto> dtoList = page.getContent().stream()
-                .map(this::toSummaryDto)
-                .collect(Collectors.toList());
-
-        // Build display fields map
-        Map<String, String> displayFields = new HashMap<>();
-        displayFields.put("docRef", "text");
-        displayFields.put("quotationStatus", "text");
-        displayFields.put("transactionDate", "date");
-        displayFields.put("customerRef", "text");
-        displayFields.put("vesselName", "text");
-
-        // Build response
-        SalesQuotationSchListResponse response = new SalesQuotationSchListResponse();
-        response.setContent(dtoList);
-        response.setLast(page.isLast());
-        response.setTotalPages(page.getTotalPages());
-        response.setTotalElements(page.getTotalElements());
-        response.setPageSize(page.getSize());
-        response.setDisplayFields(displayFields);
-        response.setPageNumber(page.getNumber());
-
-        log.info("listSalesQuotationSchWithFilters completed for companyPoid={} totalElements={} totalPages={}",
-                companyPoid, response.getTotalElements(), response.getTotalPages());
-        return response;
-    }
-
-    private Specification<SalesQuotationSchHdr> buildFilterSpecification(String searchField, String searchValue,
-            Long companyPoid) {
-        String upperField = searchField.toUpperCase();
-        String searchPattern = "%" + searchValue.trim().toUpperCase() + "%";
-
-        // DOC_REF filter
-        if ("DOC_REF".equals(upperField) || "DOCREF".equals(upperField)) {
-            return (root, query, cb) -> cb.like(cb.upper(root.get("docRef")), searchPattern);
-        }
-
-        // QUOTATION_STATUS filter
-        if ("QUOTATION_STATUS".equals(upperField) || "STATUS".equals(upperField)
-                || "QUOTATIONSTATUS".equals(upperField)) {
-            return (root, query, cb) -> cb.equal(cb.upper(root.get("quotationStatus")),
-                    searchValue.trim().toUpperCase());
-        }
-
-        // CUSTOMER_NAME filter - fetch customer POIDs and filter by them
-        // Note: This is called within a transaction, so it uses the same connection
-        if ("CUSTOMER_NAME".equals(upperField) || "CUSTOMERNAME".equals(upperField)) {
-            String customerNamePattern = "%" + searchValue.trim().toUpperCase() + "%";
-            List<Long> customerPoids = quotationSchHdrRepository.findCustomerPoidsByName(customerNamePattern);
-
-            if (customerPoids == null || customerPoids.isEmpty()) {
-                // No matching customers, return specification that matches nothing
-                return (root, query, cb) -> cb.disjunction();
-            }
-
-            // Filter by customer POIDs
-            return (root, query, cb) -> root.get("customerPoid").in(customerPoids);
-        }
-
-        // TRANSACTION_DATE filter - supports date range or exact date
-        if ("TRANSACTION_DATE".equals(upperField) || "TRANSACTIONDATE".equals(upperField)) {
-            try {
-                // Try to parse as date
-                Timestamp dateValue = Timestamp.valueOf(searchValue.trim() + " 00:00:00");
-                Timestamp nextDay = new Timestamp(dateValue.getTime() + 24 * 60 * 60 * 1000);
-                return (root, query, cb) -> cb.and(
-                        cb.greaterThanOrEqualTo(root.get("transactionDate"), dateValue),
-                        cb.lessThan(root.get("transactionDate"), nextDay));
-            } catch (Exception e) {
-                // If parsing fails, try to use as pattern
-                return (root, query, cb) -> cb.like(
-                        cb.function("TO_CHAR", String.class, root.get("transactionDate"), cb.literal("YYYY-MM-DD")),
-                        searchPattern);
-            }
-        }
-
-        // GLOBALSEARCH - search across multiple fields
-        if ("GLOBALSEARCH".equals(upperField)) {
-            return (root, query, cb) -> cb.or(
-                    cb.like(cb.upper(cb.coalesce(root.get("docRef"), "")), searchPattern),
-                    cb.like(cb.upper(cb.coalesce(root.get("customerRef"), "")), searchPattern),
-                    cb.like(cb.upper(cb.coalesce(root.get("details"), "")), searchPattern));
-        }
-
-        return null;
+        return PaginationUtil.wrapPage(page, raw.displayFields());
     }
 
     @Override
@@ -997,8 +844,61 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     }
 
     /**
+     * Creates a new address in GlobalAddressMaster and GlobalAddressDetails
+     * when newAddressYN is true
+     *
+     * @param customerPoid Customer POID to get customer name
+     * @param addressDetails Address details from request
+     * @param groupPoid Group POID for address master
+     * @param userId User ID for audit fields
+     * @return The created addressPoid
+     */
+    private Long createNewAddress(Long customerPoid, AddressDetailsResponse addressDetails, Long groupPoid, String userId) {
+        log.info("createNewAddress started for customerPoid={} groupPoid={}", customerPoid, groupPoid);
+
+        // Get customer name from SALES_CUSTOMER_MASTER
+        String customerName = getCustomerName(customerPoid);
+
+        // Create GlobalAddressMaster
+        GlobalAddressMaster addressMaster = new GlobalAddressMaster();
+        addressMaster.setAddressName(customerName != null ? customerName : "Customer Address");
+        addressMaster.setGroupPoid(groupPoid);
+        addressMaster.setCreatedBy(userId);
+        addressMaster.setLastmodifiedBy(userId);
+        addressMaster.setDeleted("N");
+        addressMaster.setActive("Y");
+
+        // Save address master to get addressMasterPoid
+        GlobalAddressMaster savedAddressMaster = globalAddressMasterRepository.save(addressMaster);
+        globalAddressMasterRepository.flush();
+        log.info("createNewAddress created address master with addressMasterPoid={}", savedAddressMaster.getAddressMasterPoid());
+
+        // Create GlobalAddressDetails with addressType "SALES"
+        GlobalAddressDetails addressDetailsEntity = new GlobalAddressDetails();
+        addressDetailsEntity.setAddressMasterPoid(savedAddressMaster.getAddressMasterPoid());
+        addressDetailsEntity.setAddressType("SALES");
+
+        // Map fields from AddressDetailsResponse
+        if (addressDetails != null) {
+            addressDetailsEntity.setContactPerson(addressDetails.getContactPerson());
+            addressDetailsEntity.setEmail1(addressDetails.getEmail1());
+            addressDetailsEntity.setMobile(addressDetails.getMobile());
+        }
+
+        addressDetailsEntity.setCreatedBy(userId);
+        addressDetailsEntity.setLastmodifiedBy(userId);
+
+        // Save address details to get addressPoid
+        GlobalAddressDetails savedAddressDetails = globalAddressDetailsRepository.save(addressDetailsEntity);
+        globalAddressDetailsRepository.flush();
+        log.info("createNewAddress created address details with addressPoid={}", savedAddressDetails.getAddressPoid());
+
+        return savedAddressDetails.getAddressPoid();
+    }
+
+    /**
      * Gets customer name from SALES_CUSTOMER_MASTER table
-     * 
+     *
      * @param customerPoid Customer POID
      * @return Customer name or null if not found
      */
@@ -1706,26 +1606,26 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Transactional(readOnly = true)
     public CurrencyRateResponse getLatestCurrencyRate(Long currencyPoid) {
         log.info("getLatestCurrencyRate called for currencyPoid={}", currencyPoid);
-        
+
         if (currencyPoid == null) {
             throw new CustomException("Currency POID is required");
         }
-        
+
         // Find currency by POID
         GlobalCurrencyMaster currency = globalCurrencyMasterRepository
                 .findByCurrencyPoid(java.math.BigDecimal.valueOf(currencyPoid))
                 .orElseThrow(() -> new ResourceNotFoundException("Currency", "currencyPoid", currencyPoid));
-        
+
         // Check if currency is active and not deleted
         if (!"Y".equalsIgnoreCase(currency.getActive()) || "Y".equalsIgnoreCase(currency.getDeleted())) {
             throw new CustomException("Currency is not active or has been deleted");
         }
-        
+
         // Get latest rate by currency code
         GlobalCurrencyRates latestRate = globalCurrencyRatesRepository
                 .findLatestByCurrencyCode(currency.getCurrencyCode())
                 .orElseThrow(() -> new ResourceNotFoundException("Currency Rate", "currencyCode", currency.getCurrencyCode()));
-        
+
         // Map to response DTO
         CurrencyRateResponse response = new CurrencyRateResponse();
         response.setCurrencyPoid(currencyPoid);
@@ -1734,10 +1634,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         response.setBuyRate(latestRate.getBuyRate());
         response.setSellRate(latestRate.getSellRate());
         response.setRateDate(latestRate.getRateDate());
-        
-        log.info("getLatestCurrencyRate completed for currencyPoid={} currencyCode={} buyRate={} sellRate={}", 
+
+        log.info("getLatestCurrencyRate completed for currencyPoid={} currencyCode={} buyRate={} sellRate={}",
                 currencyPoid, currency.getCurrencyCode(), latestRate.getBuyRate(), latestRate.getSellRate());
-        
+
         return response;
     }
 }

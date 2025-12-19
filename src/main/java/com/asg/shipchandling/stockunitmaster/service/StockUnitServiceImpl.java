@@ -1,44 +1,42 @@
 package com.asg.shipchandling.stockunitmaster.service;
 
+import com.asg.common.lib.dto.FilterDto;
+import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.exceptions.ResourceAlreadyExistsException;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
 import com.asg.shipchandling.group.repository.GroupRepository;
 import com.asg.shipchandling.stockunitmaster.dto.CreateStockUnitMasterRequest;
-import com.asg.shipchandling.stockunitmaster.dto.FilterDto;
-import com.asg.shipchandling.stockunitmaster.dto.FilterRequestDto;
-import com.asg.shipchandling.stockunitmaster.dto.StockUnitListResponse;
 import com.asg.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
 import com.asg.shipchandling.stockunitmaster.dto.UnitDependenciesDto;
 import com.asg.shipchandling.stockunitmaster.entity.StockUnitMaster;
 import com.asg.shipchandling.stockunitmaster.repository.StockUnitRepository;
 
-// import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class StockUnitServiceImpl implements StockUnitService {
 
-    @Autowired
-    StockUnitRepository stockUnitRepository;
-
-    @Autowired
-    GroupRepository groupRepository;
+    private final StockUnitRepository stockUnitRepository;
+    private final DocumentSearchService documentService;
+    private final GroupRepository groupRepository;
 
     private static final Logger log = LoggerFactory.getLogger(StockUnitServiceImpl.class);
 
@@ -347,107 +345,18 @@ public Page<StockUnitMasterDto> listStockUnitsUsingParams(
 
     @Override
     @Transactional(readOnly = true)
-    public StockUnitListResponse listStockUnitsWithFilters(FilterRequestDto filterRequest, Pageable pageable) {
-        Specification<StockUnitMaster> spec = null;
+    public Map<String, Object> listStockUnits(String docId, FilterRequestDto request, Pageable pageable) {
+        String operator = documentService.resolveOperator(request);
+        String isDeleted = documentService.resolveIsDeleted(request);
+        List<FilterDto> filters = documentService.resolveFilters(request);
 
-        // Handle isDeleted filter
-        String isDeleted = filterRequest.isDeleted();
-        if (isDeleted != null && !isDeleted.trim().isEmpty()) {
-            if ("Y".equalsIgnoreCase(isDeleted)) {
-                // Show only deleted records
-                spec = (root, query, cb) -> 
-                    cb.equal(root.get("deleted"), "Y");
-            } else if ("N".equalsIgnoreCase(isDeleted)) {
-                // Show only non-deleted records
-                spec = (root, query, cb) -> 
-                    cb.or(
-                        cb.isNull(root.get("deleted")),
-                        cb.notEqual(root.get("deleted"), "Y")
-                    );
-            }
-        } else {
-            // Default: Show only non-deleted records when isDeleted is not provided
-            spec = (root, query, cb) -> 
-                cb.or(
-                    cb.isNull(root.get("deleted")),
-                    cb.notEqual(root.get("deleted"), "Y")
-                );
-        }
+        RawSearchResult raw = documentService.search(docId, filters, operator, pageable, isDeleted,
+                "STOCK_UNIT_NAME",   // label
+                "STOCK_UNIT_POID");    // value);
 
-        // Handle operator and filters
-        String operator = filterRequest.operator() != null ? filterRequest.operator().toUpperCase() : "OR";
-        List<FilterDto> filters = filterRequest.filters() != null ? filterRequest.filters() : new ArrayList<>();
+        Page<Map<String, Object>> page = new PageImpl<>(raw.records(), pageable, raw.totalRecords());
 
-        if (!filters.isEmpty()) {
-            boolean isAndOperator = "AND".equals(operator);
-            List<Specification<StockUnitMaster>> filterSpecs = new ArrayList<>();
-            
-            for (FilterDto filter : filters) {
-                String searchField = filter.searchField();
-                String searchValue = filter.searchValue();
-                
-                if (searchField == null || searchValue == null || searchValue.trim().isEmpty()) {
-                    continue;
-                }
-
-                Specification<StockUnitMaster> filterSpec = buildFilterSpecification(searchField, searchValue);
-                
-                if (filterSpec != null) {
-                    filterSpecs.add(filterSpec);
-                }
-            }
-            
-            // Combine filters based on operator
-            if (!filterSpecs.isEmpty()) {
-                Specification<StockUnitMaster> combinedFilterSpec = filterSpecs.get(0);
-                for (int i = 1; i < filterSpecs.size(); i++) {
-                    if (isAndOperator) {
-                        combinedFilterSpec = combinedFilterSpec.and(filterSpecs.get(i));
-                    } else {
-                        combinedFilterSpec = combinedFilterSpec.or(filterSpecs.get(i));
-                    }
-                }
-                if (spec != null) {
-                    spec = spec.and(combinedFilterSpec);
-                } else {
-                    spec = combinedFilterSpec;
-                }
-            }
-        }
-
-        // Execute query
-        Page<StockUnitMaster> page;
-        if (spec != null) {
-            page = stockUnitRepository.findAll(spec, pageable);
-        } else {
-            page = stockUnitRepository.findAll(pageable);
-        }
-
-        // Convert to DTOs
-        List<StockUnitMasterDto> dtoList = page.getContent().stream()
-            .map(entity -> {
-                StockUnitMasterDto dto = new StockUnitMasterDto();
-                BeanUtils.copyProperties(entity, dto);
-                return dto;
-            })
-            .collect(Collectors.toList());
-
-        // Build display fields map
-        Map<String, String> displayFields = new HashMap<>();
-        displayFields.put("stockUnitCode", "text");
-        displayFields.put("stockUnitName", "text");
-
-        // Create response
-        StockUnitListResponse response = new StockUnitListResponse();
-        response.setContent(dtoList);
-        response.setLast(page.isLast());
-        response.setTotalPages(page.getTotalPages());
-        response.setTotalElements(page.getTotalElements());
-        response.setPageSize(page.getSize());
-        response.setDisplayFields(displayFields);
-        response.setPageNumber(page.getNumber());
-
-        return response;
+        return PaginationUtil.wrapPage(page, raw.displayFields());
     }
 
     private Specification<StockUnitMaster> buildFilterSpecification(String searchField, String searchValue) {

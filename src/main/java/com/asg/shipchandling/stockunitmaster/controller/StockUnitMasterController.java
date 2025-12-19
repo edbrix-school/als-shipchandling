@@ -2,9 +2,7 @@ package com.asg.shipchandling.stockunitmaster.controller;
 
 import com.asg.shipchandling.stockunitmaster.dto.CreateStockUnitMasterRequest;
 import com.asg.shipchandling.stockunitmaster.dto.FilterRequestDto;
-import com.asg.shipchandling.stockunitmaster.dto.StockUnitListResponse;
 import com.asg.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
-import com.asg.shipchandling.stockunitmaster.dto.UnitDependenciesDto;
 import com.asg.shipchandling.stockunitmaster.dto.ValidationResponse;
 import com.asg.shipchandling.stockunitmaster.service.StockUnitService;
 import com.asg.common.lib.security.util.UserContext;
@@ -25,8 +23,6 @@ import org.springframework.web.bind.annotation.*;
 import static com.asg.shipchandling.common.ApiResponse.*;
 import com.asg.common.lib.annotation.AllowedAction;
 import com.asg.common.lib.enums.UserRolesRightsEnum;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/v1/stockunitmaster")
@@ -121,13 +117,8 @@ public class StockUnitMasterController {
         }))
         @PostMapping("/list")
         @AllowedAction(UserRolesRightsEnum.VIEW)
-        public ResponseEntity<?> getStockUnitList(
-                        @Valid @RequestBody FilterRequestDto filterRequest,
-                        @ParameterObject Pageable pageable) {
-
-                StockUnitListResponse response = stockUnitService.listStockUnitsWithFilters(filterRequest, pageable);
-
-                return success("Stock units fetched successfully", response);
+        public ResponseEntity<?> listStockUnits(@Valid @RequestBody com.asg.common.lib.dto.FilterRequestDto filterRequest, @ParameterObject Pageable pageable) {
+                return success("Stock units fetched successfully", stockUnitService.listStockUnits(UserContext.getDocumentId(),filterRequest, pageable));
         }
 
         @Operation(summary = "Soft delete a stock unit", description = "Marks a stock unit as deleted without permanently removing its data", responses = {
