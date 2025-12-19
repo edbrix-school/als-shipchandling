@@ -5,6 +5,7 @@ import com.asg.shipchandling.deliverynote.dto.*;
 import org.springframework.data.domain.Pageable;
 
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -42,5 +43,5 @@ public interface SalesDeliveryNoteService {
 
     SalesDeliveryNoteDependenciesDto checkDeliveryNoteDependencies(Long transactionPoid, Long companyPoid);
 
-    Map<String, Object> listDeliveryNotes(String docId, FilterRequestDto request, Pageable pageable);
+    Map<String, Object> listDeliveryNotes(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable);
 }

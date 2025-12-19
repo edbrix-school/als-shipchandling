@@ -31,6 +31,7 @@ import com.asg.common.lib.security.util.UserContext;
 import com.asg.common.lib.annotation.AllowedAction;
 import com.asg.common.lib.enums.UserRolesRightsEnum;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -177,8 +178,11 @@ public class SalesQuotationSchController {
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @PostMapping("/list")
         @AllowedAction(UserRolesRightsEnum.VIEW)
-        public ResponseEntity<?> listSalesQuotationSch(@ParameterObject Pageable pageable, @RequestBody(required = false) FilterRequestDto filters) {
-                return success("Delivery notes fetched successfully", quotationSchService.listSalesQuotationSch(UserContext.getDocumentId(), filters, pageable));
+        public ResponseEntity<?> listSalesQuotationSch(@ParameterObject Pageable pageable,
+                                                       @RequestBody(required = false) FilterRequestDto filters,
+                                                       @RequestParam(required = false) LocalDate startDate,
+                                                       @RequestParam(required = false) LocalDate endDate) {
+                return success("Delivery notes fetched successfully", quotationSchService.listSalesQuotationSch(UserContext.getDocumentId(), filters, startDate, endDate, pageable));
         }
 
         // ==================== VALIDATION APIs ====================

@@ -1,6 +1,7 @@
 package com.asg.shipchandling.salesquotationsch.service;
 
 import com.asg.common.lib.dto.FilterDto;
+import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
 import com.asg.common.lib.service.DocumentSearchService;
 import com.asg.common.lib.utility.PaginationUtil;
@@ -48,6 +49,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -324,10 +326,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
     @Override
     @Transactional(readOnly = true)
-    public Map<String, Object> listSalesQuotationSch(String docId, com.asg.common.lib.dto.FilterRequestDto request, Pageable pageable) {
+    public Map<String, Object> listSalesQuotationSch(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable) {
         String operator = documentService.resolveOperator(request);
         String isDeleted = documentService.resolveIsDeleted(request);
-        List<FilterDto> filters = documentService.resolveFilters(request);
+        List<FilterDto> filters = documentService.resolveDateFilters(request, "TRANSACTION_DATE", startDateValue, endDateValue);
 
         RawSearchResult raw = documentService.search(docId, filters, operator, pageable, isDeleted,
                 "DOC_REF",   // label

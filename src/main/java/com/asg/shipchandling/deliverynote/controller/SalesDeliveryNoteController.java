@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import com.asg.shipchandling.deliverynote.service.SalesDeliveryNoteService;
 import com.asg.common.lib.security.util.UserContext;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -107,8 +108,11 @@ public class SalesDeliveryNoteController {
             @ApiResponse(responseCode = "401", description = "Unauthorized")
     }, security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping("/list")
-    public ResponseEntity<?> getAllDeliveryNotes(@ParameterObject Pageable pageable, @RequestBody(required = false) FilterRequestDto filters) {
-        return success("Delivery notes fetched successfully", deliveryNoteService.listDeliveryNotes(UserContext.getDocumentId(), filters, pageable));
+    public ResponseEntity<?> getAllDeliveryNotes(@ParameterObject Pageable pageable,
+                                                 @RequestBody(required = false) FilterRequestDto filters,
+                                                 @RequestParam(required = false) LocalDate startDate,
+                                                 @RequestParam(required = false) LocalDate endDate) {
+        return success("Delivery notes fetched successfully", deliveryNoteService.listDeliveryNotes(UserContext.getDocumentId(), filters, startDate, endDate, pageable));
     }
 
     // ==================== VALIDATION APIs ====================

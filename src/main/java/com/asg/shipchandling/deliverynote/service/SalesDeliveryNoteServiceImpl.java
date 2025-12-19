@@ -45,6 +45,7 @@ import javax.sql.DataSource;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -335,10 +336,10 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
     @Override
     @Transactional(readOnly = true)
-    public Map<String, Object> listDeliveryNotes(String docId, FilterRequestDto request, Pageable pageable) {
+    public Map<String, Object> listDeliveryNotes(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable) {
         String operator = documentService.resolveOperator(request);
         String isDeleted = documentService.resolveIsDeleted(request);
-        List<FilterDto> filters = documentService.resolveFilters(request);
+        List<FilterDto> filters = documentService.resolveDateFilters(request, "TRANSACTION_DATE", startDateValue, endDateValue);
 
         RawSearchResult raw = documentService.search(docId, filters, operator, pageable, isDeleted,
                 "DOC_REF",   // label

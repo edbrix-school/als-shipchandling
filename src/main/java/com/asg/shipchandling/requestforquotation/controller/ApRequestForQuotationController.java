@@ -21,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Map;
 
 import static com.asg.shipchandling.common.ApiResponse.success;
@@ -37,8 +38,11 @@ public class ApRequestForQuotationController {
         })
         @AllowedAction(UserRolesRightsEnum.VIEW)
         @PostMapping("/list")
-        public ResponseEntity<?> listRequestForQuotations(@ParameterObject Pageable pageable, @RequestBody(required = false) FilterRequestDto filters) {
-                return success("RFQs fetched successfully", rfqService.listRequestForQuotations(UserContext.getDocumentId(), filters, pageable));
+        public ResponseEntity<?> listRequestForQuotations(@ParameterObject Pageable pageable,
+                                                          @RequestBody(required = false) FilterRequestDto filters,
+                                                          @RequestParam(required = false) LocalDate startDate,
+                                                          @RequestParam(required = false) LocalDate endDate) {
+                return success("RFQs fetched successfully", rfqService.listRequestForQuotations(UserContext.getDocumentId(), filters, startDate, endDate, pageable));
         }
 
         @Operation(summary = "Create Request For Quotation", description = "Creates a new RFQ document. DocRef is auto-generated. Calls stored procedure after save.", responses = {

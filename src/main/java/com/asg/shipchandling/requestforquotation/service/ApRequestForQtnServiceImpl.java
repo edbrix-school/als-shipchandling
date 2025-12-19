@@ -290,10 +290,10 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
     @Override
     @Transactional(readOnly = true)
-    public Map<String, Object> listRequestForQuotations(String docId, FilterRequestDto request, Pageable pageable) {
+    public Map<String, Object> listRequestForQuotations(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable) {
         String operator = documentService.resolveOperator(request);
         String isDeleted = documentService.resolveIsDeleted(request);
-        List<FilterDto> filters = documentService.resolveFilters(request);
+        List<FilterDto> filters = documentService.resolveDateFilters(request, "TRANSACTION_DATE", startDateValue, endDateValue);
 
         RawSearchResult raw = documentService.search(docId, filters, operator, pageable, isDeleted,
                 "DOC_REF",   // label
