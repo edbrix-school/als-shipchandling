@@ -844,59 +844,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     }
 
     /**
-     * Creates a new address in GlobalAddressMaster and GlobalAddressDetails
-     * when newAddressYN is true
-     *
-     * @param customerPoid Customer POID to get customer name
-     * @param addressDetails Address details from request
-     * @param groupPoid Group POID for address master
-     * @param userId User ID for audit fields
-     * @return The created addressPoid
-     */
-    private Long createNewAddress(Long customerPoid, AddressDetailsResponse addressDetails, Long groupPoid, String userId) {
-        log.info("createNewAddress started for customerPoid={} groupPoid={}", customerPoid, groupPoid);
-
-        // Get customer name from SALES_CUSTOMER_MASTER
-        String customerName = getCustomerName(customerPoid);
-
-        // Create GlobalAddressMaster
-        GlobalAddressMaster addressMaster = new GlobalAddressMaster();
-        addressMaster.setAddressName(customerName != null ? customerName : "Customer Address");
-        addressMaster.setGroupPoid(groupPoid);
-        addressMaster.setCreatedBy(userId);
-        addressMaster.setLastmodifiedBy(userId);
-        addressMaster.setDeleted("N");
-        addressMaster.setActive("Y");
-
-        // Save address master to get addressMasterPoid
-        GlobalAddressMaster savedAddressMaster = globalAddressMasterRepository.save(addressMaster);
-        globalAddressMasterRepository.flush();
-        log.info("createNewAddress created address master with addressMasterPoid={}", savedAddressMaster.getAddressMasterPoid());
-
-        // Create GlobalAddressDetails with addressType "SALES"
-        GlobalAddressDetails addressDetailsEntity = new GlobalAddressDetails();
-        addressDetailsEntity.setAddressMasterPoid(savedAddressMaster.getAddressMasterPoid());
-        addressDetailsEntity.setAddressType("SALES");
-
-        // Map fields from AddressDetailsResponse
-        if (addressDetails != null) {
-            addressDetailsEntity.setContactPerson(addressDetails.getContactPerson());
-            addressDetailsEntity.setEmail1(addressDetails.getEmail1());
-            addressDetailsEntity.setMobile(addressDetails.getMobile());
-        }
-
-        addressDetailsEntity.setCreatedBy(userId);
-        addressDetailsEntity.setLastmodifiedBy(userId);
-
-        // Save address details to get addressPoid
-        GlobalAddressDetails savedAddressDetails = globalAddressDetailsRepository.save(addressDetailsEntity);
-        globalAddressDetailsRepository.flush();
-        log.info("createNewAddress created address details with addressPoid={}", savedAddressDetails.getAddressPoid());
-
-        return savedAddressDetails.getAddressPoid();
-    }
-
-    /**
      * Gets customer name from SALES_CUSTOMER_MASTER table
      *
      * @param customerPoid Customer POID
