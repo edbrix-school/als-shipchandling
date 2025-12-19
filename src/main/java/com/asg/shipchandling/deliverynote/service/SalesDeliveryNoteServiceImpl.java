@@ -23,6 +23,7 @@ import com.asg.shipchandling.stockunitmaster.repository.StockUnitRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -1108,7 +1109,15 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
             String procResult = cs.getString(5);
             try (ResultSet rs = (ResultSet) cs.getObject(6)) {
-                if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
+                if (StringUtils.isNotBlank(procResult) && procResult.toUpperCase().contains("ERROR")) {
+
+                    // Handle NO DATA FOUND as empty result, not as error
+                    if (procResult.toUpperCase().contains("ORA-01403")) {
+                        log.warn("No quotation items found for transactionPoid={}", transactionPoid);
+                        return new ArrayList<>(); // return empty list
+                    }
+
+                    // Real DB error → throw exception
                     throw new CustomException("PROC_DN_LOAD_QUOTATION_DETAIL failed: " + procResult);
                 }
 
