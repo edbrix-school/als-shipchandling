@@ -30,6 +30,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -1113,8 +1114,8 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
                     // Handle NO DATA FOUND as empty result, not as error
                     if (procResult.toUpperCase().contains("ORA-01403")) {
-                        log.warn("No quotation items found for transactionPoid={}", transactionPoid);
-                        return new ArrayList<>(); // return empty list
+                        log.warn("No items to be loaded from quotation for transactionPoid={}", transactionPoid);
+                        throw new CustomException("No items to be loaded from quotation", HttpStatus.NOT_FOUND.value());
                     }
 
                     // Real DB error → throw exception
