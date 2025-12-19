@@ -39,6 +39,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.List;
 
 import static com.asg.shipchandling.common.ApiResponse.success;
@@ -132,8 +133,11 @@ public class SalesInvoiceController {
         }, security = @SecurityRequirement(name = "bearerAuth"))
         @PostMapping("/list")
         @AllowedAction(UserRolesRightsEnum.VIEW)
-        public ResponseEntity<?> listSalesInvoices(@ParameterObject Pageable pageable, @RequestBody(required = false) FilterRequestDto filters) {
-                return success("Sales invoices fetched successfully", invoiceService.listSalesInvoices(UserContext.getDocumentId(), filters, pageable));
+        public ResponseEntity<?> listSalesInvoices(@ParameterObject Pageable pageable,
+                                                   @RequestBody(required = false) FilterRequestDto filters,
+                                                   @RequestParam(required = false) LocalDate startDate,
+                                                   @RequestParam(required = false) LocalDate endDate) {
+                return success("Sales invoices fetched successfully", invoiceService.listSalesInvoices(UserContext.getDocumentId(), filters, startDate, endDate, pageable));
         }
 
         // ==================== INVOICE DETAILS (ITEM DETAILS) APIs ====================

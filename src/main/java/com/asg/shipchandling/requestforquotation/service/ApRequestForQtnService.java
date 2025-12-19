@@ -7,6 +7,7 @@ import com.asg.shipchandling.requestforquotation.dto.response.*;
 import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -23,7 +24,7 @@ public interface ApRequestForQtnService {
     
     void deleteRequestForQuotation(Long transactionPoid, Long groupPoid, Long companyPoid);
 
-    Map<String, Object> listRequestForQuotations(String docId, FilterRequestDto request, Pageable pageable);
+    Map<String, Object> listRequestForQuotations(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable);
 
     // Detail Table APIs
     ApRequestForQtnItemDtlDto addItemDetail(Long transactionPoid, CreateApRequestForQtnItemDtlRequest request,

@@ -13,6 +13,7 @@ import com.asg.shipchandling.salesquotationsch.dto.response.CurrencyRateResponse
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -35,7 +36,7 @@ public interface SalesQuotationSchService {
         SalesQuotationSchListResponse search(SalesQuotationSchFilter filter, String userId);
         
         // Filter method with dynamic filters (similar to stock unit)
-        Map<String, Object> listSalesQuotationSch(String docId, FilterRequestDto request, Pageable pageable);
+        Map<String, Object> listSalesQuotationSch(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable);
 
         // Validation APIs
         ValidationResponse validateDocRef(String docRef, Long transactionPoid);
