@@ -18,6 +18,10 @@ public class SalesQuotationSchHdrDto {
     private String docRef;
     private Long customerPoid;
     private Long addressPoid;
+
+    // Indicates whether this quotation is using a legacy "New Temp Address" (GLOBAL_NEW_ADDRESS_DETAILS)
+    private Boolean newAddressYN;
+
     private String currencyCode;
     private Long currencyRate;
     private String quotationStatus;

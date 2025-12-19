@@ -18,14 +18,14 @@ public interface SalesQuotationSchService {
 
         // Basic CRUD Operations
         SalesQuotationSchHdrDto createSalesQuotationSch(CreateSalesQuotationSchRequest request, Long groupPoid,
-                                                        Long companyPoid, String userId);
+                                                        Long companyPoid, Long userPoid, String userId);
 
         SalesQuotationSchHdrDto getSalesQuotationSchByPoid(Long transactionPoid, Long groupPoid,
-                        Long companyPoid, Boolean includeDetails);
+                        Long companyPoid, Long userPoid, Boolean includeDetails);
 
         SalesQuotationSchHdrDto updateSalesQuotationSch(Long groupPoid, Long transactionPoid,
                         UpdateSalesQuotationSchRequest request,
-                        Long companyPoid, String userId);
+                        Long companyPoid, Long userPoid, String userId);
 
         void deleteSalesQuotationSch(Long groupPoid, Long transactionPoid, Long companyPoid);
 

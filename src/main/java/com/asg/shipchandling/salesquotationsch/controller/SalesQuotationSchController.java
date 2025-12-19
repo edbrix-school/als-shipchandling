@@ -12,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -32,8 +31,6 @@ import com.asg.common.lib.security.util.UserContext;
 import com.asg.common.lib.annotation.AllowedAction;
 import com.asg.common.lib.enums.UserRolesRightsEnum;
 
-import java.sql.Timestamp;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -62,7 +59,7 @@ public class SalesQuotationSchController {
                         @Valid @RequestBody CreateSalesQuotationSchRequest request) {
                 log.info("createSalesQuotationSch started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesQuotationSchHdrDto dto = quotationSchService.createSalesQuotationSch(
-                                request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid(), UserContext.getUserId());
                 log.info("createSalesQuotationSch completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success("Sales quotation sch created successfully", dto);
         }
@@ -80,7 +77,7 @@ public class SalesQuotationSchController {
 
                 log.info("getSalesQuotationSchByPoid started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesQuotationSchHdrDto dto = quotationSchService.getSalesQuotationSchByPoid(
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), includeDetails);
+                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid(), includeDetails);
                 log.info("getSalesQuotationSchByPoid completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(),
                                 UserContext.getGroupPoid());
                 return success("Sales quotation sch fetched successfully", dto);
@@ -100,7 +97,7 @@ public class SalesQuotationSchController {
 
                 log.info("updateSalesQuotationSch started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesQuotationSchHdrDto dto = quotationSchService.updateSalesQuotationSch(
-                                UserContext.getGroupPoid(), transactionPoid, request, UserContext.getCompanyPoid(), UserContext.getUserId());
+                                UserContext.getGroupPoid(), transactionPoid, request, UserContext.getCompanyPoid(), UserContext.getUserPoid(), UserContext.getUserId());
                 log.info("updateSalesQuotationSch completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success("Sales quotation sch updated successfully", dto);
         }

@@ -1,5 +1,6 @@
 package com.asg.shipchandling.StockMaster.dto;
 
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -41,9 +42,12 @@ public class CreateStockMasterRequest {
     private BigDecimal tagPrice;
     private BigDecimal retailPrice;
     private BigDecimal wholesalePrice;
+    @Digits(integer = 126, fraction = 3, message = "Price 1 must be at most 126 digits with up to 3 decimals")
     @NotNull(message = "Price 1 is required")
     private BigDecimal price1;
+    @Digits(integer = 126, fraction = 3, message = "Price 2 must be at most 126 digits with up to 3 decimals")
     private BigDecimal price2;
+    @Digits(integer = 126, fraction = 3, message = "Price 3 must be at most 126 digits with up to 3 decimals")
     private BigDecimal price3;
     @NotBlank(message = "Currency code is required")
     @Size(max = 20, message = "Currency code must not exceed 20 characters")

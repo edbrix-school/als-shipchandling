@@ -9,21 +9,16 @@ import com.asg.shipchandling.salesquotationsch.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.CurrencyRateResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.TempAddressProcedureResponse;
+import com.asg.shipchandling.salesquotationsch.dto.TempNewAddressRow;
 import com.asg.shipchandling.StockMaster.service.StockMasterService;
 import com.asg.shipchandling.StockMaster.dto.StockDetailsResponse;
-import com.asg.shipchandling.stockunitmaster.service.StockUnitService;
-import com.asg.shipchandling.common.repository.GlobalAddressMasterRepository;
-import com.asg.shipchandling.common.repository.GlobalAddressDetailsRepository;
 import com.asg.shipchandling.common.repository.GlobalCurrencyMasterRepository;
 import com.asg.shipchandling.common.repository.GlobalCurrencyRatesRepository;
-import com.asg.shipchandling.common.entity.GlobalAddressMaster;
-import com.asg.shipchandling.common.entity.GlobalAddressDetails;
 import com.asg.shipchandling.common.entity.GlobalCurrencyMaster;
 import com.asg.shipchandling.common.entity.GlobalCurrencyRates;
-import com.asg.shipchandling.salesquotationsch.entity.*;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
 import com.asg.shipchandling.exceptions.CustomException;
-import com.asg.shipchandling.salesquotationsch.repository.*;
 import com.asg.shipchandling.salesquotationsch.entity.SalesQuotationSchHdr;
 import com.asg.shipchandling.salesquotationsch.entity.SalesQuotationSchItemDtl;
 import com.asg.shipchandling.salesquotationsch.repository.SalesQuotationSchHdrRepository;
@@ -61,20 +56,21 @@ import java.util.stream.Collectors;
 @Slf4j
 public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
+    // Legacy (ADF) constants for Sales Quotation (SCH)
+    private static final String LEGACY_DOC_ID_SALES_QUOTATION = "350-101";
+    private static final String LEGACY_DOC_FIELD_NAME_CUSTOMER_POID = "CustomerPoid";
+
     private final SalesQuotationSchHdrRepository quotationSchHdrRepository;
     private final SalesQuotationSchItemDtlRepository itemDtlRepository;
     private final SalesQuotationSchStoredProcRepository quotationSchStoredProcRepository;
     private final StockMasterService stockMasterService;
-    private final StockUnitService stockUnitMasterService;
-    private final GlobalAddressMasterRepository globalAddressMasterRepository;
-    private final GlobalAddressDetailsRepository globalAddressDetailsRepository;
     private final GlobalCurrencyMasterRepository globalCurrencyMasterRepository;
     private final GlobalCurrencyRatesRepository globalCurrencyRatesRepository;
 
     @Override
     @Transactional
     public SalesQuotationSchHdrDto createSalesQuotationSch(CreateSalesQuotationSchRequest request, Long groupPoid,
-                                                           Long companyPoid, String userId) {
+                                                           Long companyPoid, Long userPoid, String userId) {
         log.info("createSalesQuotationSch service started for groupPoid={} userId={}", groupPoid, userId);
         // Validate required fields
         validateQuotationSchRequest(request);
@@ -85,12 +81,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             log.info("createSalesQuotationSch set transactionDate to current timestamp");
         }
 
-        // Handle new address creation if newAddressYN is true
-        Long addressPoid = request.getAddressPoid();
-        if (request.isNewAddressYN() && request.getAddressDetails() != null) {
-            addressPoid = createNewAddress(request.getCustomerPoid(), request.getAddressDetails(), groupPoid, userId);
-            log.info("createSalesQuotationSch created new address with addressPoid={}", addressPoid);
-        }
+        // Keep a copy of the incoming value for any lookups before we overwrite customerPoid (legacy temp address flow)
+        Long requestCustomerPoid = request.getCustomerPoid();
 
         // Create entity
         SalesQuotationSchHdr quotationSch = new SalesQuotationSchHdr();
@@ -99,9 +91,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         quotationSch.setCreatedBy(userId);
         quotationSch.setLastmodifiedBy(userId);
         quotationSch.setDeleted("N");
-        // Set the addressPoid (either from request or newly created)
-        if (addressPoid != null) {
-            quotationSch.setAddressPoid(addressPoid);
+        // Keep existing behavior for addressPoid (not part of legacy temp address implementation)
+        if (request.getAddressPoid() != null) {
+            quotationSch.setAddressPoid(request.getAddressPoid());
         }
 
         // Save to get transactionPoid
@@ -109,6 +101,63 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         quotationSchHdrRepository.flush();
         log.info("createSalesQuotationSch persisted groupPoid={} userId={} transactionPoid={} ", groupPoid, userId,
                 savedQuotationSch.getTransactionPoid());
+
+        // Legacy-compatible: create/update temp address in GLOBAL_NEW_ADDRESS_DETAILS, keyed by DocId+DocKeyPoid+DocFieldName
+        if (request.isNewAddressYN() && request.getAddressDetails() != null) {
+            String addressName = getCustomerName(requestCustomerPoid);
+            if (addressName == null || addressName.isBlank()) {
+                addressName = "Customer Address";
+            }
+
+            // Legacy UI requires Tel; for REST we map best-effort.
+            String offTel1 = request.getAddressDetails().getContactPerson();
+            if (offTel1 == null || offTel1.isBlank()) {
+                offTel1 = request.getAddressDetails().getMobile();
+            }
+
+            Long generatedNewAddressPoid = System.currentTimeMillis();
+
+            TempAddressProcedureResponse tempAddrResp = quotationSchStoredProcRepository.callNewTempAddressCreateUpdateProc(
+                    groupPoid,
+                    userPoid,
+                    LEGACY_DOC_ID_SALES_QUOTATION,
+                    savedQuotationSch.getTransactionPoid(),
+                    LEGACY_DOC_FIELD_NAME_CUSTOMER_POID,
+                    addressName,
+                    generatedNewAddressPoid,
+                    offTel1,
+                    null,
+                    request.getAddressDetails().getContactPerson(),
+                    null,
+                    request.getAddressDetails().getMobile(),
+                    null,
+                    request.getAddressDetails().getEmail1(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "CREATE"
+            );
+
+            if (!tempAddrResp.isSuccess() || tempAddrResp.getNewAddressPoid() == null) {
+                throw new CustomException(tempAddrResp.getErrorMessage() != null ? tempAddrResp.getErrorMessage()
+                        : "Temp address save failed");
+            }
+
+            // Per agreed REST contract: store returned temp id into customerPoid (ADF binding-style)
+            savedQuotationSch.setCustomerPoid(tempAddrResp.getNewAddressPoid());
+            savedQuotationSch.setLastmodifiedBy(userId);
+            savedQuotationSch = quotationSchHdrRepository.save(savedQuotationSch);
+            quotationSchHdrRepository.flush();
+            log.info("createSalesQuotationSch updated customerPoid to temp newAddressPoid={} for transactionPoid={}",
+                    tempAddrResp.getNewAddressPoid(), savedQuotationSch.getTransactionPoid());
+        }
 
         // Save item details
         if (request.getItemDetails() != null && !request.getItemDetails().isEmpty()) {
@@ -125,6 +174,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
         // Convert to DTO
         SalesQuotationSchHdrDto dto = convertToDto(refreshedQuotationSch, true);
+        // reflect request flag in response
+        dto.setNewAddressYN(request.isNewAddressYN());
         log.info("createSalesQuotationSch completed for transactionPoid={} docRef={}",
                 dto.getTransactionPoid(), dto.getDocRef());
         return dto;
@@ -133,7 +184,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Override
     @Transactional(readOnly = true)
     public SalesQuotationSchHdrDto getSalesQuotationSchByPoid(Long transactionPoid, Long groupPoid,
-            Long companyPoid, Boolean includeDetails) {
+            Long companyPoid, Long userPoid, Boolean includeDetails) {
         log.info(
                 "getSalesQuotationSchByPoid called for transactionPoid={} groupPoid={} companyPoid={} includeDetails={}",
                 transactionPoid, groupPoid, companyPoid, includeDetails);
@@ -165,6 +216,40 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             setEmptyLovDetails(dto);
         }
 
+        // Legacy "reopen" behavior: load temp addresses via PROC_NEW_ADDRESS_LOADLIST and patch addressDetails
+        boolean tempNewAddressFound = false;
+        try {
+            List<TempNewAddressRow> newTempAddresses = quotationSchStoredProcRepository.callNewTempAddressLoadListProc(
+                    groupPoid,
+                    companyPoid,
+                    userPoid,
+                    LEGACY_DOC_ID_SALES_QUOTATION,
+                    transactionPoid
+            );
+
+            if (newTempAddresses != null) {
+                for (TempNewAddressRow row : newTempAddresses) {
+                    if (row != null && row.getDocFieldName() != null &&
+                            row.getDocFieldName().equalsIgnoreCase(LEGACY_DOC_FIELD_NAME_CUSTOMER_POID)) {
+                        AddressDetailsResponse addr = new AddressDetailsResponse();
+                        addr.setAddressPoid(row.getNewAddressPoid());
+                        addr.setContactPerson(row.getContactPerson());
+                        addr.setEmail1(row.getEmail1());
+                        addr.setMobile(row.getMobile());
+                        dto.setAddressDetails(addr);
+                        tempNewAddressFound = true;
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Do not fail GET if temp address cannot be loaded; keep existing dto as-is.
+            log.warn("Temp address loadlist failed for transactionPoid={}: {}", transactionPoid, e.getMessage());
+        }
+
+        // Expose legacy temp-address status in response (true if temp address exists for CustomerPoid)
+        dto.setNewAddressYN(tempNewAddressFound);
+
         log.info("getSalesQuotationSchByPoid completed for transactionPoid={} companyPoid={}",
                 transactionPoid, companyPoid);
         return dto;
@@ -174,7 +259,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Transactional
     public SalesQuotationSchHdrDto updateSalesQuotationSch(Long groupPoid, Long transactionPoid,
             UpdateSalesQuotationSchRequest request,
-            Long companyPoid, String userId) {
+            Long companyPoid, Long userPoid, String userId) {
         log.info("updateSalesQuotationSch service started for transactionPoid={} groupPoid={}", transactionPoid,
                 groupPoid);
         SalesQuotationSchHdr quotationSch = quotationSchHdrRepository
@@ -191,22 +276,60 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Validate required fields
         validateQuotationSchRequest(request);
 
-        // Handle new address creation if newAddressYN is true
-        Long addressPoid = request.getAddressPoid();
+        TempAddressProcedureResponse tempAddrResp = null;
         if (request.isNewAddressYN() && request.getAddressDetails() != null) {
-            // Get groupPoid from existing quotation or use a default
-            Long groupPoidForAddress = groupPoid != null ? groupPoid : quotationSch.getCompanyPoid();
-            addressPoid = createNewAddress(request.getCustomerPoid(), request.getAddressDetails(), groupPoidForAddress, userId);
-            log.info("updateSalesQuotationSch created new address with addressPoid={}", addressPoid);
+            // For update, assume request.customerPoid holds the temp id (legacy binding-style). If missing, create a new one.
+            Long existingOrNewTempId = request.getCustomerPoid() != null ? request.getCustomerPoid() : System.currentTimeMillis();
+            String action = request.getCustomerPoid() != null ? "UPDATE" : "CREATE";
+
+            String addressName = "Customer Address";
+            String offTel1 = request.getAddressDetails().getContactPerson();
+            if (offTel1 == null || offTel1.isBlank()) {
+                offTel1 = request.getAddressDetails().getMobile();
+            }
+
+            tempAddrResp = quotationSchStoredProcRepository.callNewTempAddressCreateUpdateProc(
+                    groupPoid,
+                    userPoid,
+                    LEGACY_DOC_ID_SALES_QUOTATION,
+                    transactionPoid,
+                    LEGACY_DOC_FIELD_NAME_CUSTOMER_POID,
+                    addressName,
+                    existingOrNewTempId,
+                    offTel1,
+                    null,
+                    request.getAddressDetails().getContactPerson(),
+                    null,
+                    request.getAddressDetails().getMobile(),
+                    null,
+                    request.getAddressDetails().getEmail1(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    action
+            );
+
+            if (!tempAddrResp.isSuccess() || tempAddrResp.getNewAddressPoid() == null) {
+                throw new CustomException(tempAddrResp.getErrorMessage() != null ? tempAddrResp.getErrorMessage()
+                        : "Temp address save failed");
+            }
         }
 
         // Update fields (excluding read-only fields)
         BeanUtils.copyProperties(request, quotationSch, "transactionPoid", "docRef", "createdBy",
                 "createdDate", "transactionDate");
         quotationSch.setLastmodifiedBy(userId);
-        // Set the addressPoid (either from request or newly created)
-        if (addressPoid != null) {
-            quotationSch.setAddressPoid(addressPoid);
+
+        // Per agreed REST contract: store returned temp id into customerPoid (ADF binding-style)
+        if (tempAddrResp != null && tempAddrResp.getNewAddressPoid() != null) {
+            quotationSch.setCustomerPoid(tempAddrResp.getNewAddressPoid());
         }
 
         // Process item details based on actionType (UPDATE, DELETE, or CREATE)
@@ -221,6 +344,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         calculateTotals(transactionPoid);
 
         SalesQuotationSchHdrDto dto = convertToDto(savedQuotationSch, true);
+        // reflect request flag in response
+        dto.setNewAddressYN(request.isNewAddressYN());
         log.info("updateSalesQuotationSch completed for transactionPoid={} companyPoid={}",
                 quotationSch.getTransactionPoid(), quotationSch.getCompanyPoid());
         return dto;
@@ -869,59 +994,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         }
 
         quotationSchHdrRepository.save(quotationSch);
-    }
-
-    /**
-     * Creates a new address in GlobalAddressMaster and GlobalAddressDetails
-     * when newAddressYN is true
-     * 
-     * @param customerPoid Customer POID to get customer name
-     * @param addressDetails Address details from request
-     * @param groupPoid Group POID for address master
-     * @param userId User ID for audit fields
-     * @return The created addressPoid
-     */
-    private Long createNewAddress(Long customerPoid, AddressDetailsResponse addressDetails, Long groupPoid, String userId) {
-        log.info("createNewAddress started for customerPoid={} groupPoid={}", customerPoid, groupPoid);
-        
-        // Get customer name from SALES_CUSTOMER_MASTER
-        String customerName = getCustomerName(customerPoid);
-        
-        // Create GlobalAddressMaster
-        GlobalAddressMaster addressMaster = new GlobalAddressMaster();
-        addressMaster.setAddressName(customerName != null ? customerName : "Customer Address");
-        addressMaster.setGroupPoid(groupPoid);
-        addressMaster.setCreatedBy(userId);
-        addressMaster.setLastmodifiedBy(userId);
-        addressMaster.setDeleted("N");
-        addressMaster.setActive("Y");
-        
-        // Save address master to get addressMasterPoid
-        GlobalAddressMaster savedAddressMaster = globalAddressMasterRepository.save(addressMaster);
-        globalAddressMasterRepository.flush();
-        log.info("createNewAddress created address master with addressMasterPoid={}", savedAddressMaster.getAddressMasterPoid());
-        
-        // Create GlobalAddressDetails with addressType "SALES"
-        GlobalAddressDetails addressDetailsEntity = new GlobalAddressDetails();
-        addressDetailsEntity.setAddressMasterPoid(savedAddressMaster.getAddressMasterPoid());
-        addressDetailsEntity.setAddressType("SALES");
-        
-        // Map fields from AddressDetailsResponse
-        if (addressDetails != null) {
-            addressDetailsEntity.setContactPerson(addressDetails.getContactPerson());
-            addressDetailsEntity.setEmail1(addressDetails.getEmail1());
-            addressDetailsEntity.setMobile(addressDetails.getMobile());
-        }
-        
-        addressDetailsEntity.setCreatedBy(userId);
-        addressDetailsEntity.setLastmodifiedBy(userId);
-        
-        // Save address details to get addressPoid
-        GlobalAddressDetails savedAddressDetails = globalAddressDetailsRepository.save(addressDetailsEntity);
-        globalAddressDetailsRepository.flush();
-        log.info("createNewAddress created address details with addressPoid={}", savedAddressDetails.getAddressPoid());
-        
-        return savedAddressDetails.getAddressPoid();
     }
 
     /**
