@@ -1,6 +1,8 @@
 package com.asg.shipchandling.deliverynote.controller;
 
+import com.asg.common.lib.annotation.AllowedAction;
 import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.common.lib.enums.UserRolesRightsEnum;
 import com.asg.shipchandling.deliverynote.dto.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -43,6 +45,7 @@ public class SalesDeliveryNoteController {
             @ApiResponse(responseCode = "401", description = "Unauthorized")
     }, security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping
+    @AllowedAction(UserRolesRightsEnum.CREATE)
     public ResponseEntity<?> createDeliveryNote(
             @Valid @RequestBody CreateSalesDeliveryNoteRequest request) {
         log.info("createDeliveryNote started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
@@ -58,6 +61,7 @@ public class SalesDeliveryNoteController {
             @ApiResponse(responseCode = "401", description = "Unauthorized")
     }, security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/{transactionPoid}")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getDeliveryNoteByPoid(
             @PathVariable Long transactionPoid,
             @RequestParam(required = false, defaultValue = "true") Boolean includeDetails) {
@@ -76,6 +80,7 @@ public class SalesDeliveryNoteController {
             @ApiResponse(responseCode = "401", description = "Unauthorized")
     }, security = @SecurityRequirement(name = "bearerAuth"))
     @PutMapping("/{transactionPoid}")
+    @AllowedAction(UserRolesRightsEnum.EDIT)
     public ResponseEntity<?> updateDeliveryNote(
             @PathVariable Long transactionPoid,
             @Valid @RequestBody UpdateSalesDeliveryNoteRequest request) {
@@ -94,6 +99,7 @@ public class SalesDeliveryNoteController {
             @ApiResponse(responseCode = "401", description = "Unauthorized")
     }, security = @SecurityRequirement(name = "bearerAuth"))
     @DeleteMapping("/{transactionPoid}")
+    @AllowedAction(UserRolesRightsEnum.DELETE)
     public ResponseEntity<?> deleteDeliveryNote(
             @PathVariable Long transactionPoid) {
 
@@ -108,6 +114,7 @@ public class SalesDeliveryNoteController {
             @ApiResponse(responseCode = "401", description = "Unauthorized")
     }, security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping("/list")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getAllDeliveryNotes(@ParameterObject Pageable pageable,
                                                  @RequestBody(required = false) FilterRequestDto filters,
                                                  @RequestParam(required = false) LocalDate startDate,
@@ -198,6 +205,7 @@ public class SalesDeliveryNoteController {
 
     @Operation(summary = "Load Quotation Items", description = "Loads items from quotation into delivery note. Requires QtnRefNo to be set. Removes items with CheckAll='N' before loading. Calls PROC_DN_LOAD_QUOTATION_DETAIL.")
     @GetMapping("/{transactionPoid}/load-quotation-items")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> loadQuotationItems(
             @PathVariable Long transactionPoid) {
 
