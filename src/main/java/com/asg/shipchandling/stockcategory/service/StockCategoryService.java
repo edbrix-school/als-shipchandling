@@ -1,10 +1,12 @@
 package com.asg.shipchandling.stockcategory.service;
 
 
+import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.stockcategory.dto.*;
 import com.asg.shipchandling.stockcategory.dto.*;
 import com.asg.shipchandling.stockcategory.dto.request.CreateStockCategoryRequest;
 import com.asg.shipchandling.stockcategory.dto.request.UpdateStockCategoryRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -38,4 +40,6 @@ public interface StockCategoryService {
     List<StockCategoryHierarchyDto> getCategoryHierarchy(Long categoryPoid, Long groupPoid);
 
     List<Map<String, Object>> getStockCategoriesHierarchical(Long groupPoid, Long parentPoid, String filterValue, boolean includeDeleted, boolean tree);
+
+    Map<String, Object> listStockCategories(String docId, FilterRequestDto request, Pageable pageable);
 }

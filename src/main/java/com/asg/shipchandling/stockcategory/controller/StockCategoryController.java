@@ -1,5 +1,6 @@
 package com.asg.shipchandling.stockcategory.controller;
 
+import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.stockcategory.dto.*;
 import com.asg.shipchandling.stockcategory.dto.request.CreateStockCategoryRequest;
 import com.asg.shipchandling.stockcategory.dto.request.UpdateStockCategoryRequest;
@@ -17,6 +18,9 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -528,11 +532,11 @@ public class StockCategoryController {
             },
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    @GetMapping("/list")
+    @PostMapping("/list")
     @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getStockCategoriesList(
             @Parameter(description = "Filter parameters", required = false)
-            @RequestParam Map<String, String> filters,
+            @Valid @RequestBody FilterRequestDto filterRequest,
             @Parameter(description = "Parent POID for hierarchical view", required = false)
             @RequestParam(required = false) Long parentPoid,
             @Parameter(description = "Return tree structure", required = false)
@@ -573,6 +577,10 @@ public class StockCategoryController {
 
             return success("Stock Category list retrieved successfully", data);
         }
+        Sort sort = sortOrder.equalsIgnoreCase("DESC")
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+        Pageable pageable = PageRequest.of(page, size, sort);
 
         // When only filterValue is provided (no parentPoid / documentId) in non-tree mode, return plain array as data
         if (hasFilter) {
@@ -586,8 +594,8 @@ public class StockCategoryController {
             List<StockCategoryTreeDto> treeStructure = stockCategoryService.getStockCategoryTree(groupPoid, null, null);
             return success("Stock category tree fetched successfully", treeStructure);
         } else {
-            List<StockCategoryMasterDto> categories = stockCategoryService.getAllStockCategories(groupPoid, null, null);
-            return success("Stock categories fetched successfully", categories);
+            Map<String, Object> result = stockCategoryService.listStockCategories(UserContext.getDocumentId(),  filterRequest,  pageable);
+            return success("Stock categories fetched successfully", result);
         }
     }
 }
