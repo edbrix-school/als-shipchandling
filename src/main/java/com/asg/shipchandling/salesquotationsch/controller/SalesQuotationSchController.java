@@ -60,7 +60,7 @@ public class SalesQuotationSchController {
                         @Valid @RequestBody CreateSalesQuotationSchRequest request) {
                 log.info("createSalesQuotationSch started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesQuotationSchHdrDto dto = quotationSchService.createSalesQuotationSch(
-                                request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid(), UserContext.getUserId());
                 log.info("createSalesQuotationSch completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success("Sales quotation sch created successfully", dto);
         }
@@ -78,7 +78,7 @@ public class SalesQuotationSchController {
 
                 log.info("getSalesQuotationSchByPoid started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesQuotationSchHdrDto dto = quotationSchService.getSalesQuotationSchByPoid(
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), includeDetails);
+                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid(), includeDetails);
                 log.info("getSalesQuotationSchByPoid completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(),
                                 UserContext.getGroupPoid());
                 return success("Sales quotation sch fetched successfully", dto);
@@ -98,7 +98,7 @@ public class SalesQuotationSchController {
 
                 log.info("updateSalesQuotationSch started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 SalesQuotationSchHdrDto dto = quotationSchService.updateSalesQuotationSch(
-                                UserContext.getGroupPoid(), transactionPoid, request, UserContext.getCompanyPoid(), UserContext.getUserId());
+                                UserContext.getGroupPoid(), transactionPoid, request, UserContext.getCompanyPoid(), UserContext.getUserPoid(), UserContext.getUserId());
                 log.info("updateSalesQuotationSch completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 return success("Sales quotation sch updated successfully", dto);
         }
