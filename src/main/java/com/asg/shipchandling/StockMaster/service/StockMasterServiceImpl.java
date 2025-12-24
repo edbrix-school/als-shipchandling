@@ -1,10 +1,17 @@
 package com.asg.shipchandling.StockMaster.service;
 
+import com.asg.common.lib.dto.FilterDto;
+import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.utility.PaginationUtil;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -53,6 +60,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class StockMasterServiceImpl implements StockMasterService {
 
     @Autowired
@@ -72,6 +80,8 @@ public class StockMasterServiceImpl implements StockMasterService {
     
     @PersistenceContext
     private EntityManager entityManager;
+
+    private final DocumentSearchService documentService;
 
     private static final Logger logger = LoggerFactory.getLogger(StockMasterServiceImpl.class);
 
@@ -1904,6 +1914,23 @@ public class StockMasterServiceImpl implements StockMasterService {
 
         logger.info("getStockDetailsByCode completed for stockCode={}", stockCode);
         return response;
+    }
+
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> listStockMaster(String docId, FilterRequestDto request, Pageable pageable) {
+        String operator = documentService.resolveOperator(request);
+        String isDeleted = documentService.resolveIsDeleted(request);
+        List<FilterDto> filters = documentService.resolveFilters(request);
+
+        RawSearchResult raw = documentService.search(docId, filters, operator, pageable, isDeleted,
+                "STOCK_NAME",   // label
+                "STOCK_POID");    // value);
+
+        Page<Map<String, Object>> page = new PageImpl<>(raw.records(), pageable, raw.totalRecords());
+
+        return PaginationUtil.wrapPage(page, raw.displayFields());
     }
 
 }

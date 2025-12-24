@@ -1,5 +1,10 @@
 package com.asg.shipchandling.stockcategory.service;
 
+import com.asg.common.lib.dto.FilterDto;
+import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.exceptions.CustomException;
 import com.asg.shipchandling.exceptions.ResourceAlreadyExistsException;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
@@ -15,6 +20,9 @@ import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +35,7 @@ import java.util.stream.Collectors;
 public class StockCategoryServiceImpl implements StockCategoryService {
 
     private final StockCategoryRepository stockCategoryRepository;
+    private final DocumentSearchService documentService;
     
     @PersistenceContext
     private EntityManager entityManager;
@@ -744,5 +753,21 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         }
         
         return item;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> listStockCategories(String docId, FilterRequestDto request, Pageable pageable) {
+        String operator = documentService.resolveOperator(request);
+        String isDeleted = documentService.resolveIsDeleted(request);
+        List<FilterDto> filters = documentService.resolveFilters(request);
+
+        RawSearchResult raw = documentService.search(docId, filters, operator, pageable, isDeleted,
+                "CATEGORY_NAME",   // label
+                "CATEGORY_POID");    // value);
+
+        Page<Map<String, Object>> page = new PageImpl<>(raw.records(), pageable, raw.totalRecords());
+
+        return PaginationUtil.wrapPage(page, raw.displayFields());
     }
 }

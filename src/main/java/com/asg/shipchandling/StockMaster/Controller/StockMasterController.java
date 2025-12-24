@@ -1,6 +1,6 @@
 package com.asg.shipchandling.StockMaster.Controller;
 
-import org.springframework.beans.BeanUtils;
+import com.asg.common.lib.dto.FilterRequestDto;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
@@ -13,24 +13,16 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Map;
 import org.springframework.data.domain.Sort;
-import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
-import com.asg.shipchandling.StockMaster.dto.CreateStockMasterDtlRequest;
 import com.asg.shipchandling.StockMaster.dto.CreateStockMasterRequest;
-import com.asg.shipchandling.StockMaster.dto.CreateStockMasterWarehouseDtlRequest;
-import com.asg.shipchandling.StockMaster.dto.StockMasterDependenciesDto;
-import com.asg.shipchandling.StockMaster.dto.StockMasterDtlDto;
 import com.asg.shipchandling.StockMaster.dto.StockMasterDto;
 import com.asg.shipchandling.StockMaster.dto.StockMasterViewResponse;
-import com.asg.shipchandling.StockMaster.dto.StockMasterWarehouseDtlDto;
 import com.asg.shipchandling.StockMaster.dto.UpdateStockMasterRequest;
 import com.asg.shipchandling.StockMaster.dto.ValidationResponse;
-import com.asg.shipchandling.StockMaster.dto.StockDetailsResponse;
 import com.asg.shipchandling.StockMaster.service.StockMasterService;
 import com.asg.common.lib.security.util.UserContext;
 
@@ -55,7 +47,7 @@ public class StockMasterController {
     @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getStockMasterById(
             @PathVariable Long stockPoid,
-            @Parameter(description = "Deprecated: Supplier and warehouse details are always included. This parameter is kept for backward compatibility only.") 
+            @Parameter(description = "Deprecated: Supplier and warehouse details are always included. This parameter is kept for backward compatibility only.")
             @RequestParam(required = false, defaultValue = "false") boolean includeDetails,
             @RequestParam(required = false) Long groupPoid) {
 
@@ -73,7 +65,7 @@ public class StockMasterController {
     @GetMapping
     @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getStockMastersRoot(
-            @RequestParam Map<String, String> filters,
+            @Valid @RequestBody FilterRequestDto filterRequest,
             @RequestParam(required = false) Long parentPoid,
             @RequestParam(defaultValue = "false") boolean tree,
             @RequestParam(required = false) String filterValue,
@@ -82,15 +74,15 @@ public class StockMasterController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "seqno") String sortBy,
             @RequestParam(defaultValue = "ASC") String sortOrder) {
-        
+
         // Delegate to the existing getStockMasters method
-        return getStockMasters(filters, parentPoid, tree, filterValue, includeDeleted, page, size, sortBy, sortOrder);
+        return getStockMasters(filterRequest, parentPoid, tree, filterValue, includeDeleted, page, size, sortBy, sortOrder);
     }
 
-    @GetMapping("/list")
+    @PostMapping("/list")
     @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getStockMasters(
-            @RequestParam Map<String, String> filters,
+            @Valid @RequestBody FilterRequestDto filterRequest,
             @RequestParam(required = false) Long parentPoid,
             @RequestParam(defaultValue = "false") boolean tree,
             @RequestParam(required = false) String filterValue,
@@ -102,26 +94,25 @@ public class StockMasterController {
 
         Long groupPoid = UserContext.getGroupPoid();
         Long companyPoid = UserContext.getCompanyPoid();
-        Long userPoid = filters.containsKey("userPoid") ? Long.parseLong(filters.get("userPoid")) : null;
-        String documentId = UserContext.getDocumentId();
+        Long userPoid = UserContext.getUserPoid();
 
         // Check if this is a tree structure request with documentId
-        if (tree && documentId != null) {
+        if (tree) {
             List<Map<String, Object>> treeStructure = stockMasterService.getStockMastersTreeStructure(
                     groupPoid, filterValue, includeDeleted, companyPoid, userPoid);
-            
+
             return com.asg.shipchandling.common.ApiResponse.success("Stock Master tree structure retrieved successfully", treeStructure);
         }
 
         // Check if this is a hierarchical view request (flat list)
-        if (documentId != null) {
+        if (parentPoid != null) {
             List<Map<String, Object>> hierarchicalList = stockMasterService.getStockMastersHierarchical(
                     groupPoid, parentPoid, filterValue, includeDeleted, companyPoid, userPoid);
-            
+
             Map<String, Object> data = Map.of(
                     "content", hierarchicalList,
                     "totalElements", hierarchicalList.size());
-            
+
             return com.asg.shipchandling.common.ApiResponse.success("Stock Master list retrieved successfully", data);
         }
 
@@ -135,12 +126,8 @@ public class StockMasterController {
             Map<String, Object> data = Map.of("categories", categories);
             return com.asg.shipchandling.common.ApiResponse.success("Stock masters tree fetched successfully", data);
         } else {
-            Page<StockMasterEntity> result = stockMasterService.getStockMasters(filters, pageable);
-            Map<String, Object> data = Map.of(
-                    "content", result.getContent(),
-                    "totalElements", result.getTotalElements(),
-                    "totalPages", result.getTotalPages());
-            return com.asg.shipchandling.common.ApiResponse.success("Stock masters list fetched successfully", data);
+            Map<String, Object> result =stockMasterService.listStockMaster(UserContext.getDocumentId(),  filterRequest,  pageable);
+            return com.asg.shipchandling.common.ApiResponse.success("Stock masters list fetched successfully", result);
         }
     }
 
@@ -183,7 +170,7 @@ public class StockMasterController {
     // @AllowedAction(UserRolesRightsEnum.VIEW)
     // public ResponseEntity<?> checkStockMasterDependencies(
     //         @PathVariable Long stockPoid) {
-        
+
     //     StockMasterDependenciesDto dto = stockMasterService.checkStockMasterDependencies(stockPoid, UserContext.getGroupPoid());
     //     return com.asg.shipchandling.common.ApiResponse.success("Dependency check completed", dto);
     // }
@@ -194,7 +181,7 @@ public class StockMasterController {
     @AllowedAction(UserRolesRightsEnum.DELETE)
     public ResponseEntity<?> deleteStockMaster(
             @PathVariable Long stockPoid) {
-        
+
         stockMasterService.deleteStockMaster(stockPoid, UserContext.getGroupPoid());
         return com.asg.shipchandling.common.ApiResponse.success("Stock item deleted successfully", null);
     }
@@ -248,7 +235,7 @@ public class StockMasterController {
         @Valid @RequestBody CreateStockMasterRequest request) {
         // Use documentId for logging/context (can be used for audit trail or validation)
         // documentId is available for use in service layer if needed
-        
+
         StockMasterDto dto = stockMasterService.createStockMaster(request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
         return com.asg.shipchandling.common.ApiResponse.success("Stock item created successfully", dto);
     }
@@ -290,7 +277,7 @@ public ResponseEntity<?> updateStockMaster(
     // public ResponseEntity<?> addSupplierDetail(
     //         @PathVariable Long stockPoid,
     //         @Valid @RequestBody CreateStockMasterDtlRequest request) {
-        
+
     //     StockMasterDtlDto dto = stockMasterService.addSupplierDetail(
     //             stockPoid, request, UserContext.getGroupPoid(), UserContext.getUserId());
     //     return com.asg.shipchandling.common.ApiResponse.success("Supplier detail added successfully", dto);
@@ -304,7 +291,7 @@ public ResponseEntity<?> updateStockMaster(
     //         @PathVariable Long stockPoid,
     //         @PathVariable Long detRowId,
     //         @Valid @RequestBody CreateStockMasterDtlRequest request){
-        
+
     //     StockMasterDtlDto dto = stockMasterService.updateSupplierDetail(
     //             stockPoid, detRowId, request, UserContext.getGroupPoid(), UserContext.getUserId());
     //     return com.asg.shipchandling.common.ApiResponse.success("Supplier detail updated successfully", dto);
@@ -317,7 +304,7 @@ public ResponseEntity<?> updateStockMaster(
     // public ResponseEntity<?> deleteSupplierDetail(
     //         @PathVariable Long stockPoid,
     //         @PathVariable Long detRowId) {
-        
+
     //     stockMasterService.deleteSupplierDetail(stockPoid, detRowId, UserContext.getGroupPoid());
     //     return com.asg.shipchandling.common.ApiResponse.success("Supplier detail deleted successfully", null);
     // }
@@ -327,7 +314,7 @@ public ResponseEntity<?> updateStockMaster(
     // @AllowedAction(UserRolesRightsEnum.VIEW)
     // public ResponseEntity<?> getSupplierDetails(
     //         @PathVariable Long stockPoid) {
-        
+
     //     List<StockMasterDtlDto> supplierDetails = stockMasterService.getSupplierDetails(stockPoid, UserContext.getGroupPoid());
     //     return com.asg.shipchandling.common.ApiResponse.success("Supplier details fetched successfully", supplierDetails);
     // }
@@ -339,7 +326,7 @@ public ResponseEntity<?> updateStockMaster(
     // public ResponseEntity<?> addWarehouseDetail(
     //         @PathVariable Long stockPoid,
     //         @Valid @RequestBody CreateStockMasterWarehouseDtlRequest request) {
-        
+
     //     StockMasterWarehouseDtlDto dto = stockMasterService.addWarehouseDetail(
     //             stockPoid, request, UserContext.getGroupPoid(), UserContext.getUserId());
     //     return com.asg.shipchandling.common.ApiResponse.success("Warehouse detail added successfully", dto);
@@ -353,7 +340,7 @@ public ResponseEntity<?> updateStockMaster(
     //         @PathVariable Long stockPoid,
     //         @PathVariable Long detRowId,
     //         @Valid @RequestBody CreateStockMasterWarehouseDtlRequest request) {
-        
+
     //     StockMasterWarehouseDtlDto dto = stockMasterService.updateWarehouseDetail(
     //             stockPoid, detRowId, request, UserContext.getGroupPoid(), UserContext.getUserId());
     //     return com.asg.shipchandling.common.ApiResponse.success("Warehouse detail updated successfully", dto);
@@ -365,7 +352,7 @@ public ResponseEntity<?> updateStockMaster(
     // public ResponseEntity<?> deleteWarehouseDetail(
     //         @PathVariable Long stockPoid,
     //         @PathVariable Long detRowId) {
-        
+
     //     stockMasterService.deleteWarehouseDetail(stockPoid, detRowId, UserContext.getGroupPoid());
     //     return com.asg.shipchandling.common.ApiResponse.success("Warehouse detail deleted successfully", null);
     // }
@@ -375,7 +362,7 @@ public ResponseEntity<?> updateStockMaster(
     // @AllowedAction(UserRolesRightsEnum.VIEW)
     // public ResponseEntity<?> getWarehouseDetails(
     //         @PathVariable Long stockPoid) {
-        
+
     //     List<StockMasterWarehouseDtlDto> warehouseDetails = stockMasterService.getWarehouseDetails(stockPoid, UserContext.getGroupPoid());
     //     return com.asg.shipchandling.common.ApiResponse.success("Warehouse details fetched successfully", warehouseDetails);
     // }
