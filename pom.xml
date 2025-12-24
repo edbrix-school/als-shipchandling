@@ -124,5 +124,15 @@
 			</plugin>
 		</plugins>
 	</build>
-
+    <profiles>
+        <profile>
+            <id>qa</id>
+            <properties>
+                <spring.profiles.active>qa</spring.profiles.active>
+            </properties>
+            <build>
+                <finalName>${project.artifactId}-${project.version}-qa</finalName>
+            </build>
+        </profile>
+    </profiles>
 </project>
