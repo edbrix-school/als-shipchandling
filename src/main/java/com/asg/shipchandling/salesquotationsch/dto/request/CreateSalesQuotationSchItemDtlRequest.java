@@ -67,5 +67,17 @@ public class CreateSalesQuotationSchItemDtlRequest {
     @Size(max = 1, message = "VAT modified must not exceed 1 character")
     private String vatModified;
     
-    private String actionType; // "UPDATE", "DELETE", or null/"CREATE" for new items
+    /**
+     * Item detail action type.
+     *
+     * PUT (/v1/sales-quotations/{transactionPoid}):
+     * - noChange/noChanges or blank: skip (no DB change)
+     * - isCreated (or CREATE): create (detRowId not required)
+     * - isUpdated (or UPDATE): update (detRowId required)
+     * - isDeleted (or DELETE): delete (detRowId required)
+     *
+     * POST (/v1/sales-quotations):
+     * - all rows are created regardless of actionType (current implementation ignores actionType on create)
+     */
+    private String actionType;
 }
