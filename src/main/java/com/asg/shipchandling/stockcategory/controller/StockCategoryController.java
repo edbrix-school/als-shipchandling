@@ -60,6 +60,7 @@ public class StockCategoryController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @PostMapping
+    @AllowedAction(UserRolesRightsEnum.CREATE)
     public ResponseEntity<?> createStockCategory(
             @Parameter(description = "Stock category creation request", required = true)
             @Valid @RequestBody CreateStockCategoryRequest request) {
@@ -103,6 +104,7 @@ public class StockCategoryController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @GetMapping("/{categoryPoid}")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getStockCategoryByPoid(
             @Parameter(description = "Category POID reference identifier", required = true)
             @PathVariable Long categoryPoid) {
@@ -146,6 +148,7 @@ public class StockCategoryController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @PutMapping("/{categoryPoid}")
+    @AllowedAction(UserRolesRightsEnum.EDIT)
     public ResponseEntity<?> updateStockCategory(
             @Parameter(description = "Category POID reference identifier", required = true)
             @PathVariable Long categoryPoid,
@@ -189,6 +192,7 @@ public class StockCategoryController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @DeleteMapping("/{categoryPoid}")
+    @AllowedAction(UserRolesRightsEnum.DELETE)
     public ResponseEntity<?> deleteStockCategory(
             @Parameter(description = "Category POID reference identifier", required = true)
             @PathVariable Long categoryPoid) {
@@ -327,6 +331,7 @@ public class StockCategoryController {
 //             security = @SecurityRequirement(name = "bearerAuth")
 //     )
     @GetMapping("/validate-code")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> validateCategoryCode(
             @Parameter(description = "Category code to validate", required = true)
             @RequestParam String categoryCode,
@@ -364,6 +369,7 @@ public class StockCategoryController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @GetMapping("/validate-name")
+    @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> validateCategoryName(
             @Parameter(description = "Category name to validate", required = true)
             @RequestParam String categoryName,
