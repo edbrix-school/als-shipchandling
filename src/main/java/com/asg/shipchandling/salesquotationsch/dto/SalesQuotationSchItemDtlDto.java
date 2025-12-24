@@ -1,5 +1,7 @@
 package com.asg.shipchandling.salesquotationsch.dto;
 
+import com.asg.shipchandling.StockMaster.dto.StockDetailsResponse;
+import com.asg.shipchandling.commonlov.dto.LovItem;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -13,12 +15,15 @@ public class SalesQuotationSchItemDtlDto {
     private Long transactionPoid;
     private Long detRowId;
     private Long stockPoid;
+    private LovItem stockPoidDetails;
+    private StockDetailsResponse.CategoryDetailDto categoryDetails;
     private Long quantity;
     private Long price;
     private Long discount;
     private Long amount;
     private String remarks;
     private Long stockUnitPoid;
+    private LovItem stockUnitDetails;
     private String createdBy;
     private Timestamp createdDate;
     private String lastmodifiedBy;
@@ -38,6 +43,7 @@ public class SalesQuotationSchItemDtlDto {
     private String refDocId;
     private Long refPoid;
     private Long taxPoid;
+    private LovItem taxPoidDetails;
     private Long taxAmount;
     private Long taxPercentage;
     private String vatModified;

@@ -22,6 +22,7 @@ import com.asg.shipchandling.common.repository.GlobalCurrencyMasterRepository;
 import com.asg.shipchandling.common.repository.GlobalCurrencyRatesRepository;
 import com.asg.shipchandling.common.entity.GlobalCurrencyMaster;
 import com.asg.shipchandling.common.entity.GlobalCurrencyRates;
+import com.asg.shipchandling.commonlov.dto.LovItem;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
 import com.asg.shipchandling.exceptions.CustomException;
 import com.asg.shipchandling.salesquotationsch.entity.SalesQuotationSchHdr;
@@ -42,9 +43,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -53,6 +59,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
+import javax.sql.DataSource;
 
 @Service
 @RequiredArgsConstructor
@@ -63,6 +71,13 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private static final String LEGACY_DOC_ID_SALES_QUOTATION = "350-101";
     private static final String LEGACY_DOC_FIELD_NAME_CUSTOMER_POID = "CustomerPoid";
 
+    // Item detail action types (PUT / update contract)
+    private static final String ACTION_NO_CHANGE = "noChange";
+    private static final String ACTION_NO_CHANGES = "noChanges";
+    private static final String ACTION_IS_CREATED = "isCreated";
+    private static final String ACTION_IS_UPDATED = "isUpdated";
+    private static final String ACTION_IS_DELETED = "isDeleted";
+
     private final SalesQuotationSchHdrRepository quotationSchHdrRepository;
     private final SalesQuotationSchItemDtlRepository itemDtlRepository;
     private final SalesQuotationSchStoredProcRepository quotationSchStoredProcRepository;
@@ -70,6 +85,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private final GlobalCurrencyMasterRepository globalCurrencyMasterRepository;
     private final GlobalCurrencyRatesRepository globalCurrencyRatesRepository;
     private final DocumentSearchService documentService;
+
+    @Autowired
+    private DataSource dataSource;
 
     @Override
     @Transactional
@@ -733,71 +751,89 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         List<CreateSalesQuotationSchItemDtlRequest> itemsToCreate = new ArrayList<>();
 
         for (CreateSalesQuotationSchItemDtlRequest item : details) {
-            String actionType = item.getActionType();
+            String actionTypeRaw = item.getActionType();
+            String actionType = actionTypeRaw == null ? "" : actionTypeRaw.trim();
 
-            if ("DELETE".equalsIgnoreCase(actionType)) {
-                if (item.getDetRowId() != null) {
-                    try {
-                        itemDtlRepository
-                                .deleteById(new SalesQuotationSchItemDtlId(transactionPoid, item.getDetRowId()));
-                        log.debug("Deleted item detail transactionPoid={} detRowId={}", transactionPoid,
-                                item.getDetRowId());
-                    } catch (Exception ex) {
-                        log.warn("Failed to delete item detail transactionPoid={} detRowId={}: {}",
-                                transactionPoid, item.getDetRowId(), ex.getMessage());
-                    }
-                }
-            } else if ("UPDATE".equalsIgnoreCase(actionType)) {
-                if (item.getDetRowId() != null) {
-                    try {
-                        SalesQuotationSchItemDtl existingItem = itemDtlRepository
-                                .findById(new SalesQuotationSchItemDtlId(transactionPoid, item.getDetRowId()))
-                                .orElse(null);
-
-                        if (existingItem != null) {
-                            existingItem.setStockPoid(item.getStockPoid());
-                            existingItem.setQuantity(item.getQuantity());
-                            existingItem.setPrice(item.getPrice());
-                            existingItem.setDiscount(item.getDiscount());
-                            existingItem.setAmount(item.getAmount());
-                            existingItem.setRemarks(item.getRemarks());
-                            existingItem.setStockUnitPoid(item.getStockUnitPoid());
-                            existingItem.setAdjQuantity(item.getAdjQuantity());
-                            existingItem.setCost(item.getCost());
-                            existingItem.setLastRate1(item.getLastRate1());
-                            existingItem.setLastRate2(item.getLastRate2());
-                            existingItem.setDeliverySelect(item.getDeliverySelect());
-                            existingItem.setDnRefNo(item.getDnRefNo());
-                            existingItem.setGpAmount(item.getGpAmount());
-                            existingItem.setGpPercentage(item.getGpPercentage());
-                            existingItem.setTotCost(item.getTotCost());
-                            existingItem.setPurchasePrice(item.getPurchasePrice());
-                            existingItem.setPurchaseQty(item.getPurchaseQty());
-                            existingItem.setItemType(item.getItemType());
-                            existingItem.setRefDocId(item.getRefDocId());
-                            existingItem.setRefPoid(item.getRefPoid());
-                            existingItem.setTaxPoid(item.getTaxPoid());
-                            existingItem.setTaxAmount(item.getTaxAmount());
-                            existingItem.setTaxPercentage(item.getTaxPercentage());
-                            existingItem.setVatModified(item.getVatModified());
-                            existingItem.setLastmodifiedBy(userId);
-
-                            itemDtlRepository.save(existingItem);
-                            log.debug("Updated item detail transactionPoid={} detRowId={}", transactionPoid,
-                                    item.getDetRowId());
-                        } else {
-                            itemsToCreate.add(item);
-                        }
-                    } catch (Exception ex) {
-                        log.warn("Failed to update item detail transactionPoid={} detRowId={}: {}",
-                                transactionPoid, item.getDetRowId(), ex.getMessage());
-                    }
-                } else {
-                    itemsToCreate.add(item);
-                }
-            } else {
-                itemsToCreate.add(item);
+            // noChange/noChanges (or blank): skip processing on PUT
+            if (actionType.isEmpty()
+                    || ACTION_NO_CHANGE.equalsIgnoreCase(actionType)
+                    || ACTION_NO_CHANGES.equalsIgnoreCase(actionType)) {
+                continue;
             }
+
+            // DELETE
+            if (ACTION_IS_DELETED.equalsIgnoreCase(actionType) || "DELETE".equalsIgnoreCase(actionType)) {
+                if (item.getDetRowId() == null) {
+                    throw new CustomException("actionType '" + actionType + "' requires detRowId");
+                }
+
+                SalesQuotationSchItemDtlId id = new SalesQuotationSchItemDtlId(transactionPoid, item.getDetRowId());
+                SalesQuotationSchItemDtl existingItem = itemDtlRepository.findById(id).orElse(null);
+                if (existingItem == null) {
+                    throw new CustomException("Item detail not found for delete. detRowId=" + item.getDetRowId());
+                }
+                itemDtlRepository.deleteById(id);
+                log.debug("Deleted item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
+                continue;
+            }
+
+            // UPDATE
+            if (ACTION_IS_UPDATED.equalsIgnoreCase(actionType) || "UPDATE".equalsIgnoreCase(actionType)) {
+                if (item.getDetRowId() == null) {
+                    throw new CustomException("actionType '" + actionType + "' requires detRowId");
+                }
+
+                SalesQuotationSchItemDtl existingItem = itemDtlRepository
+                        .findById(new SalesQuotationSchItemDtlId(transactionPoid, item.getDetRowId()))
+                        .orElse(null);
+
+                if (existingItem == null) {
+                    // strict: do not create on update, to avoid accidental duplicates
+                    throw new CustomException("Item detail not found for update. detRowId=" + item.getDetRowId());
+                }
+
+                existingItem.setStockPoid(item.getStockPoid());
+                existingItem.setQuantity(item.getQuantity());
+                existingItem.setPrice(item.getPrice());
+                existingItem.setDiscount(item.getDiscount());
+                existingItem.setAmount(item.getAmount());
+                existingItem.setRemarks(item.getRemarks());
+                existingItem.setStockUnitPoid(item.getStockUnitPoid());
+                existingItem.setAdjQuantity(item.getAdjQuantity());
+                existingItem.setCost(item.getCost());
+                existingItem.setLastRate1(item.getLastRate1());
+                existingItem.setLastRate2(item.getLastRate2());
+                existingItem.setDeliverySelect(item.getDeliverySelect());
+                existingItem.setDnRefNo(item.getDnRefNo());
+                existingItem.setGpAmount(item.getGpAmount());
+                existingItem.setGpPercentage(item.getGpPercentage());
+                existingItem.setTotCost(item.getTotCost());
+                existingItem.setPurchasePrice(item.getPurchasePrice());
+                existingItem.setPurchaseQty(item.getPurchaseQty());
+                existingItem.setItemType(item.getItemType());
+                existingItem.setRefDocId(item.getRefDocId());
+                existingItem.setRefPoid(item.getRefPoid());
+                existingItem.setTaxPoid(item.getTaxPoid());
+                existingItem.setTaxAmount(item.getTaxAmount());
+                existingItem.setTaxPercentage(item.getTaxPercentage());
+                existingItem.setVatModified(item.getVatModified());
+                existingItem.setLastmodifiedBy(userId);
+
+                itemDtlRepository.save(existingItem);
+                log.debug("Updated item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
+                continue;
+            }
+
+            // CREATE
+            if (ACTION_IS_CREATED.equalsIgnoreCase(actionType) || "CREATE".equalsIgnoreCase(actionType)) {
+                itemsToCreate.add(item);
+                continue;
+            }
+
+            // Unknown actionType => reject (prevents silent creates)
+            throw new CustomException("Invalid actionType '" + actionType
+                    + "'. Allowed: " + ACTION_NO_CHANGE + ", " + ACTION_IS_CREATED + ", "
+                    + ACTION_IS_UPDATED + ", " + ACTION_IS_DELETED);
         }
 
         if (!itemsToCreate.isEmpty()) {
@@ -867,10 +903,21 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         BeanUtils.copyProperties(quotationSch, dto);
 
         if (includeDetails) {
+            Map<Long, LovItem> stockCache = new HashMap<>();
+            Map<Long, LovItem> stockUnitCache = new HashMap<>();
+            Map<Long, LovItem> taxCache = new HashMap<>();
+            Map<Long, StockDetailsResponse.CategoryDetailDto> categoryCache = new HashMap<>();
+
             List<SalesQuotationSchItemDtl> itemDetails = itemDtlRepository
                     .findByTransactionPoid(quotationSch.getTransactionPoid());
             dto.setItemDetails(itemDetails.stream()
-                    .map(this::convertItemDtlToDto)
+                    .map(item -> convertItemDtlToDto(
+                            item,
+                            quotationSch.getCompanyPoid(),
+                            stockCache,
+                            stockUnitCache,
+                            taxCache,
+                            categoryCache))
                     .collect(Collectors.toList()));
         }
 
@@ -881,6 +928,145 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         SalesQuotationSchItemDtlDto dto = new SalesQuotationSchItemDtlDto();
         BeanUtils.copyProperties(itemDtl, dto);
         return dto;
+    }
+
+    private SalesQuotationSchItemDtlDto convertItemDtlToDto(
+            SalesQuotationSchItemDtl itemDtl,
+            Long companyPoid,
+            Map<Long, LovItem> stockCache,
+            Map<Long, LovItem> stockUnitCache,
+            Map<Long, LovItem> taxCache,
+            Map<Long, StockDetailsResponse.CategoryDetailDto> categoryCache) {
+
+        SalesQuotationSchItemDtlDto dto = new SalesQuotationSchItemDtlDto();
+        BeanUtils.copyProperties(itemDtl, dto);
+
+        Long stockPoid = itemDtl.getStockPoid();
+        if (stockPoid != null) {
+            dto.setStockPoidDetails(stockCache.computeIfAbsent(stockPoid, this::getStockPoidDetails));
+            dto.setCategoryDetails(categoryCache.computeIfAbsent(stockPoid,
+                    sp -> getStockCategoryDetails(sp, companyPoid)));
+        }
+
+        Long stockUnitPoid = itemDtl.getStockUnitPoid();
+        if (stockUnitPoid != null) {
+            dto.setStockUnitDetails(stockUnitCache.computeIfAbsent(stockUnitPoid, this::getStockUnitDetails));
+        }
+
+        Long taxPoid = itemDtl.getTaxPoid();
+        if (taxPoid != null) {
+            dto.setTaxPoidDetails(taxCache.computeIfAbsent(taxPoid, this::getTaxPoidDetails));
+        }
+
+        return dto;
+    }
+
+    private StockDetailsResponse.CategoryDetailDto getStockCategoryDetails(Long stockPoid, Long companyPoid) {
+        if (stockPoid == null) {
+            return null;
+        }
+        try {
+            StockDetailsResponse stockDetails = stockMasterService.getStockDetails(stockPoid, companyPoid);
+            return stockDetails != null ? stockDetails.getCategoryDetails() : null;
+        } catch (Exception e) {
+            // Do not fail quotation GET if stock details cannot be loaded
+            log.warn("Failed to load stock category details for stockPoid={}: {}", stockPoid, e.getMessage());
+            return null;
+        }
+    }
+
+    private LovItem getStockPoidDetails(Long stockPoid) {
+        if (stockPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping stock LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT STOCK_POID AS POID, STOCK_CODE AS CODE, STOCK_NAME AS DESCRIPTION " +
+                "FROM STOCK_MASTER WHERE STOCK_POID = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, stockPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description, description, poid, null);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch stock LOV for stockPoid {}", stockPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getStockUnitDetails(Long stockUnitPoid) {
+        if (stockUnitPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping stock unit LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT STOCK_UNIT_POID AS POID, STOCK_UNIT_CODE AS CODE, STOCK_UNIT_CODE AS DESCRIPTION " +
+                "FROM STOCK_UNIT_MASTER WHERE STOCK_UNIT_POID = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, stockUnitPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description, description, poid, null);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch stock unit LOV for stockUnitPoid {}", stockUnitPoid, ex);
+            return null;
+        }
+    }
+
+    private LovItem getTaxPoidDetails(Long taxPoid) {
+        if (taxPoid == null) {
+            return null;
+        }
+        if (dataSource == null) {
+            log.warn("DataSource is not configured; skipping tax LOV fetch");
+            return null;
+        }
+
+        final String sql = "SELECT TAX_POID AS POID, TAX_CODE AS CODE, TAX_NAME AS DESCRIPTION " +
+                "FROM GLOBAL_TAX_MASTER " +
+                "WHERE TAX_POID = ? " +
+                "AND NVL(ACTIVE, 'Y') = 'Y' " +
+                "AND NVL(DELETED, 'N') = 'N' " +
+                "AND TAX_TYPE = 'OUTPUT_VAT'";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setLong(1, taxPoid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    Long poid = rs.getLong("POID");
+                    String code = rs.getString("CODE");
+                    String description = rs.getString("DESCRIPTION");
+                    return new LovItem(poid, code, description, description, poid, null);
+                }
+            }
+            return null;
+        } catch (SQLException ex) {
+            log.error("Failed to fetch tax LOV for taxPoid {}", taxPoid, ex);
+            return null;
+        }
     }
 
     /**
@@ -996,10 +1182,21 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
         // Fetch item details if requested
         if (includeDetails) {
+            Map<Long, LovItem> stockCache = new HashMap<>();
+            Map<Long, LovItem> stockUnitCache = new HashMap<>();
+            Map<Long, LovItem> taxCache = new HashMap<>();
+            Map<Long, StockDetailsResponse.CategoryDetailDto> categoryCache = new HashMap<>();
+
             List<SalesQuotationSchItemDtl> itemDetails = itemDtlRepository
                     .findByTransactionPoid(dto.getTransactionPoid());
             dto.setItemDetails(itemDetails.stream()
-                    .map(this::convertItemDtlToDto)
+                    .map(item -> convertItemDtlToDto(
+                            item,
+                            dto.getCompanyPoid(),
+                            stockCache,
+                            stockUnitCache,
+                            taxCache,
+                            categoryCache))
                     .collect(Collectors.toList()));
         }
 
