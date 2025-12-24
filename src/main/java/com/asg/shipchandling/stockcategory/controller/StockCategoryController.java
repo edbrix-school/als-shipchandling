@@ -555,19 +555,18 @@ public class StockCategoryController {
             @RequestParam(defaultValue = "ASC") String sortOrder) {
 
         Long groupPoid = UserContext.getGroupPoid();
-        String documentId = UserContext.getDocumentId();
 
         boolean hasFilter = filterValue != null && !filterValue.trim().isEmpty();
 
         // Tree structure (similar to Stock Master tree): return plain array as data
-        if (tree && (documentId != null || hasFilter)) {
+        if (tree && hasFilter) {
             List<Map<String, Object>> treeStructure = stockCategoryService.getStockCategoriesHierarchical(
                     groupPoid, parentPoid, filterValue, includeDeleted, true);
             return success("Stock Category tree structure retrieved successfully", treeStructure);
         }
 
         // Hierarchical list (flat, pagination-like): wrap in { content, totalElements }
-        if (parentPoid != null || documentId != null) {
+        if (parentPoid != null) {
             List<Map<String, Object>> hierarchicalList = stockCategoryService.getStockCategoriesHierarchical(
                     groupPoid, parentPoid, filterValue, includeDeleted, tree);
 

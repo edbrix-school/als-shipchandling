@@ -95,10 +95,9 @@ public class StockMasterController {
         Long groupPoid = UserContext.getGroupPoid();
         Long companyPoid = UserContext.getCompanyPoid();
         Long userPoid = UserContext.getUserPoid();
-        String documentId = UserContext.getDocumentId();
 
         // Check if this is a tree structure request with documentId
-        if (tree && documentId != null) {
+        if (tree) {
             List<Map<String, Object>> treeStructure = stockMasterService.getStockMastersTreeStructure(
                     groupPoid, filterValue, includeDeleted, companyPoid, userPoid);
 
@@ -106,7 +105,7 @@ public class StockMasterController {
         }
 
         // Check if this is a hierarchical view request (flat list)
-        if (documentId != null) {
+        if (parentPoid != null) {
             List<Map<String, Object>> hierarchicalList = stockMasterService.getStockMastersHierarchical(
                     groupPoid, parentPoid, filterValue, includeDeleted, companyPoid, userPoid);
 
