@@ -561,14 +561,14 @@ public class StockCategoryController {
         // Tree structure (similar to Stock Master tree): return plain array as data
         if (tree && hasFilter) {
             List<Map<String, Object>> treeStructure = stockCategoryService.getStockCategoriesHierarchical(
-                    groupPoid, parentPoid, filterValue, includeDeleted, true);
+                    groupPoid, parentPoid, filterValue, includeDeleted, true, sortBy, sortOrder);
             return success("Stock Category tree structure retrieved successfully", treeStructure);
         }
 
         // Hierarchical list (flat, pagination-like): wrap in { content, totalElements }
         if (parentPoid != null) {
             List<Map<String, Object>> hierarchicalList = stockCategoryService.getStockCategoriesHierarchical(
-                    groupPoid, parentPoid, filterValue, includeDeleted, tree);
+                    groupPoid, parentPoid, filterValue, includeDeleted, tree, sortBy, sortOrder);
 
             Map<String, Object> data = Map.of(
                     "content", hierarchicalList,
@@ -584,13 +584,13 @@ public class StockCategoryController {
         // When only filterValue is provided (no parentPoid / documentId) in non-tree mode, return plain array as data
         if (hasFilter) {
             List<Map<String, Object>> hierarchicalList = stockCategoryService.getStockCategoriesHierarchical(
-                    groupPoid, null, filterValue, includeDeleted, tree);
+                    groupPoid, null, filterValue, includeDeleted, tree, sortBy, sortOrder);
             return success("Stock Category list retrieved successfully", hierarchicalList);
         }
 
         // Default behavior: return flat list or tree based on tree parameter
         if (tree) {
-            List<StockCategoryTreeDto> treeStructure = stockCategoryService.getStockCategoryTree(groupPoid, null, null);
+            List<StockCategoryTreeDto> treeStructure = stockCategoryService.getStockCategoryTree(groupPoid, null, null, sortBy, sortOrder);
             return success("Stock category tree fetched successfully", treeStructure);
         } else {
             Map<String, Object> result = stockCategoryService.listStockCategories(UserContext.getDocumentId(),  filterRequest,  pageable);
