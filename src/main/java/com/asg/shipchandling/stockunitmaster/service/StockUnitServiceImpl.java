@@ -13,8 +13,11 @@ import com.asg.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
 import com.asg.shipchandling.stockunitmaster.dto.UnitDependenciesDto;
 import com.asg.shipchandling.stockunitmaster.entity.StockUnitMaster;
 import com.asg.shipchandling.stockunitmaster.repository.StockUnitRepository;
+import com.asg.shipchandling.stockunitmaster.util.StockUnitConstraintErrorHandler;
+import com.asg.shipchandling.stockunitmaster.exception.StockUnitConstraintViolationException;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
 import org.slf4j.Logger;
@@ -68,10 +71,26 @@ public class StockUnitServiceImpl implements StockUnitService {
 
         StockUnitMaster entity = mapRequestToEntity(request);
 
-        StockUnitMaster responseEntity = stockUnitRepository.save(entity);
-        BeanUtils.copyProperties(responseEntity, responseDto);
-
-        return responseDto;
+        try {
+            StockUnitMaster responseEntity = stockUnitRepository.save(entity);
+            BeanUtils.copyProperties(responseEntity, responseDto);
+            return responseDto;
+        } catch (DataIntegrityViolationException ex) {
+            StockUnitConstraintErrorHandler.handleConstraintViolation(ex);
+            // If handleConstraintViolation doesn't throw, re-throw original exception
+            throw ex;
+        } catch (StockUnitConstraintViolationException ex) {
+            // Re-throw as ResourceAlreadyExistsException for unique constraints
+            if ("UNIQUE".equals(ex.getViolationType()) || "PK".equals(ex.getViolationType())) {
+                throw new ResourceAlreadyExistsException(ex.getMessage(), null);
+            }
+            // For foreign key parent not found, throw as ResourceNotFoundException
+            if ("FK_PARENT".equals(ex.getViolationType())) {
+                throw new ResourceNotFoundException(ex.getMessage());
+            }
+            // For other cases, throw as ResourceAlreadyExistsException
+            throw new ResourceAlreadyExistsException(ex.getMessage(), null);
+        }
     }
 
     private StockUnitMaster mapRequestToEntity(CreateStockUnitMasterRequest request) {
@@ -101,13 +120,13 @@ public class StockUnitServiceImpl implements StockUnitService {
         if (stockUnitRepository.existsByStockUnitCodeIgnoreCaseAndStockUnitPoidNot(
                 stockUnitMasterDto.getStockUnitCode(),
                 stockUnitMasterDto.getStockUnitPoid())) {
-            throw new ResourceAlreadyExistsException("Stock Unit Code already exists, please enter unique code.",
+            throw new ResourceAlreadyExistsException("Unit Code already exists, please enter unique code.",
                     stockUnitMasterDto.getStockUnitCode());
         }
         if (stockUnitRepository.existsByStockUnitNameIgnoreCaseAndStockUnitPoidNot(
                 stockUnitMasterDto.getStockUnitName(),
                 stockUnitMasterDto.getStockUnitPoid())) {
-            throw new ResourceAlreadyExistsException("Stock Unit Name already exists, please enter unique name.",
+            throw new ResourceAlreadyExistsException("Unit Name already exists, please enter unique name.",
                     stockUnitMasterDto.getStockUnitName());
         }
 
@@ -137,23 +156,40 @@ public class StockUnitServiceImpl implements StockUnitService {
         }
         existingStockUnit.setLastModifiedDate(LocalDateTime.now());
 
-        StockUnitMaster updatedStockUnit = stockUnitRepository.save(existingStockUnit);
-        StockUnitMasterDto responseDto = new StockUnitMasterDto();
-        BeanUtils.copyProperties(updatedStockUnit, responseDto);
+        try {
+            StockUnitMaster updatedStockUnit = stockUnitRepository.save(existingStockUnit);
+            StockUnitMasterDto responseDto = new StockUnitMasterDto();
+            BeanUtils.copyProperties(updatedStockUnit, responseDto);
 
-        responseDto.setActive(updatedStockUnit.getActive());
+            responseDto.setActive(updatedStockUnit.getActive());
 
-        // Set audit fields
-        responseDto.setCreatedBy(updatedStockUnit.getCreatedBy());
-        responseDto.setCreatedDate(updatedStockUnit.getCreatedDate() != null
-                ? updatedStockUnit.getCreatedDate().atOffset(java.time.ZoneOffset.UTC)
-                : null);
-        responseDto.setLastModifiedBy(updatedStockUnit.getLastModifiedBy());
-        responseDto.setLastModifiedDate(updatedStockUnit.getLastModifiedDate() != null
-                ? updatedStockUnit.getLastModifiedDate().atOffset(java.time.ZoneOffset.UTC)
-                : null);
+            // Set audit fields
+            responseDto.setCreatedBy(updatedStockUnit.getCreatedBy());
+            responseDto.setCreatedDate(updatedStockUnit.getCreatedDate() != null
+                    ? updatedStockUnit.getCreatedDate().atOffset(java.time.ZoneOffset.UTC)
+                    : null);
+            responseDto.setLastModifiedBy(updatedStockUnit.getLastModifiedBy());
+            responseDto.setLastModifiedDate(updatedStockUnit.getLastModifiedDate() != null
+                    ? updatedStockUnit.getLastModifiedDate().atOffset(java.time.ZoneOffset.UTC)
+                    : null);
 
-        return responseDto;
+            return responseDto;
+        } catch (DataIntegrityViolationException ex) {
+            StockUnitConstraintErrorHandler.handleConstraintViolation(ex);
+            // If handleConstraintViolation doesn't throw, re-throw original exception
+            throw ex;
+        } catch (StockUnitConstraintViolationException ex) {
+            // Re-throw as ResourceAlreadyExistsException for unique constraints
+            if ("UNIQUE".equals(ex.getViolationType()) || "PK".equals(ex.getViolationType())) {
+                throw new ResourceAlreadyExistsException(ex.getMessage(), null);
+            }
+            // For foreign key parent not found, throw as ResourceNotFoundException
+            if ("FK_PARENT".equals(ex.getViolationType())) {
+                throw new ResourceNotFoundException(ex.getMessage());
+            }
+            // For other cases, throw as ResourceAlreadyExistsException
+            throw new ResourceAlreadyExistsException(ex.getMessage(), null);
+        }
     }
 
     @Override
@@ -166,7 +202,21 @@ public class StockUnitServiceImpl implements StockUnitService {
         existingStockunit.setActive("N");
         existingStockunit.setLastModifiedDate(LocalDateTime.now());
         existingStockunit.setLastModifiedBy(existingStockunit.getLastModifiedBy());
-        stockUnitRepository.save(existingStockunit);
+        
+        try {
+            stockUnitRepository.save(existingStockunit);
+        } catch (DataIntegrityViolationException ex) {
+            StockUnitConstraintErrorHandler.handleConstraintViolation(ex);
+            // If handleConstraintViolation doesn't throw, re-throw original exception
+            throw ex;
+        } catch (StockUnitConstraintViolationException ex) {
+            // For foreign key child found (trying to delete when referenced), throw as conflict
+            if ("FK_CHILD".equals(ex.getViolationType())) {
+                throw new ResourceAlreadyExistsException(ex.getMessage(), null);
+            }
+            // Re-throw other constraint violations
+            throw new ResourceAlreadyExistsException(ex.getMessage(), null);
+        }
     }
 
     // @Override
@@ -291,7 +341,7 @@ public Page<StockUnitMasterDto> listStockUnitsUsingParams(
     public UnitDependenciesDto checkUnitDependencies(Long stockUnitPoid, Long groupPoid) {
         StockUnitMaster unit = stockUnitRepository
                 .findByStockUnitPoidAndGroupPoid(stockUnitPoid, groupPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Stock Unit", "stockUnitPoid", stockUnitPoid));
+                .orElseThrow(() -> new ResourceNotFoundException("Unit", "UnitPoid", stockUnitPoid));
 
         Long stockItemCount = stockUnitRepository.countStockItemsByStockUnitPoid(stockUnitPoid);
 

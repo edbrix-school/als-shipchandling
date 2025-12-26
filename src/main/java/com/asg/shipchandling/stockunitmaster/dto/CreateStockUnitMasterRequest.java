@@ -12,15 +12,15 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CreateStockUnitMasterRequest {
 
-    @NotBlank(message = "Stock unit code is required")
-    @Size(max = 20, message = "Stock unit code must not exceed 20 characters")
+    @NotBlank(message = "Unit code is required")
+    @Size(max = 20, message = "Unit code must not exceed 20 characters")
     private String stockUnitCode;
 
-    @NotBlank(message = "Stock unit name is required")
-    @Size(max = 100, message = "Stock unit name must not exceed 100 characters")
+    @NotBlank(message = "Unit name is required")
+    @Size(max = 100, message = "Unit name must not exceed 100 characters")
     private String stockUnitName;
 
-    @Size(max = 100, message = "Stock unit name 2 must not exceed 100 characters")
+    @Size(max = 100, message = "Unit name 2 must not exceed 100 characters")
     private String stockUnitName2;
 
     @NotNull(message = "Group POID is required")
