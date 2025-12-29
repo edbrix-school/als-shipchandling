@@ -46,7 +46,7 @@ public class StockUnitServiceImpl implements StockUnitService {
     @Override
     public StockUnitMasterDto getStockUnitByPoid(Long stockUnitPoid) {
         if (!stockUnitRepository.existsByStockUnitPoid(stockUnitPoid)) {
-            throw new ResourceNotFoundException("StockUnit", "stockUnitPoid", stockUnitPoid);
+            throw new ResourceNotFoundException("Unit", "UnitPoid", stockUnitPoid);
         }
         StockUnitMasterDto stockUnitMasterDto = new StockUnitMasterDto();
 
@@ -62,7 +62,7 @@ public class StockUnitServiceImpl implements StockUnitService {
 
         // Validate stock unit name uniqueness
         if (stockUnitRepository.existsBystockUnitNameIgnoreCaseAndGroupPoid(request.getStockUnitName(), request.getGroupPoid())) {
-            throw new ResourceAlreadyExistsException("stockUnitName", request.getStockUnitName());
+            throw new ResourceAlreadyExistsException("UnitName", request.getStockUnitName());
         }
 
         // Validate group exists
@@ -114,7 +114,7 @@ public class StockUnitServiceImpl implements StockUnitService {
     public StockUnitMasterDto updateStockUnit(Long stockUnitPoid, StockUnitMasterDto stockUnitMasterDto) {
         StockUnitMaster existingStockUnit = stockUnitRepository.findByStockUnitPoid(stockUnitPoid);
         if (!stockUnitRepository.existsByStockUnitPoid(stockUnitPoid)) {
-            throw new ResourceNotFoundException("StockUnit", "stockUnitPoid", stockUnitPoid);
+            throw new ResourceNotFoundException("Unit", "UnitPoid", stockUnitPoid);
         }
 
         if (stockUnitRepository.existsByStockUnitCodeIgnoreCaseAndStockUnitPoidNot(
@@ -196,7 +196,7 @@ public class StockUnitServiceImpl implements StockUnitService {
     public void softDeleteStockUnit(Long stockUnitPoid) {
         StockUnitMaster existingStockunit = stockUnitRepository.findByStockUnitPoid(stockUnitPoid);
         if (!stockUnitRepository.existsByStockUnitPoid(stockUnitPoid)) {
-            throw new ResourceNotFoundException("StockUnit", "stockUnitPoid", stockUnitPoid);
+            throw new ResourceNotFoundException("Unit", "UnitPoid", stockUnitPoid);
         }
         existingStockunit.setDeleted("Y");
         existingStockunit.setActive("N");
