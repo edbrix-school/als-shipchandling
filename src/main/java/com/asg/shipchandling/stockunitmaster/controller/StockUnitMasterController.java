@@ -60,7 +60,7 @@ public class StockUnitMasterController {
 
                 StockUnitMasterDto response = stockUnitService.createStockUnit(request);
 
-                return success("Stock unit created successfully", response);
+                return success("Unit created successfully", response);
         }
 
         @Operation(summary = "Update Stock unit details", description = "Updates the details of an existing Stock unit identified by its ID", responses = {
@@ -87,7 +87,7 @@ public class StockUnitMasterController {
                 stockUnitMasterDto.setStockUnitPoid(stockUnitPoid);
 
                 StockUnitMasterDto updatedCountry = stockUnitService.updateStockUnit(stockUnitPoid, stockUnitMasterDto);
-                return success("Stock unit updated successfully", updatedCountry);
+                return success("Unit updated successfully", updatedCountry);
         }
 
         @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, description = """
@@ -118,7 +118,7 @@ public class StockUnitMasterController {
         @PostMapping("/list")
         @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> listStockUnits(@Valid @RequestBody com.asg.common.lib.dto.FilterRequestDto filterRequest, @ParameterObject Pageable pageable) {
-                return success("Stock units fetched successfully", stockUnitService.listStockUnits(UserContext.getDocumentId(),filterRequest, pageable));
+                return success("Units fetched successfully", stockUnitService.listStockUnits(UserContext.getDocumentId(),filterRequest, pageable));
         }
 
         @Operation(summary = "Soft delete a stock unit", description = "Marks a stock unit as deleted without permanently removing its data", responses = {
@@ -133,7 +133,7 @@ public class StockUnitMasterController {
 
                 stockUnitService.softDeleteStockUnit(stockUnitPoid);
                 // Only return a simple message now:
-                return success("Stock unit has been soft deleted successfully");
+                return success("Unit has been soft deleted successfully");
         }
 
         @Operation(summary = "Validate stock unit code uniqueness", description = "Validates if a stock unit code is unique. Used for real-time validation in UI.", responses = {
@@ -149,11 +149,11 @@ public class StockUnitMasterController {
                 boolean isUnique = stockUnitService.validateStockUnitCode(stockUnitCode, UserContext.getGroupPoid(),
                                 excludeStockUnitPoid);
                 if (isUnique) {
-                        return success("Stock unit code is available",
-                                        new ValidationResponse(isUnique, "Stock unit code is available"));
+                        return success("Unit code is available",
+                                        new ValidationResponse(isUnique, "Unit code is available"));
                 } else {
-                        return success("Stock unit code already exists",
-                                        new ValidationResponse(isUnique, "Stock unit code already exists"));
+                        return success("Unit code already exists",
+                                        new ValidationResponse(isUnique, "Unit code already exists"));
                 }
         }
 
@@ -171,11 +171,11 @@ public class StockUnitMasterController {
                                 excludeStockUnitPoid);
 
                 if (isUnique) {
-                        return success("Stock unit name is available",
-                                        new ValidationResponse(isUnique, "Stock unit name is available"));
+                        return success("Unit name is available",
+                                        new ValidationResponse(isUnique, "Unit name is available"));
                 } else {
-                        return success("Stock unit name already exists",
-                                        new ValidationResponse(isUnique, "Stock unit name already exists"));
+                        return success("Unit name already exists",
+                                        new ValidationResponse(isUnique, "Unit name already exists"));
                 }
         }
 

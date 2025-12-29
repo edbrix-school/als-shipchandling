@@ -250,14 +250,16 @@ public class StockCategoryServiceImpl implements StockCategoryService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<StockCategoryTreeDto> getStockCategoryTree(Long groupPoid, String categoryType, String active) {
-        log.info("getStockCategoryTree service started for groupPoid={} categoryType={} active={}", groupPoid, categoryType, active);
+    public List<StockCategoryTreeDto> getStockCategoryTree(Long groupPoid, String categoryType, String active, String sortBy, String sortOrder) {
+        log.info("getStockCategoryTree service started for groupPoid={} categoryType={} active={} sortBy={} sortOrder={}", 
+                groupPoid, categoryType, active, sortBy, sortOrder);
         List<StockCategoryMaster> categories = stockCategoryRepository.findParentCategoriesByGroupPoid(groupPoid);
 
         List<StockCategoryTreeDto> result = categories.stream()
                 .filter(c -> categoryType == null || categoryType.equals(c.getCategoryType()))
                 .filter(c -> active == null || active.equals(c.getActive()))
                 .map(this::convertToTreeDto)
+                .sorted(getTreeDtoComparator(sortBy, sortOrder))
                 .collect(Collectors.toList());
         log.info("getStockCategoryTree service completed for groupPoid={} nodeCount={}", groupPoid, result.size());
         return result;
@@ -579,9 +581,9 @@ public class StockCategoryServiceImpl implements StockCategoryService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> getStockCategoriesHierarchical(Long groupPoid, Long parentPoid, String filterValue, boolean includeDeleted, boolean tree) {
-        log.info("getStockCategoriesHierarchical service started for groupPoid={} parentPoid={} filterValue={} includeDeleted={} tree={}", 
-                groupPoid, parentPoid, filterValue, includeDeleted, tree);
+    public List<Map<String, Object>> getStockCategoriesHierarchical(Long groupPoid, Long parentPoid, String filterValue, boolean includeDeleted, boolean tree, String sortBy, String sortOrder) {
+        log.info("getStockCategoriesHierarchical service started for groupPoid={} parentPoid={} filterValue={} includeDeleted={} tree={} sortBy={} sortOrder={}", 
+                groupPoid, parentPoid, filterValue, includeDeleted, tree, sortBy, sortOrder);
         
         List<Map<String, Object>> result = new ArrayList<>();
         boolean hasFilter = filterValue != null && !filterValue.trim().isEmpty();
@@ -616,7 +618,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                 
                 if (tree && childCount > 0) {
                     // Add children for tree structure only if it has children
-                    List<Map<String, Object>> children = getChildrenForCategory(category.getCategoryPoid(), groupPoid, 1, includeDeleted, filterValue, categoryMap, tree);
+                    List<Map<String, Object>> children = getChildrenForCategory(category.getCategoryPoid(), groupPoid, 1, includeDeleted, filterValue, categoryMap, tree, sortBy, sortOrder);
                     item.put("children", children);
 
                     // If filtering, keep node when it matches or has matching descendants
@@ -629,6 +631,9 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                 }
                 result.add(item);
             }
+            
+            // Sort the result list
+            result.sort(getMapComparator(sortBy, sortOrder));
         } else {
             // Check if parentPoid is a category
             Optional<StockCategoryMaster> parentCategory = stockCategoryRepository.findByCategoryPoidAndGroupPoid(parentPoid, groupPoid);
@@ -655,7 +660,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                     
                     if (tree && childCount > 0) {
                         // Add children for tree structure only if it has children
-                        List<Map<String, Object>> children = getChildrenForCategory(category.getCategoryPoid(), groupPoid, level + 1, includeDeleted, filterValue, categoryMap, tree);
+                        List<Map<String, Object>> children = getChildrenForCategory(category.getCategoryPoid(), groupPoid, level + 1, includeDeleted, filterValue, categoryMap, tree, sortBy, sortOrder);
                         item.put("children", children);
 
                         if (hasFilter && children.isEmpty() && !matchesCategory(category, searchPattern)) {
@@ -666,6 +671,9 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                     }
                     result.add(item);
                 }
+                
+                // Sort the result list
+                result.sort(getMapComparator(sortBy, sortOrder));
             }
         }
         
@@ -673,7 +681,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         return result;
     }
     
-    private List<Map<String, Object>> getChildrenForCategory(Long categoryPoid, Long groupPoid, int level, boolean includeDeleted, String filterValue, Map<Long, StockCategoryMaster> categoryMap, boolean tree) {
+    private List<Map<String, Object>> getChildrenForCategory(Long categoryPoid, Long groupPoid, int level, boolean includeDeleted, String filterValue, Map<Long, StockCategoryMaster> categoryMap, boolean tree, String sortBy, String sortOrder) {
         List<Map<String, Object>> children = new ArrayList<>();
         
         List<StockCategoryMaster> childCategories;
@@ -695,7 +703,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
             
             if (tree && childCount > 0) {
                 // Recursively add children only if it has children
-                List<Map<String, Object>> grandChildren = getChildrenForCategory(category.getCategoryPoid(), groupPoid, level + 1, includeDeleted, filterValue, categoryMap, tree);
+                List<Map<String, Object>> grandChildren = getChildrenForCategory(category.getCategoryPoid(), groupPoid, level + 1, includeDeleted, filterValue, categoryMap, tree, sortBy, sortOrder);
                 item.put("children", grandChildren);
                 
                 // If filterValue is provided and this category doesn't match, but has matching children, still include it
@@ -709,6 +717,9 @@ public class StockCategoryServiceImpl implements StockCategoryService {
             }
             children.add(item);
         }
+        
+        // Sort the children list
+        children.sort(getMapComparator(sortBy, sortOrder));
         
         return children;
     }
@@ -741,6 +752,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         item.put("categoryName", category.getCategoryName());
         item.put("type", type);
         item.put("level", level);
+        item.put("seqno", category.getSeqno() != null ? category.getSeqno() : 0);
         item.put("active", category.getActive() != null && "Y".equalsIgnoreCase(category.getActive()));
         item.put("deleted", category.getDeleted() != null && "Y".equalsIgnoreCase(category.getDeleted()));
         item.put("groupPoid", category.getGroupPoid());
@@ -753,6 +765,125 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         }
         
         return item;
+    }
+
+    /**
+     * Comparator for sorting Map<String, Object> results based on sortBy and sortOrder
+     */
+    private java.util.Comparator<Map<String, Object>> getMapComparator(String sortBy, String sortOrder) {
+        boolean isDesc = sortOrder != null && sortOrder.equalsIgnoreCase("DESC");
+        String field = (sortBy != null && !sortBy.trim().isEmpty()) ? sortBy : "seqno";
+        
+        return (a, b) -> {
+            Object valA = getMapValue(a, field);
+            Object valB = getMapValue(b, field);
+            
+            int comparison = compareValues(valA, valB);
+            return isDesc ? -comparison : comparison;
+        };
+    }
+
+    /**
+     * Comparator for sorting StockCategoryTreeDto results based on sortBy and sortOrder
+     */
+    private java.util.Comparator<StockCategoryTreeDto> getTreeDtoComparator(String sortBy, String sortOrder) {
+        boolean isDesc = sortOrder != null && sortOrder.equalsIgnoreCase("DESC");
+        String field = (sortBy != null && !sortBy.trim().isEmpty()) ? sortBy : "seqno";
+        
+        return (a, b) -> {
+            Object valA = getTreeDtoValue(a, field);
+            Object valB = getTreeDtoValue(b, field);
+            
+            int comparison = compareValues(valA, valB);
+            return isDesc ? -comparison : comparison;
+        };
+    }
+
+    /**
+     * Get value from Map for sorting
+     */
+    private Object getMapValue(Map<String, Object> map, String field) {
+        // Map field names to actual keys in the map
+        String key = mapFieldToKey(field);
+        return map.get(key);
+    }
+
+    /**
+     * Get value from StockCategoryTreeDto for sorting
+     */
+    private Object getTreeDtoValue(StockCategoryTreeDto dto, String field) {
+        switch (field.toLowerCase()) {
+            case "categorycode":
+            case "code":
+                return dto.getCode();
+            case "categoryname":
+            case "description":
+                return dto.getDescription();
+            case "seqno":
+                return dto.getSeqno() != null ? dto.getSeqno() : 0;
+            case "categorypoid":
+                return dto.getCategoryPoid();
+            case "itemtype":
+            case "categorytype":
+                return dto.getItemType();
+            default:
+                return dto.getSeqno() != null ? dto.getSeqno() : 0;
+        }
+    }
+
+    /**
+     * Map sort field name to actual key in the Map
+     */
+    private String mapFieldToKey(String field) {
+        switch (field.toLowerCase()) {
+            case "categorycode":
+                return "categoryCode";
+            case "categoryname":
+                return "categoryName";
+            case "seqno":
+                return "seqno";
+            case "categorypoid":
+                return "categoryPoid";
+            case "type":
+            case "categorytype":
+                return "type";
+            default:
+                return "seqno";
+        }
+    }
+
+    /**
+     * Compare two values for sorting (handles nulls, numbers, strings)
+     */
+    @SuppressWarnings("unchecked")
+    private int compareValues(Object valA, Object valB) {
+        if (valA == null && valB == null) return 0;
+        if (valA == null) return -1;
+        if (valB == null) return 1;
+        
+        // Handle numbers
+        if (valA instanceof Number && valB instanceof Number) {
+            double numA = ((Number) valA).doubleValue();
+            double numB = ((Number) valB).doubleValue();
+            return Double.compare(numA, numB);
+        }
+        
+        // Handle strings
+        if (valA instanceof String && valB instanceof String) {
+            return ((String) valA).compareToIgnoreCase((String) valB);
+        }
+        
+        // Handle Comparable
+        if (valA instanceof Comparable && valB instanceof Comparable) {
+            try {
+                return ((Comparable<Object>) valA).compareTo(valB);
+            } catch (ClassCastException e) {
+                return valA.toString().compareToIgnoreCase(valB.toString());
+            }
+        }
+        
+        // Fallback to string comparison
+        return valA.toString().compareToIgnoreCase(valB.toString());
     }
 
     @Override
