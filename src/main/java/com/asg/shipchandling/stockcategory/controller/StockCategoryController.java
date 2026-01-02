@@ -553,6 +553,7 @@ public class StockCategoryController {
             @RequestParam(defaultValue = "ASC") String sortOrder) {
 
         Long groupPoid = UserContext.getGroupPoid();
+        String documentId = UserContext.getDocumentId();
 
         boolean hasFilter = filterValue != null && !filterValue.trim().isEmpty();
 
@@ -564,7 +565,7 @@ public class StockCategoryController {
         }
 
         // Hierarchical list (flat, pagination-like): wrap in { content, totalElements }
-        if (parentPoid != null) {
+        if (documentId != null) {
             List<Map<String, Object>> hierarchicalList = stockCategoryService.getStockCategoriesHierarchical(
                     groupPoid, parentPoid, filterValue, includeDeleted, tree, sortBy, sortOrder);
 
