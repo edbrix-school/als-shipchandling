@@ -1,7 +1,8 @@
 package com.asg.shipchandling.StockMaster.Controller;
 
-import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -61,28 +62,11 @@ public class StockMasterController {
         return com.asg.shipchandling.common.ApiResponse.success("Stock master fetched successfully", response);
     }
 
-    @Operation(summary = "Get Stock Masters List", description = "Retrieves a paginated list of stock masters with optional filtering and tree structure support")
-    @GetMapping
-    @AllowedAction(UserRolesRightsEnum.VIEW)
-    public ResponseEntity<?> getStockMastersRoot(
-            @Valid @RequestBody FilterRequestDto filterRequest,
-            @RequestParam(required = false) Long parentPoid,
-            @RequestParam(defaultValue = "false") boolean tree,
-            @RequestParam(required = false) String filterValue,
-            @RequestParam(defaultValue = "false") boolean includeDeleted,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "seqno") String sortBy,
-            @RequestParam(defaultValue = "ASC") String sortOrder) {
-
-        // Delegate to the existing getStockMasters method
-        return getStockMasters(filterRequest, parentPoid, tree, filterValue, includeDeleted, page, size, sortBy, sortOrder);
-    }
 
     @GetMapping("/list")
     @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getStockMasters(
-            @Valid @RequestBody(required = false) FilterRequestDto filterRequest,
+            @RequestParam Map<String, String> filters,
             @RequestParam(required = false) Long parentPoid,
             @RequestParam(defaultValue = "false") boolean tree,
             @RequestParam(required = false) String filterValue,
@@ -94,10 +78,11 @@ public class StockMasterController {
 
         Long groupPoid = UserContext.getGroupPoid();
         Long companyPoid = UserContext.getCompanyPoid();
-        Long userPoid = UserContext.getUserPoid();
+        Long userPoid = filters.containsKey("userPoid") ? Long.parseLong(filters.get("userPoid")) : null;
+        String documentId = UserContext.getDocumentId();
 
         // Check if this is a tree structure request with documentId
-        if (tree) {
+        if (tree && documentId != null) {
             List<Map<String, Object>> treeStructure = stockMasterService.getStockMastersTreeStructure(
                     groupPoid, filterValue, includeDeleted, companyPoid, userPoid);
 
@@ -105,7 +90,7 @@ public class StockMasterController {
         }
 
         // Check if this is a hierarchical view request (flat list)
-        if (parentPoid != null) {
+        if (documentId != null) {
             List<Map<String, Object>> hierarchicalList = stockMasterService.getStockMastersHierarchical(
                     groupPoid, parentPoid, filterValue, includeDeleted, companyPoid, userPoid);
 
@@ -126,8 +111,12 @@ public class StockMasterController {
             Map<String, Object> data = Map.of("categories", categories);
             return com.asg.shipchandling.common.ApiResponse.success("Stock masters tree fetched successfully", data);
         } else {
-            Map<String, Object> result =stockMasterService.listStockMaster(UserContext.getDocumentId(),  filterRequest,  pageable);
-            return com.asg.shipchandling.common.ApiResponse.success("Stock masters list fetched successfully", result);
+            Page<StockMasterEntity> result = stockMasterService.getStockMasters(filters, pageable);
+            Map<String, Object> data = Map.of(
+                    "content", result.getContent(),
+                    "totalElements", result.getTotalElements(),
+                    "totalPages", result.getTotalPages());
+            return com.asg.shipchandling.common.ApiResponse.success("Stock masters list fetched successfully", data);
         }
     }
 
