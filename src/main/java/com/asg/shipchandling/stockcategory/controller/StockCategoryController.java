@@ -532,7 +532,7 @@ public class StockCategoryController {
             },
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    @PostMapping("/list")
+    @GetMapping("/list")
     @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getStockCategoriesList(
             @Parameter(description = "Filter parameters", required = false)
