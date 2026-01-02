@@ -79,7 +79,7 @@ public class StockMasterController {
         return getStockMasters(filterRequest, parentPoid, tree, filterValue, includeDeleted, page, size, sortBy, sortOrder);
     }
 
-    @PostMapping("/list")
+    @GetMapping("/list")
     @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getStockMasters(
             @Valid @RequestBody FilterRequestDto filterRequest,
