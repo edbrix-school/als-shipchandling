@@ -71,7 +71,4 @@ public interface StockMasterService {
     StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid);
     
     StockDetailsResponse getStockDetailsByCode(String stockCode, Long companyPoid);
-
-    Map<String, Object> listStockMaster(String docId, FilterRequestDto request, Pageable pageable);
-
 }

@@ -1915,22 +1915,4 @@ public class StockMasterServiceImpl implements StockMasterService {
         logger.info("getStockDetailsByCode completed for stockCode={}", stockCode);
         return response;
     }
-
-
-    @Override
-    @Transactional(readOnly = true)
-    public Map<String, Object> listStockMaster(String docId, FilterRequestDto request, Pageable pageable) {
-        String operator = documentService.resolveOperator(request);
-        String isDeleted = documentService.resolveIsDeleted(request);
-        List<FilterDto> filters = documentService.resolveFilters(request);
-
-        RawSearchResult raw = documentService.search(docId, filters, operator, pageable, isDeleted,
-                "STOCK_NAME",   // label
-                "STOCK_POID");    // value);
-
-        Page<Map<String, Object>> page = new PageImpl<>(raw.records(), pageable, raw.totalRecords());
-
-        return PaginationUtil.wrapPage(page, raw.displayFields());
-    }
-
 }

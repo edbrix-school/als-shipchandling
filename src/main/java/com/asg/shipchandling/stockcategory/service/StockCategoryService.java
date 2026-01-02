@@ -39,6 +39,4 @@ public interface StockCategoryService {
     List<StockCategoryHierarchyDto> getCategoryHierarchy(Long categoryPoid, Long groupPoid);
 
     List<Map<String, Object>> getStockCategoriesHierarchical(Long groupPoid, Long parentPoid, String filterValue, boolean includeDeleted, boolean tree, String sortBy, String sortOrder);
-
-    Map<String, Object> listStockCategories(String docId, FilterRequestDto request, Pageable pageable);
 }

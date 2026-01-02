@@ -885,20 +885,4 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         // Fallback to string comparison
         return valA.toString().compareToIgnoreCase(valB.toString());
     }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Map<String, Object> listStockCategories(String docId, FilterRequestDto request, Pageable pageable) {
-        String operator = documentService.resolveOperator(request);
-        String isDeleted = documentService.resolveIsDeleted(request);
-        List<FilterDto> filters = documentService.resolveFilters(request);
-
-        RawSearchResult raw = documentService.search(docId, filters, operator, pageable, isDeleted,
-                "CATEGORY_NAME",   // label
-                "CATEGORY_POID");    // value);
-
-        Page<Map<String, Object>> page = new PageImpl<>(raw.records(), pageable, raw.totalRecords());
-
-        return PaginationUtil.wrapPage(page, raw.displayFields());
-    }
 }
