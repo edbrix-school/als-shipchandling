@@ -536,7 +536,7 @@ public class StockCategoryController {
     @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getStockCategoriesList(
             @Parameter(description = "Filter parameters", required = false)
-            @Valid @RequestBody FilterRequestDto filterRequest,
+            @Valid @RequestBody(required = false) FilterRequestDto filterRequest,
             @Parameter(description = "Parent POID for hierarchical view", required = false)
             @RequestParam(required = false) Long parentPoid,
             @Parameter(description = "Return tree structure", required = false)

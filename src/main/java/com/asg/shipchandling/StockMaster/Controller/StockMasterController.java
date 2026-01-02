@@ -82,7 +82,7 @@ public class StockMasterController {
     @GetMapping("/list")
     @AllowedAction(UserRolesRightsEnum.VIEW)
     public ResponseEntity<?> getStockMasters(
-            @Valid @RequestBody FilterRequestDto filterRequest,
+            @Valid @RequestBody(required = false) FilterRequestDto filterRequest,
             @RequestParam(required = false) Long parentPoid,
             @RequestParam(defaultValue = "false") boolean tree,
             @RequestParam(required = false) String filterValue,
