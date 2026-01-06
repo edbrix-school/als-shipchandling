@@ -12,11 +12,12 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,16 +34,36 @@ public class ApRequestForQuotationController {
 
         private final ApRequestForQtnService rfqService;
 
-        @Operation(summary = "Get all RFQs", description = "Returns paginated list of RFQs with optional filters. Supports pagination with page and size parameters.", responses = {
+        @Operation(summary = "Get all RFQs", description = "Returns paginated list of RFQs with optional filters. Supports pagination with page and size parameters, and sorting with sortBy and sortOrder parameters.", responses = {
                         @ApiResponse(responseCode = "200", description = "Task list fetched successfully", content = @Content(schema = @Schema(implementation = Page.class)))
         })
         @AllowedAction(UserRolesRightsEnum.VIEW)
         @PostMapping("/list")
-        public ResponseEntity<?> listRequestForQuotations(@ParameterObject Pageable pageable,
+        public ResponseEntity<?> listRequestForQuotations(@RequestParam(defaultValue = "0") int page,
+                                                          @RequestParam(defaultValue = "20") int size,
+                                                          @RequestParam(required = false) String sortBy,
+                                                          @RequestParam(required = false, defaultValue = "ASC") String sortOrder,
                                                           @RequestBody(required = false) FilterRequestDto filters,
                                                           @RequestParam(required = false) LocalDate startDate,
                                                           @RequestParam(required = false) LocalDate endDate) {
+                // Create Pageable with sorting
+                Pageable pageable = createPageable(page, size, sortBy, sortOrder);
                 return success("RFQs fetched successfully", rfqService.listRequestForQuotations(UserContext.getDocumentId(), filters, startDate, endDate, pageable));
+        }
+
+        /**
+         * Create Pageable from page, size, sortBy, and sortOrder parameters
+         */
+        private Pageable createPageable(int page, int size, String sortBy, String sortOrder) {
+                if (sortBy != null && !sortBy.trim().isEmpty()) {
+                        Sort.Direction direction = "DESC".equalsIgnoreCase(sortOrder) 
+                                ? Sort.Direction.DESC 
+                                : Sort.Direction.ASC;
+                        Sort sort = Sort.by(direction, sortBy);
+                        return PageRequest.of(page, size, sort);
+                }
+                // No sorting specified, return Pageable without sort
+                return PageRequest.of(page, size);
         }
 
         @Operation(summary = "Create Request For Quotation", description = "Creates a new RFQ document. DocRef is auto-generated. Calls stored procedure after save.", responses = {

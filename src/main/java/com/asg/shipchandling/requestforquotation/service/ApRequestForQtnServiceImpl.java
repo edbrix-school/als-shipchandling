@@ -379,12 +379,13 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             itemDtl.setStockUnitPoid(stockUnitPoid);
 
             itemDtl.setQty(detail.getQty());
-            itemDtl.setSupplierPoid(detail.getSupplierPoid());
+            Long normalizedSupplierPoid = normalizeSupplierPoid(detail.getSupplierPoid());
+            itemDtl.setSupplierPoid(normalizedSupplierPoid);
             itemDtl.setPrice(detail.getPrice());
 
-            if (detail.getSupplierPoid() != null) {
+            if (normalizedSupplierPoid != null) {
                 BigDecimal lastPrice = getLastPriceFromProcedure(detail.getStockPoid(), stockUnitPoid,
-                        detail.getSupplierPoid(), groupPoid, companyPoid, userId);
+                        normalizedSupplierPoid, groupPoid, companyPoid, userId);
                 if (lastPrice != null) {
                     itemDtl.setLastRate(lastPrice);
                 }
@@ -651,12 +652,13 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             }
         }
         itemDtl.setStockUnitPoid(stockUnitPoid);
-        itemDtl.setSupplierPoid(request.getSupplierPoid());
+        Long normalizedSupplierPoid = normalizeSupplierPoid(request.getSupplierPoid());
+        itemDtl.setSupplierPoid(normalizedSupplierPoid);
 
         // Get last price if stock, unit, and supplier are all set
-        if (request.getSupplierPoid() != null) {
+        if (normalizedSupplierPoid != null) {
             BigDecimal lastPrice = getLastPriceFromProcedure(request.getStockPoid(), stockUnitPoid,
-                    request.getSupplierPoid(), groupPoid, companyPoid, userId);
+                    normalizedSupplierPoid, groupPoid, companyPoid, userId);
             if (lastPrice != null) {
                 itemDtl.setLastRate(lastPrice);
             }
@@ -684,10 +686,12 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         if (itemDtl.getRefPoid() != null && !itemDtl.getRefPoid().isEmpty() &&
                 Long.parseLong(itemDtl.getRefPoid()) > 0) {
             // StockPoid, StockUnitPoid, SupplierPoid become read-only
+            Long normalizedRequestSupplierPoid = normalizeSupplierPoid(request.getSupplierPoid());
+            Long normalizedItemSupplierPoid = normalizeSupplierPoid(itemDtl.getSupplierPoid());
             if (!request.getStockPoid().equals(itemDtl.getStockPoid()) ||
                     !request.getStockUnitPoid().equals(itemDtl.getStockUnitPoid()) ||
-                    (request.getSupplierPoid() != null
-                            && !request.getSupplierPoid().equals(itemDtl.getSupplierPoid()))) {
+                    (normalizedRequestSupplierPoid != null
+                            && !normalizedRequestSupplierPoid.equals(normalizedItemSupplierPoid))) {
                 throw new CustomException(
                         "Cannot modify stock, unit, or supplier. Item is linked to another document.");
             }
@@ -715,13 +719,14 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         if (itemDtl.getRefDocId() == null || !itemDtl.getRefDocId().contains("400")) {
             itemDtl.setPrice(request.getPrice());
         }
-        itemDtl.setSupplierPoid(request.getSupplierPoid());
+        Long normalizedSupplierPoid = normalizeSupplierPoid(request.getSupplierPoid());
+        itemDtl.setSupplierPoid(normalizedSupplierPoid);
         itemDtl.setRemarks(request.getRemarks());
 
         // Update last price if stock, unit, and supplier are all set
-        if (request.getSupplierPoid() != null) {
+        if (normalizedSupplierPoid != null) {
             BigDecimal lastPrice = getLastPriceFromProcedure(request.getStockPoid(), stockUnitPoid,
-                    request.getSupplierPoid(), groupPoid, companyPoid, userId);
+                    normalizedSupplierPoid, groupPoid, companyPoid, userId);
             if (lastPrice != null) {
                 itemDtl.setLastRate(lastPrice);
             }
@@ -914,6 +919,15 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         return value != null && !value.trim().isEmpty();
     }
 
+    /**
+     * Normalize supplierPoid: convert 0 to null to avoid foreign key constraint violations
+     * @param supplierPoid the supplier POID to normalize
+     * @return null if supplierPoid is null or 0, otherwise returns the supplierPoid
+     */
+    private Long normalizeSupplierPoid(Long supplierPoid) {
+        return (supplierPoid == null || supplierPoid == 0) ? null : supplierPoid;
+    }
+
     private void validateCurrencyCode(String currencyCode, Long groupPoid, Long companyPoid) {
         if (!hasText(currencyCode)) {
             return;
@@ -1083,12 +1097,13 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             }
         }
         itemDtl.setStockUnitPoid(stockUnitPoid);
-        itemDtl.setSupplierPoid(request.getSupplierPoid());
+        Long normalizedSupplierPoid = normalizeSupplierPoid(request.getSupplierPoid());
+        itemDtl.setSupplierPoid(normalizedSupplierPoid);
 
         // Get last price if stock, unit, and supplier are all set
-        if (request.getSupplierPoid() != null) {
+        if (normalizedSupplierPoid != null) {
             BigDecimal lastPrice = getLastPriceFromProcedure(request.getStockPoid(), stockUnitPoid,
-                    request.getSupplierPoid(), groupPoid, companyPoid, normalizedUserId);
+                    normalizedSupplierPoid, groupPoid, companyPoid, normalizedUserId);
             if (lastPrice != null) {
                 itemDtl.setLastRate(lastPrice);
             }
@@ -1140,10 +1155,12 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         if (itemDtl.getRefPoid() != null && !itemDtl.getRefPoid().isEmpty() &&
                 Long.parseLong(itemDtl.getRefPoid()) > 0) {
             // StockPoid, StockUnitPoid, SupplierPoid become read-only
+            Long normalizedRequestSupplierPoid = normalizeSupplierPoid(request.getSupplierPoid());
+            Long normalizedItemSupplierPoid = normalizeSupplierPoid(itemDtl.getSupplierPoid());
             if (!request.getStockPoid().equals(itemDtl.getStockPoid()) ||
                     !request.getStockUnitPoid().equals(itemDtl.getStockUnitPoid()) ||
-                    (request.getSupplierPoid() != null
-                            && !request.getSupplierPoid().equals(itemDtl.getSupplierPoid()))) {
+                    (normalizedRequestSupplierPoid != null
+                            && !normalizedRequestSupplierPoid.equals(normalizedItemSupplierPoid))) {
                 throw new CustomException(
                         "Cannot modify stock, unit, or supplier. Item is linked to another document.");
             }
@@ -1171,14 +1188,15 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         if (itemDtl.getRefDocId() == null || !itemDtl.getRefDocId().contains("400")) {
             itemDtl.setPrice(request.getPrice());
         }
-        itemDtl.setSupplierPoid(request.getSupplierPoid());
+        Long normalizedSupplierPoid = normalizeSupplierPoid(request.getSupplierPoid());
+        itemDtl.setSupplierPoid(normalizedSupplierPoid);
         itemDtl.setRemarks(request.getRemarks());
-        itemDtl.setLastmodifiedBy(userId);
+        itemDtl.setLastmodifiedBy(normalizedUserId);
 
         // Update last price if stock, unit, and supplier are all set
-        if (request.getSupplierPoid() != null) {
+        if (normalizedSupplierPoid != null) {
             BigDecimal lastPrice = getLastPriceFromProcedure(request.getStockPoid(), stockUnitPoid,
-                    request.getSupplierPoid(), groupPoid, companyPoid, normalizedUserId);
+                    normalizedSupplierPoid, groupPoid, companyPoid, normalizedUserId);
             if (lastPrice != null) {
                 itemDtl.setLastRate(lastPrice);
             }
