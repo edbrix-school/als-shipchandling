@@ -42,12 +42,12 @@ public class ApRequestForQuotationController {
         public ResponseEntity<?> listRequestForQuotations(@RequestParam(defaultValue = "0") int page,
                                                           @RequestParam(defaultValue = "20") int size,
                                                           @RequestParam(required = false) String sortBy,
-                                                          @RequestParam(required = false, defaultValue = "ASC") String sortOrder,
+                                                          @RequestParam(required = false, defaultValue = "ASC") String sortDir,
                                                           @RequestBody(required = false) FilterRequestDto filters,
                                                           @RequestParam(required = false) LocalDate startDate,
                                                           @RequestParam(required = false) LocalDate endDate) {
                 // Create Pageable with sorting
-                Pageable pageable = createPageable(page, size, sortBy, sortOrder);
+                Pageable pageable = createPageable(page, size, sortBy, sortDir);
                 return success("RFQs fetched successfully", rfqService.listRequestForQuotations(UserContext.getDocumentId(), filters, startDate, endDate, pageable));
         }
 
