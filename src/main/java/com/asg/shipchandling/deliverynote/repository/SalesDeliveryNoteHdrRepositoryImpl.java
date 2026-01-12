@@ -116,7 +116,7 @@ public class SalesDeliveryNoteHdrRepositoryImpl {
         entity.setCompanyPoid(((Number) row[3]).longValue());
         entity.setCustomerPoid(((Number) row[4]).longValue());
         entity.setCurrencyCode(toStringSafe(row[5]));
-        entity.setCurrencyRate(row[6] != null ? (BigDecimal) row[6] : null);
+        entity.setCurrencyRate(row[6] != null ? new BigDecimal(row[6].toString()) : null);
         entity.setDeliveryStatus(toStringSafe(row[7]));
         entity.setSalesmanPoid(row[8] != null ? ((Number) row[8]).longValue() : null);
         entity.setPaymentMode(toStringSafe(row[9]));
