@@ -1,6 +1,7 @@
 package com.asg.shipchandling.deliverynote.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -31,6 +32,7 @@ public class SalesDeliveryNoteHdrDto {
     private String voyageRef;
     private Long portPoid;
     private String portDescription;
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private String qtnRefNo;
     private String vesselAgent;
     private String deliveryToAddress;
