@@ -9,6 +9,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import com.asg.shipchandling.deliverynote.dto.SalesDeliveryNoteItemDtlId;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 
 @Entity
@@ -34,7 +35,7 @@ public class SalesDeliveryNoteItemDtl {
     private Long quantity;
 
     @Column(name = "PRICE")
-    private Long price;
+    private BigDecimal price;
 
     @Column(name = "DISCOUNT")
     private Long discount;

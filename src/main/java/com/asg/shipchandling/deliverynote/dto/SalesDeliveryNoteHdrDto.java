@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.util.List;
 
@@ -20,7 +20,7 @@ public class SalesDeliveryNoteHdrDto {
     private Long customerPoid;
     private String customerName; // From joined SALES_CUSTOMER_MASTER table
     private String currencyCode;
-    private Long currencyRate;
+    private BigDecimal currencyRate;
     private String deliveryStatus;
     private Long salesmanPoid;
     private String paymentMode;

@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.util.List;
 
@@ -115,7 +116,7 @@ public class SalesDeliveryNoteHdrRepositoryImpl {
         entity.setCompanyPoid(((Number) row[3]).longValue());
         entity.setCustomerPoid(((Number) row[4]).longValue());
         entity.setCurrencyCode(toStringSafe(row[5]));
-        entity.setCurrencyRate(row[6] != null ? ((Number) row[6]).longValue() : null);
+        entity.setCurrencyRate(row[6] != null ? new BigDecimal(row[6].toString()) : null);
         entity.setDeliveryStatus(toStringSafe(row[7]));
         entity.setSalesmanPoid(row[8] != null ? ((Number) row[8]).longValue() : null);
         entity.setPaymentMode(toStringSafe(row[9]));

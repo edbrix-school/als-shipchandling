@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.math.BigDecimal;
 
 @Data
 @NoArgsConstructor
@@ -60,7 +61,7 @@ public class CreateSalesDeliveryNoteRequest {
     private Long principalPoid;
 
     @NotNull(message = "Currency rate is required")
-    private Long currencyRate;
+    private BigDecimal currencyRate;
 
     @Size(max = 500, message = "Remarks must not exceed 500 characters")
     private String remarks;

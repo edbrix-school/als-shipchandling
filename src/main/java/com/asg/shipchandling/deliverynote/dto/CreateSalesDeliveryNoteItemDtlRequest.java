@@ -3,6 +3,7 @@ package com.asg.shipchandling.deliverynote.dto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.math.BigDecimal;
 
 @Data
 @NoArgsConstructor
@@ -13,7 +14,7 @@ class CreateSalesDeliveryNoteItemDtlRequest {
     private Long stockPoid;
     private Long stockUnitPoid;
     private Long quantity;
-    private Long price;
+    private BigDecimal price;
     private Long discount;
     private Long amount;
     private String remarks;

@@ -43,6 +43,7 @@ import java.sql.ResultSet;
 
 import javax.sql.DataSource;
 import java.sql.SQLException;
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.LocalDate;
@@ -872,7 +873,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         dto.setCompanyPoid(getLongValue(row[index++]));
         dto.setCustomerPoid(getLongValue(row[index++]));
         dto.setCurrencyCode(getStringValue(row[index++]));
-        dto.setCurrencyRate(getLongValue(row[index++]));
+        dto.setCurrencyRate(getBigDecimalValue(row[index++]));
         dto.setDeliveryStatus(getStringValue(row[index++]));
         dto.setSalesmanPoid(getLongValue(row[index++]));
         dto.setPaymentMode(getStringValue(row[index++]));
@@ -1035,6 +1036,19 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         return null;
     }
 
+    private BigDecimal getBigDecimalValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof BigDecimal) {
+            return (BigDecimal) value;
+        }
+        if (value instanceof Number) {
+            return new BigDecimal(value.toString()); // NO precision loss
+        }
+        return new BigDecimal(value.toString());
+    }
+
     // Placeholder for stored procedure call (implemented in Part 2)
     // private void callUpdateDeletedDetailsProcedure1(Long groupPoid, Long
     // companyPoid,
@@ -1139,8 +1153,8 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
                         Long qty = rs.getLong("QUANTITY");
                         dto.setQuantity(qty);
 
-                        Long price = rs.getLong("PRICE");
-                        dto.setPrice(price);
+                        Object priceObj = rs.getObject("PRICE");
+                        dto.setPrice(priceObj != null ? getBigDecimalValue(priceObj) : null);
 
                         Long discount = rs.getLong("DISCOUNT");
                         dto.setDiscount(discount);
