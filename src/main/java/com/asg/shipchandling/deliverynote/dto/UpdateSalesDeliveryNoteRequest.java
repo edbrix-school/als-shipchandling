@@ -61,6 +61,8 @@ public class UpdateSalesDeliveryNoteRequest {
     @Size(max = 1, message = "Description print flag must be Y or N")
     private String descriptionPrintYn;
 
+    private Long printDivisionPoid;
+
     @Size(max = 500, message = "Remarks must not exceed 500 characters")
     private String remarks;
 
