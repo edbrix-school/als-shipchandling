@@ -644,14 +644,6 @@ public class SalesQuotationShipService {
         
         // Validate status before allowing delete
         validateStatusForDelete(header.getQuotationStatus());
-        
-        // Perform soft delete (set Deleted = 'Y')
-       // header.setDeleted("Y");
-        
-        // Update audit fields
-        /*LocalDateTime now = LocalDateTime.now();
-        header.setLastModifiedBy(userId);
-        header.setLastModifiedDate(now);*/
         documentDeleteService.deleteDocument(
                 header.getTransactionPoid().longValueExact(),
                 "SALES_QUOTATION_SHIP_HDR",
@@ -659,6 +651,13 @@ public class SalesQuotationShipService {
                 deleteReasonDto,
                 header.getTransactionDate()
         );
+        // Perform soft delete (set Deleted = 'Y')
+        header.setDeleted("Y");
+
+        // Update audit fields
+        LocalDateTime now = LocalDateTime.now();
+        header.setLastModifiedBy(userId);
+        header.setLastModifiedDate(now);
 
         
         // Save the soft-deleted quotation

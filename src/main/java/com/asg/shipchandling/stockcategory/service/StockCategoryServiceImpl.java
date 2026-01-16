@@ -263,9 +263,6 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                             childCount, stockItemCount));
         }
 
-        // Soft delete
-        //category.setDeleted("Y");
-       // stockCategoryRepository.save(category);
         documentDeleteService.deleteDocument(
                 categoryPoid,
                 "STOCK_CATEGORY_MASTER",
@@ -273,6 +270,9 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                 deleteReasonDto,
                 LocalDate.now()
         );
+        // Soft delete
+        category.setDeleted("Y");
+        stockCategoryRepository.save(category);
         log.info("deleteStockCategory completed with soft delete for categoryPoid={}", categoryPoid);
     }
 
