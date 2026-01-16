@@ -50,9 +50,6 @@ public class CreateSalesDeliveryNoteRequest {
     @Size(max = 50, message = "Port description must not exceed 50 characters")
     private String portDescription;
 
-    @Size(max = 25, message = "Quotation reference must not exceed 25 characters")
-    private String qtnRefNo; // Optional - can be set to link to a quotation
-
     private Long printDivisionPoid;
 
     @Size(max = 100, message = "Party type must not exceed 100 characters")

@@ -10,6 +10,7 @@ import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
 import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.service.PrintService;
+import com.asg.common.lib.security.util.UserContext;
 import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.commonlov.service.LovService;
 import com.asg.shipchandling.deliverynote.dto.*;
@@ -98,7 +99,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
         // Create entity
         SalesDeliveryNoteHdr deliveryNote = new SalesDeliveryNoteHdr();
-        BeanUtils.copyProperties(request, deliveryNote);
+        BeanUtils.copyProperties(request, deliveryNote, "qtnRefNo");
         deliveryNote.setCompanyPoid(companyPoid);
         deliveryNote.setCreatedBy(userId);
         deliveryNote.setLastmodifiedBy(userId);
@@ -164,18 +165,11 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
             throw new ResourceNotFoundException("Delivery Note", "transactionPoid", transactionPoid);
         }
 
-        // Fetch delivery note with all LOV details in a single query
-        List<Object[]> results = deliveryNoteHdrRepository.findDeliveryNoteWithDetails(transactionPoid, companyPoid);
-        SalesDeliveryNoteHdrDto dto;
-
-        if (!results.isEmpty()) {
-            Object[] row = results.get(0);
-            dto = populateDeliveryNoteFromQueryResult(row, includeDetails != null && includeDetails);
-        } else {
-            // Fallback: use entity if query fails
-            dto = convertToDto(deliveryNote, includeDetails != null && includeDetails);
-            setEmptyLovDetails(dto);
-        }
+        // Convert entity to DTO
+        SalesDeliveryNoteHdrDto dto = convertToDto(deliveryNote, includeDetails != null && includeDetails);
+        
+        // Populate LOV details using separate queries
+        populateLovDetails(dto, companyPoid);
 
         log.info("getDeliveryNoteByPoid completed for transactionPoid={} companyPoid={}",
                 transactionPoid, companyPoid);
@@ -1032,6 +1026,138 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         dto.setVesselDetails(createEmptyLovDetail());
         dto.setPrintDivisionDetails(createEmptyLovDetail());
         dto.setPrincipalDetails(createEmptyLovDetail());
+    }
+
+    /**
+     * Populate LOV details using separate queries based on LOV_Script.sql patterns
+     */
+    private void populateLovDetails(SalesDeliveryNoteHdrDto dto, Long companyPoid) {
+        // Get company poid from UserContext
+        Long contextCompanyPoid = UserContext.getCompanyPoid() != null ? UserContext.getCompanyPoid() : companyPoid;
+
+        // Customer Details (CUSTOMER_MASTER)
+        if (dto.getCustomerPoid() != null) {
+            List<Object[]> customerResults = deliveryNoteHdrRepository.findCustomerLovDetail(dto.getCustomerPoid());
+            if (!customerResults.isEmpty()) {
+                dto.setCustomerDetails(createLovDetailFromQueryResult(customerResults.get(0)));
+                if (dto.getCustomerDetails() != null && dto.getCustomerDetails().getDescription() != null) {
+                    dto.setCustomerName(dto.getCustomerDetails().getDescription());
+                }
+            } else {
+                dto.setCustomerDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setCustomerDetails(createEmptyLovDetail());
+        }
+
+        // Salesman Details (SALESMAN)
+        if (dto.getSalesmanPoid() != null) {
+            List<Object[]> salesmanResults = deliveryNoteHdrRepository.findSalesmanLovDetail(dto.getSalesmanPoid());
+            if (!salesmanResults.isEmpty()) {
+                dto.setSalesmanDetails(createLovDetailFromQueryResult(salesmanResults.get(0)));
+            } else {
+                dto.setSalesmanDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setSalesmanDetails(createEmptyLovDetail());
+        }
+
+        // Line Details (LINE_MASTER)
+        if (dto.getLinePoid() != null) {
+            List<Object[]> lineResults = deliveryNoteHdrRepository.findLineLovDetail(dto.getLinePoid());
+            if (!lineResults.isEmpty()) {
+                dto.setLineDetails(createLovDetailFromQueryResult(lineResults.get(0)));
+            } else {
+                dto.setLineDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setLineDetails(createEmptyLovDetail());
+        }
+
+        // Port Details (PORT_MASTER)
+        if (dto.getPortPoid() != null) {
+            List<Object[]> portResults = deliveryNoteHdrRepository.findPortLovDetail(dto.getPortPoid());
+            if (!portResults.isEmpty()) {
+                dto.setPortDetails(createLovDetailFromQueryResult(portResults.get(0)));
+            } else {
+                dto.setPortDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setPortDetails(createEmptyLovDetail());
+        }
+
+        // Vessel Details (VESSEL_MASTER)
+        if (dto.getVesselPoid() != null && !dto.getVesselPoid().trim().isEmpty()) {
+            List<Object[]> vesselResults = deliveryNoteHdrRepository.findVesselLovDetail(dto.getVesselPoid());
+            if (!vesselResults.isEmpty()) {
+                dto.setVesselDetails(createLovDetailFromQueryResult(vesselResults.get(0)));
+            } else {
+                dto.setVesselDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setVesselDetails(createEmptyLovDetail());
+        }
+
+        // Print Division Details (COMPANY_DIVISION)
+        if (dto.getPrintDivisionPoid() != null) {
+            List<Object[]> divResults = deliveryNoteHdrRepository.findPrintDivisionLovDetail(
+                    dto.getPrintDivisionPoid(), contextCompanyPoid);
+            if (!divResults.isEmpty()) {
+                dto.setPrintDivisionDetails(createLovDetailFromQueryResult(divResults.get(0)));
+            } else {
+                dto.setPrintDivisionDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setPrintDivisionDetails(createEmptyLovDetail());
+        }
+
+        // Principal Details (PRINCIPAL_MASTER_FOR_DN)
+        if (dto.getPrincipalPoid() != null) {
+            List<Object[]> principalResults = deliveryNoteHdrRepository.findPrincipalLovDetail(dto.getPrincipalPoid());
+            if (!principalResults.isEmpty()) {
+                dto.setPrincipalDetails(createLovDetailFromQueryResult(principalResults.get(0)));
+            } else {
+                dto.setPrincipalDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setPrincipalDetails(createEmptyLovDetail());
+        }
+    }
+
+    /**
+     * Create LOV detail from query result Object[]
+     * Expects: [POID, CODE, DESCRIPTION] at indices [0, 1, 2]
+     */
+    private SalesDeliveryNoteHdrDto.LovDetailDto createLovDetailFromQueryResult(Object[] row) {
+        SalesDeliveryNoteHdrDto.LovDetailDto detail = new SalesDeliveryNoteHdrDto.LovDetailDto();
+
+        if (row != null && row.length > 0) {
+            // Poid (index 0)
+            if (row[0] != null) {
+                if (row[0] instanceof java.math.BigDecimal) {
+                    detail.setPoid(((java.math.BigDecimal) row[0]).longValue());
+                } else if (row[0] instanceof Number) {
+                    detail.setPoid(((Number) row[0]).longValue());
+                }
+            }
+
+            // Code (index 1)
+            if (row.length > 1 && row[1] != null) {
+                detail.setCode(row[1].toString());
+            }
+
+            // Description (index 2)
+            if (row.length > 2 && row[2] != null) {
+                detail.setDescription(row[2].toString());
+            }
+        }
+
+        // If all fields are null, return empty detail
+        if (detail.getPoid() == null && detail.getCode() == null && detail.getDescription() == null) {
+            return createEmptyLovDetail();
+        }
+
+        return detail;
     }
 
     /**

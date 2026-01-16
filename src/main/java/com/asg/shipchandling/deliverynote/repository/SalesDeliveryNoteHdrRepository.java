@@ -54,48 +54,68 @@ public interface SalesDeliveryNoteHdrRepository extends JpaRepository<SalesDeliv
                         String docRef, Long transactionPoid);
 
         /**
-         * Get Delivery Note with all LOV details in a single query using JOINs
-         * Returns Object[] with delivery note data and all related LOV details
+         * Get Customer LOV details (CUSTOMER_MASTER)
          */
-        @Query(value = "SELECT " +
-                "dn.TRANSACTION_POID as transactionPoid, dn.DOC_REF as docRef, dn.TRANSACTION_DATE as transactionDate, " +
-                "dn.COMPANY_POID as companyPoid, dn.CUSTOMER_POID as customerPoid, " +
-                "dn.CURRENCY_CODE as currencyCode, dn.CURRENCY_RATE as currencyRate, " +
-                "dn.DELIVERY_STATUS as deliveryStatus, dn.SALESMAN_POID as salesmanPoid, " +
-                "dn.PAYMENT_MODE as paymentMode, dn.DELIVERY_TERMS as deliveryTerms, " +
-                "dn.LINE_POID as linePoid, dn.VESSEL_POID as vesselPoid, dn.VESSEL_NAME as vesselName, " +
-                "dn.VOYAGE_REF as voyageRef, dn.PORT_POID as portPoid, dn.PORT_DESCRIPTION as portDescription, " +
-                "dn.QTN_REF_NO as qtnRefNo, dn.VESSEL_AGENT as vesselAgent, " +
-                "dn.DELIVERY_TO_ADDRESS as deliveryToAddress, dn.DESCRIPTION_PRINT_YN as descriptionPrintYn, " +
-                "dn.PARTY_ADDRESS_DETAILS as partyAddressDetails, dn.PRINT_DIVISION_POID as printDivisionPoid, " +
-                "dn.PARTY_TYPE as partyType, dn.PRINCIPAL_POID as principalPoid, " +
-                "dn.TOTAL_DISCOUNT as totalDiscount, dn.TOTAL_AMOUNT as totalAmount, " +
-                "dn.REMARKS as remarks, dn.DELETED as deleted, " +
-                "dn.CREATED_BY as createdBy, dn.CREATED_DATE as createdDate, " +
-                "dn.LASTMODIFIED_BY as lastmodifiedBy, dn.LASTMODIFIED_DATE as lastmodifiedDate, " +
-                // Customer Details
-                "cust.CUSTOMER_POID as custPoid, cust.CUSTOMER_CODE as custCode, cust.CUSTOMER_NAME as custName, " +
-                // Salesman Details
-                "sm.SALESMAN_POID as smPoid, sm.SALESMAN_CODE as smCode, sm.SALESMAN_NAME as smName, " +
-                // Line Details
-                "lm.LINE_POID as lmPoid, lm.LINE_CODE as lmCode, lm.LINE_NAME as lmName, " +
-                // Port Details
-                "pm.PORT_POID as pmPoid, pm.PORT_CODE as pmCode, pm.PORT_NAME as pmName, " +
-                // Vessel Details
-                "vm.VESSEL_POID as vmPoid, vm.VESSEL_CODE as vmCode, vm.VESSEL_NAME as vmName, " +
-                // Print Division Details (from GLOBAL_COMPANY_MASTER_DIV_DTL)
-                "div.DIV_POID as divPoid, div.REMARKS as divCode, div.REMARKS as divDescription, " +
-                // Principal Details
-                "pr.PRINCIPAL_POID as prPoid, pr.PRINCIPAL_CODE as prCode, pr.PRINCIPAL_NAME as prName " +
-                "FROM SALES_DELIVERY_NOTE_HDR dn " +
-                "LEFT JOIN SALES_CUSTOMER_MASTER cust ON dn.CUSTOMER_POID = cust.CUSTOMER_POID " +
-                "LEFT JOIN SALES_SALESMAN_MASTER sm ON dn.SALESMAN_POID = sm.SALESMAN_POID " +
-                "LEFT JOIN SHIP_LINE_MASTER lm ON dn.LINE_POID = lm.LINE_POID " +
-                "LEFT JOIN SHIP_PORT_MASTER pm ON dn.PORT_POID = pm.PORT_POID " +
-                "LEFT JOIN SHIP_VESSEL_MASTER vm ON dn.VESSEL_POID = vm.VESSEL_POID " +
-                "LEFT JOIN GLOBAL_COMPANY_MASTER_DIV_DTL div ON dn.PRINT_DIVISION_POID = div.DIV_POID AND dn.COMPANY_POID = div.COMPANY_POID " +
-                "LEFT JOIN SHIP_PRINCIPAL_MASTER pr ON dn.PRINCIPAL_POID = pr.PRINCIPAL_POID " +
-                "WHERE dn.TRANSACTION_POID = :transactionPoid AND dn.COMPANY_POID = :companyPoid", nativeQuery = true)
-        List<Object[]> findDeliveryNoteWithDetails(@Param("transactionPoid") Long transactionPoid, @Param("companyPoid") Long companyPoid);
+        @Query(value = "SELECT CUSTOMER_POID AS POID, CUSTOMER_CODE AS CODE, CUSTOMER_NAME AS DESCRIPTION " +
+                "FROM SALES_CUSTOMER_MASTER " +
+                "INNER JOIN GL_MASTER GLMAST ON GLMAST.GL_POID = SALES_CUSTOMER_MASTER.GL_POID " +
+                "WHERE CUSTOMER_POID = :poid " +
+                "AND NVL(SALES_CUSTOMER_MASTER.DELETED, 'N') = 'N' " +
+                "AND NVL(SALES_CUSTOMER_MASTER.ACTIVE, 'Y') = 'Y'", nativeQuery = true)
+        List<Object[]> findCustomerLovDetail(@Param("poid") Long poid);
+
+        /**
+         * Get Salesman LOV details (SALESMAN)
+         */
+        @Query(value = "SELECT SALESMAN_POID AS POID, SALESMAN_CODE AS CODE, SALESMAN_NAME AS DESCRIPTION " +
+                "FROM SALES_SALESMAN_MASTER " +
+                "WHERE SALESMAN_POID = :poid " +
+                "AND ACTIVE = 'Y'", nativeQuery = true)
+        List<Object[]> findSalesmanLovDetail(@Param("poid") Long poid);
+
+        /**
+         * Get Line LOV details (LINE_MASTER)
+         */
+        @Query(value = "SELECT LINE_POID AS POID, LINE_CODE AS CODE, LINE_NAME AS DESCRIPTION " +
+                "FROM SHIP_LINE_MASTER " +
+                "WHERE LINE_POID = :poid " +
+                "AND ACTIVE = 'Y'", nativeQuery = true)
+        List<Object[]> findLineLovDetail(@Param("poid") Long poid);
+
+        /**
+         * Get Port LOV details (PORT_MASTER)
+         */
+        @Query(value = "SELECT PORT_POID AS POID, PORT_CODE AS CODE, PORT_NAME AS DESCRIPTION " +
+                "FROM SHIP_PORT_MASTER " +
+                "WHERE PORT_POID = :poid " +
+                "AND ACTIVE = 'Y'", nativeQuery = true)
+        List<Object[]> findPortLovDetail(@Param("poid") Long poid);
+
+        /**
+         * Get Vessel LOV details (VESSEL_MASTER)
+         */
+        @Query(value = "SELECT VESSEL_POID AS POID, VESSEL_CODE AS CODE, VESSEL_NAME || ' ' || VM.IMO_NUMBER AS DESCRIPTION " +
+                "FROM SHIP_VESSEL_MASTER VM " +
+                "WHERE TO_CHAR(VESSEL_POID) = :poid " +
+                "AND NVL(VM.ACTIVE, 'Y') = 'Y'", nativeQuery = true)
+        List<Object[]> findVesselLovDetail(@Param("poid") String poid);
+
+        /**
+         * Get Print Division LOV details (COMPANY_DIVISION)
+         */
+        @Query(value = "SELECT DIV_POID AS POID, REMARKS AS CODE, REMARKS AS DESCRIPTION " +
+                "FROM GLOBAL_COMPANY_MASTER_DIV_DTL " +
+                "WHERE DIV_POID = :poid " +
+                "AND COMPANY_POID = :companyPoid", nativeQuery = true)
+        List<Object[]> findPrintDivisionLovDetail(@Param("poid") Long poid, @Param("companyPoid") Long companyPoid);
+
+        /**
+         * Get Principal LOV details (PRINCIPAL_MASTER_FOR_DN)
+         */
+        @Query(value = "SELECT PRINCIPAL_POID AS POID, PRINCIPAL_CODE AS CODE, PRINCIPAL_NAME AS DESCRIPTION " +
+                "FROM SHIP_PRINCIPAL_MASTER " +
+                "WHERE PRINCIPAL_POID = :poid " +
+                "AND GL_CODE_POID IS NOT NULL", nativeQuery = true)
+        List<Object[]> findPrincipalLovDetail(@Param("poid") Long poid);
 
 }
