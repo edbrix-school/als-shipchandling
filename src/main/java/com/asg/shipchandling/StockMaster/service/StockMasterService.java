@@ -1,5 +1,6 @@
 package com.asg.shipchandling.StockMaster.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.StockMaster.dto.CreateStockMasterDtlRequest;
 import com.asg.shipchandling.StockMaster.dto.CreateStockMasterRequest;
@@ -32,7 +33,7 @@ public interface StockMasterService {
 
     StockMasterDependenciesDto checkStockMasterDependencies(Long stockPoid, Long groupPoid);
 
-    void deleteStockMaster(Long stockPoid, Long groupPoid);
+    void deleteStockMaster(Long stockPoid, Long groupPoid, DeleteReasonDto deleteReasonDto);
 
     StockMasterDto createStockMaster(CreateStockMasterRequest request, Long groupPoid, Long companyPoid, String userId);
 

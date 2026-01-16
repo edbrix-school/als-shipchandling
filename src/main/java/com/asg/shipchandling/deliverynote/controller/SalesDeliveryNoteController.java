@@ -1,10 +1,14 @@
 package com.asg.shipchandling.deliverynote.controller;
 
 import com.asg.common.lib.annotation.AllowedAction;
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.common.lib.enums.LogDetailsEnum;
 import com.asg.common.lib.enums.UserRolesRightsEnum;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.deliverynote.dto.*;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -15,6 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,6 +33,7 @@ import java.util.Map;
 
 import org.springframework.data.domain.Page;
 
+import static com.asg.common.lib.dto.response.ApiResponse.error;
 import static com.asg.shipchandling.common.ApiResponse.success;
 
 @RestController
@@ -36,6 +43,7 @@ import static com.asg.shipchandling.common.ApiResponse.success;
 public class SalesDeliveryNoteController {
 
     private final SalesDeliveryNoteService deliveryNoteService;
+    private final LoggingService loggingService;
 
     // ==================== BASIC CRUD OPERATIONS ====================
 
@@ -70,6 +78,7 @@ public class SalesDeliveryNoteController {
         SalesDeliveryNoteHdrDto dto = deliveryNoteService.getDeliveryNoteByPoid(UserContext.getGroupPoid(),
                 transactionPoid, UserContext.getCompanyPoid(), includeDetails);
         log.info("getDeliveryNoteByPoid completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
+        loggingService.createLogSummaryEntry(LogDetailsEnum.VIEWED, UserContext.getDocumentId(), transactionPoid.toString());
         return success("Delivery note fetched successfully", dto);
     }
 
@@ -101,10 +110,11 @@ public class SalesDeliveryNoteController {
     @DeleteMapping("/{transactionPoid}")
     @AllowedAction(UserRolesRightsEnum.DELETE)
     public ResponseEntity<?> deleteDeliveryNote(
-            @PathVariable Long transactionPoid) {
+            @PathVariable Long transactionPoid,
+            @Valid @RequestBody(required = false) DeleteReasonDto deleteReasonDto) {
 
         log.info("deleteDeliveryNote started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-        deliveryNoteService.deleteDeliveryNote(UserContext.getGroupPoid(), transactionPoid, UserContext.getCompanyPoid());
+        deliveryNoteService.deleteDeliveryNote(UserContext.getGroupPoid(), transactionPoid, UserContext.getCompanyPoid(),deleteReasonDto);
         log.info("deleteDeliveryNote completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
         return success("Delivery note deleted successfully", null);
     }
@@ -228,4 +238,32 @@ public class SalesDeliveryNoteController {
     //                         UserContext.getGroupPoid());
     //         return success("Dependency check completed", dto);
     // }
+
+    @AllowedAction(UserRolesRightsEnum.PRINT)
+    @Operation(
+            summary = "Generate PDF for Sales Delivery Note",
+            description = "Generate PDF report for a specific Sales Delivery Note",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "PDF generated successfully",
+                            content = @Content(mediaType = "application/pdf")),
+                    @ApiResponse(responseCode = "404", description = "Sales Delivery Note not found"),
+                    @ApiResponse(responseCode = "500", description = "Failed to generate PDF")
+            }
+    )
+    @GetMapping("/print/{transactionPoid}")
+    public ResponseEntity<?> print(
+            @Parameter(description = "Transaction POID", example = "281")
+            @PathVariable Long transactionPoid) {
+        try {
+            byte[] pdf = deliveryNoteService.print(transactionPoid);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=imco-deposit-refund-" + transactionPoid + ".pdf")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(pdf);
+        } catch (Exception e) {
+            log.error("Failed to generate PDF for Sales Delivery Note: {}", transactionPoid, e);
+            return error("Failed to generate PDF: " + e.getMessage(), 500);
+        }
+    }
 }

@@ -1,5 +1,10 @@
 package com.asg.shipchandling.salesquotation.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.salesquotation.dto.*;
 import com.asg.shipchandling.salesquotation.entity.*;
 import com.asg.shipchandling.salesquotation.dto.*;
@@ -36,6 +41,8 @@ public class SalesQuotationShipService {
     private final SalesQuotationShipEquipmentDetailRepository equipmentDetailRepository;
     private final JdbcTemplate jdbcTemplate;
     private final EntityManager entityManager;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
 
     // Default currency code - can be retrieved from parameter SALES_QUOTATION_SH_DEF_CURRENCY
     private static final String DEFAULT_CURRENCY_CODE = "USD";
@@ -46,12 +53,16 @@ public class SalesQuotationShipService {
                                      SalesQuotationShipChargeDetailRepository chargeDetailRepository,
                                      SalesQuotationShipEquipmentDetailRepository equipmentDetailRepository,
                                      JdbcTemplate jdbcTemplate,
-                                     EntityManager entityManager) {
+                                     EntityManager entityManager,
+                                     LoggingService loggingService,
+                                     DocumentDeleteService documentDeleteService) {
         this.repository = repository;
         this.chargeDetailRepository = chargeDetailRepository;
         this.equipmentDetailRepository = equipmentDetailRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.entityManager = entityManager;
+        this.loggingService = loggingService;
+        this.documentDeleteService = documentDeleteService;
     }
 
     public SalesQuotationShipListResponse search(SalesQuotationShipFilter filter, BigDecimal userId) {
@@ -378,6 +389,10 @@ public class SalesQuotationShipService {
         // Reload to get auto-generated DocRef
         SalesQuotationShipHeader refreshed = reloadHeader(savedWithTotals);
         
+        String key = refreshed.getTransactionPoid().toString();
+        String documentId = UserContext.getDocumentId();
+        loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
+        
         return toDetailDto(refreshed);
     }
 
@@ -420,6 +435,9 @@ public class SalesQuotationShipService {
             header.getCharges().size();
             header.getEquipment().size();
         }
+        
+        SalesQuotationShipHeader oldEntity = new SalesQuotationShipHeader();
+        org.springframework.beans.BeanUtils.copyProperties(header, oldEntity);
         
         // Validate status-based editing restrictions
         validateStatusForUpdate(header.getQuotationStatus());
@@ -500,6 +518,10 @@ public class SalesQuotationShipService {
         
         // Reload to get any database-generated values
         SalesQuotationShipHeader refreshed = reloadHeader(savedWithTotals);
+        
+        String key = refreshed.getTransactionPoid().toString();
+        loggingService.logChanges(oldEntity, refreshed, SalesQuotationShipHeader.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
         
         return toDetailDto(refreshed);
     }
@@ -597,7 +619,7 @@ public class SalesQuotationShipService {
     }
 
     @Transactional
-    public SalesQuotationShipDeleteResponse deleteQuotation(BigDecimal transactionPoid, BigDecimal companyPoid, String userId) {
+    public SalesQuotationShipDeleteResponse deleteQuotation(BigDecimal transactionPoid, BigDecimal companyPoid, String userId, DeleteReasonDto deleteReasonDto) {
         Objects.requireNonNull(transactionPoid, "transactionPoid is required");
         Objects.requireNonNull(companyPoid, "companyPoid is required");
         Objects.requireNonNull(userId, "userId is required");
@@ -624,12 +646,20 @@ public class SalesQuotationShipService {
         validateStatusForDelete(header.getQuotationStatus());
         
         // Perform soft delete (set Deleted = 'Y')
-        header.setDeleted("Y");
+       // header.setDeleted("Y");
         
         // Update audit fields
-        LocalDateTime now = LocalDateTime.now();
+        /*LocalDateTime now = LocalDateTime.now();
         header.setLastModifiedBy(userId);
-        header.setLastModifiedDate(now);
+        header.setLastModifiedDate(now);*/
+        documentDeleteService.deleteDocument(
+                header.getTransactionPoid().longValueExact(),
+                "SALES_QUOTATION_SHIP_HDR",
+                "TRANSACTION_POID",
+                deleteReasonDto,
+                header.getTransactionDate()
+        );
+
         
         // Save the soft-deleted quotation
         repository.save(header);

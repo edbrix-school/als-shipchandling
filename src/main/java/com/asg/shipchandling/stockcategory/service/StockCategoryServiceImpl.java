@@ -1,10 +1,16 @@
 package com.asg.shipchandling.stockcategory.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.utility.PaginationUtil;
+import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
 import com.asg.shipchandling.exceptions.CustomException;
 import com.asg.shipchandling.exceptions.ResourceAlreadyExistsException;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
@@ -20,12 +26,14 @@ import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -36,6 +44,8 @@ public class StockCategoryServiceImpl implements StockCategoryService {
 
     private final StockCategoryRepository stockCategoryRepository;
     private final DocumentSearchService documentService;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
     
     @PersistenceContext
     private EntityManager entityManager;
@@ -94,6 +104,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         
         // Save
         StockCategoryMaster savedCategory = stockCategoryRepository.save(category);
+        Long categoryPoid = savedCategory.getCategoryPoid();
         log.info("createStockCategory persisted categoryPoid={} categoryCode={} stockGlPoid={} salesGlPoid={} costOfSalesGlPoid={}", 
                 savedCategory.getCategoryPoid(), savedCategory.getCategoryCode(),
                 savedCategory.getStockGlPoid(), savedCategory.getSalesGlPoid(), savedCategory.getCostOfSalesGlPoid());
@@ -102,6 +113,9 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         StockCategoryMasterDto dto = convertToDto(savedCategory);
         log.info("createStockCategory completed for categoryPoid={} with stockGlPoid={} salesGlPoid={} costOfSalesGlPoid={}",
                 dto.getCategoryPoid(), dto.getStockGlPoid(), dto.getSalesGlPoid(), dto.getCostOfSalesGlPoid());
+        String key = categoryPoid.toString();
+        String documentId = UserContext.getDocumentId();
+        loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
         return dto;
     }
 
@@ -133,6 +147,9 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         StockCategoryMaster category = stockCategoryRepository
                 .findByCategoryPoidAndGroupPoid(categoryPoid, groupPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Stock Category", "categoryPoid", categoryPoid));
+
+        StockCategoryMaster oldEntity = new StockCategoryMaster();
+        BeanUtils.copyProperties(category, oldEntity);
 
         // Check if deleted
         if ("Y".equals(category.getDeleted())) {
@@ -213,6 +230,10 @@ public class StockCategoryServiceImpl implements StockCategoryService {
 
         // Save the entity
         StockCategoryMaster savedCategory = stockCategoryRepository.save(category);
+
+        String key = savedCategory.getCategoryPoid().toString();
+        loggingService.logChanges(oldEntity, savedCategory, StockCategoryMaster.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "CATEGORY_POID");
         log.info("updateStockCategory saved - stockGlPoid={} salesGlPoid={} costOfSalesGlPoid={}",
                 savedCategory.getStockGlPoid(), savedCategory.getSalesGlPoid(), savedCategory.getCostOfSalesGlPoid());
 
@@ -224,7 +245,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
 
     @Override
     @Transactional
-    public void deleteStockCategory(Long categoryPoid, Long groupPoid) {
+    public void deleteStockCategory(Long categoryPoid, Long groupPoid, DeleteReasonDto deleteReasonDto) {
         log.info("deleteStockCategory service started for categoryPoid={} groupPoid={}", categoryPoid, groupPoid);
         StockCategoryMaster category = stockCategoryRepository
                 .findByCategoryPoidAndGroupPoid(categoryPoid, groupPoid)
@@ -243,8 +264,15 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         }
 
         // Soft delete
-        category.setDeleted("Y");
-        stockCategoryRepository.save(category);
+        //category.setDeleted("Y");
+       // stockCategoryRepository.save(category);
+        documentDeleteService.deleteDocument(
+                categoryPoid,
+                "STOCK_CATEGORY_MASTER",
+                "CATEGORY_POID",
+                deleteReasonDto,
+                LocalDate.now()
+        );
         log.info("deleteStockCategory completed with soft delete for categoryPoid={}", categoryPoid);
     }
 

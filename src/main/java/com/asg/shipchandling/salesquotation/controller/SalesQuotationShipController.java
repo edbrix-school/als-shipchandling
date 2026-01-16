@@ -1,5 +1,10 @@
 package com.asg.shipchandling.salesquotation.controller;
 
+import com.asg.common.lib.annotation.AllowedAction;
+import com.asg.common.lib.dto.DeleteReasonDto;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.enums.UserRolesRightsEnum;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.salesquotation.dto.*;
 import com.asg.shipchandling.salesquotation.service.SalesQuotationShipService;
 import com.asg.shipchandling.salesquotation.dto.*;
@@ -12,9 +17,11 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,15 +30,20 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+import static com.asg.common.lib.dto.response.ApiResponse.error;
+
 @RestController
 @RequestMapping(path = "/v0/sales-quotations", produces = MediaType.APPLICATION_JSON_VALUE)
 public class SalesQuotationShipController {
 
     private static final Logger log = LoggerFactory.getLogger(SalesQuotationShipController.class);
     private final SalesQuotationShipService service;
+    private final LoggingService loggingService;
 
-    public SalesQuotationShipController(SalesQuotationShipService service) {
+
+    public SalesQuotationShipController(SalesQuotationShipService service,LoggingService loggingService) {
         this.service = service;
+        this.loggingService = loggingService;
     }
 
     @Operation(
@@ -162,11 +174,13 @@ public class SalesQuotationShipController {
     @DeleteMapping(path = "/{transactionPoid}")
     public ResponseEntity<SalesQuotationShipDeleteResponse> delete(
             @Parameter(description = "Transaction POID of the sales quotation to delete", required = true)
-            @PathVariable("transactionPoid") BigDecimal transactionPoid) {
+            @PathVariable("transactionPoid") BigDecimal transactionPoid,
+            @Valid @RequestBody(required = false) DeleteReasonDto deleteReasonDto
+    ) {
         BigDecimal companyId = BigDecimal.valueOf(UserContext.getCompanyPoid());
         log.info("delete sales quotation started for transactionPoid={} companyId={} userId={}", 
                 transactionPoid, companyId, UserContext.getUserId());
-        SalesQuotationShipDeleteResponse response = service.deleteQuotation(transactionPoid, companyId, UserContext.getUserId());
+        SalesQuotationShipDeleteResponse response = service.deleteQuotation(transactionPoid, companyId, UserContext.getUserId(),deleteReasonDto);
         log.info("delete sales quotation completed for transactionPoid={} canDelete={}", 
                 transactionPoid, response.isCanDelete());
         return ResponseEntity.ok(response);
@@ -320,6 +334,7 @@ public class SalesQuotationShipController {
         SalesQuotationShipDetailDto dto = service.getDetail(transactionPoid, companyId, includeDetails);
         log.info("get sales quotation completed for transactionPoid={} docRef={}", 
                 transactionPoid, dto != null ? dto.getDocRef() : null);
+        loggingService.createLogSummaryEntry(LogDetailsEnum.VIEWED, UserContext.getDocumentId(), transactionPoid.toString());
         return dto;
     }
 

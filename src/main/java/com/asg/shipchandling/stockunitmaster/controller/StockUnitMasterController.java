@@ -1,5 +1,8 @@
 package com.asg.shipchandling.stockunitmaster.controller;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.stockunitmaster.dto.CreateStockUnitMasterRequest;
 import com.asg.shipchandling.stockunitmaster.dto.FilterRequestDto;
 import com.asg.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
@@ -31,6 +34,9 @@ public class StockUnitMasterController {
         @Autowired
         private StockUnitService stockUnitService;
 
+    @Autowired
+    private LoggingService loggingService;
+
         @Operation(summary = "Get stock unit by ID", description = "Retrieves stock unit details based on the provided stockUnit POID", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully retrieved the stock unit details", content = @Content(mediaType = "application/json", schema = @Schema(implementation = StockUnitMasterDto.class))),
                         @ApiResponse(responseCode = "400", description = "Invalid input parameters", content = @Content(mediaType = "application/json")),
@@ -42,6 +48,7 @@ public class StockUnitMasterController {
         public ResponseEntity<?> getStockUnitByPoid(
                         @Parameter(description = "StockUnitPoid reference identifier", required = true) @PathVariable Long stockUnitPoid) {
                 StockUnitMasterDto stockUnitMasterDto = stockUnitService.getStockUnitByPoid(stockUnitPoid);
+            loggingService.createLogSummaryEntry(LogDetailsEnum.VIEWED, UserContext.getDocumentId(), stockUnitPoid.toString());
                 return success("Task fetched successfully", stockUnitMasterDto);
 
         }
@@ -129,9 +136,11 @@ public class StockUnitMasterController {
         @DeleteMapping("/{stockUnitPoid}")
         @AllowedAction(UserRolesRightsEnum.DELETE)
         public ResponseEntity<?> softDeleteCountry(
-                        @Parameter(description = "StockUnitPoid reference identifier", required = true) @PathVariable Long stockUnitPoid) {
+                        @Parameter(description = "StockUnitPoid reference identifier", required = true) @PathVariable Long stockUnitPoid,
+                        @Valid @RequestBody(required = false) DeleteReasonDto deleteReasonDto
+        ) {
 
-                stockUnitService.softDeleteStockUnit(stockUnitPoid);
+                stockUnitService.softDeleteStockUnit(stockUnitPoid,deleteReasonDto);
                 // Only return a simple message now:
                 return success("Unit has been soft deleted successfully");
         }

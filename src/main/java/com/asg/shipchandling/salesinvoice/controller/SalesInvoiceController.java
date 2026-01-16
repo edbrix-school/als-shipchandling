@@ -1,6 +1,9 @@
 package com.asg.shipchandling.salesinvoice.controller;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.salesinvoice.dto.*;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.CreateSalesDnDtlRequest;
@@ -25,6 +28,8 @@ import com.asg.shipchandling.salesinvoice.dto.response.VerifyInvoiceResponse;
 import com.asg.shipchandling.salesinvoice.service.SalesInvoiceService;
 import com.asg.common.lib.security.util.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
@@ -34,7 +39,10 @@ import com.asg.common.lib.annotation.AllowedAction;
 import com.asg.common.lib.enums.UserRolesRightsEnum;
 
 import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -42,6 +50,7 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.List;
 
+import static com.asg.common.lib.dto.response.ApiResponse.error;
 import static com.asg.shipchandling.common.ApiResponse.success;
 
 @RestController
@@ -51,6 +60,7 @@ import static com.asg.shipchandling.common.ApiResponse.success;
 public class SalesInvoiceController {
 
         private final SalesInvoiceService invoiceService;
+        private final LoggingService loggingService;
 
         // ==================== BASIC CRUD OPERATIONS ====================
 
@@ -86,6 +96,7 @@ public class SalesInvoiceController {
                 SalesInvoiceHdrDto dto = invoiceService.getSalesInvoiceByPoid(
                                 transactionPoid, UserContext.getCompanyPoid(), includeDetails);
                 log.info("Sales invoice fetched with transactionPoid: {} companyId: {}", transactionPoid, UserContext.getCompanyPoid());
+            loggingService.createLogSummaryEntry(LogDetailsEnum.VIEWED, UserContext.getDocumentId(), transactionPoid.toString());
                 return success("Sales invoice fetched successfully", dto);
         }
 
@@ -118,10 +129,11 @@ public class SalesInvoiceController {
         @DeleteMapping("/{transactionPoid}")
         @AllowedAction(UserRolesRightsEnum.DELETE)
         public ResponseEntity<?> deleteSalesInvoice(
-                        @PathVariable Long transactionPoid) {
+                        @PathVariable Long transactionPoid,
+                        @Valid @RequestBody(required = false) DeleteReasonDto deleteReasonDto) {
                 log.info("Deleting sales invoice with transactionPoid: {} groupId: {} companyId: {}", transactionPoid,
                                 UserContext.getGroupPoid(), UserContext.getCompanyPoid());
-                invoiceService.deleteSalesInvoice(transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
+                invoiceService.deleteSalesInvoice(transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(),deleteReasonDto);
                 log.info("Sales invoice deleted with transactionPoid: {} groupId: {} companyId: {}", transactionPoid,
                                 UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 return success("Sales invoice deleted successfully", null);
@@ -477,4 +489,32 @@ public class SalesInvoiceController {
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 return success("Dependency check completed", dto);
         }
+
+    @AllowedAction(UserRolesRightsEnum.PRINT)
+    @Operation(
+            summary = "Generate PDF for Sales Invoice",
+            description = "Generate PDF report for a specific Sales Invoice",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "PDF generated successfully",
+                            content = @Content(mediaType = "application/pdf")),
+                    @ApiResponse(responseCode = "404", description = "Sales Invoice not found"),
+                    @ApiResponse(responseCode = "500", description = "Failed to generate PDF")
+            }
+    )
+    @GetMapping("/print/{transactionPoid}")
+    public ResponseEntity<?> print(
+            @Parameter(description = "Transaction POID", example = "281")
+            @PathVariable Long transactionPoid) {
+        try {
+            byte[] pdf = invoiceService.print(transactionPoid);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=imco-deposit-refund-" + transactionPoid + ".pdf")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(pdf);
+        } catch (Exception e) {
+            log.error("Failed to generate PDF for Sales Invoice: {}", transactionPoid, e);
+            return error("Failed to generate PDF: " + e.getMessage(), 500);
+        }
+    }
 }

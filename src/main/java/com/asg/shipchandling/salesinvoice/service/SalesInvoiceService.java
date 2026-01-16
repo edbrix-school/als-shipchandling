@@ -1,5 +1,6 @@
 package com.asg.shipchandling.salesinvoice.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.salesinvoice.dto.*;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
@@ -39,7 +40,7 @@ public interface SalesInvoiceService {
         SalesInvoiceHdrDto updateSalesInvoice(Long transactionPoid, UpdateSalesInvoiceRequest request,
                         Long groupPoid, Long companyPoid, String userId);
 
-        void deleteSalesInvoice(Long transactionPoid, Long groupPoid, Long companyPoid);
+        void deleteSalesInvoice(Long transactionPoid, Long groupPoid, Long companyPoid, DeleteReasonDto deleteReasonDto);
 
         Map<String, Object> listSalesInvoices(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable);
 
@@ -108,4 +109,6 @@ public interface SalesInvoiceService {
 
         CalculateDiscountCommissionResponse calculateHeaderDiscountCommission(Long transactionPoid, CalculateDiscountCommissionRequest request,
                         Long detRowId, Long groupPoid, Long companyPoid, Long userId);
+
+    byte[] print(Long transactionPoid) throws Exception;
 }

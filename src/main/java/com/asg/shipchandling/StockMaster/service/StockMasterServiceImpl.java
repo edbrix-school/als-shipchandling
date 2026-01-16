@@ -1,9 +1,14 @@
 package com.asg.shipchandling.StockMaster.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.utility.PaginationUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
@@ -17,6 +22,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -77,6 +83,13 @@ public class StockMasterServiceImpl implements StockMasterService {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private LoggingService loggingService;
+
+    @Autowired
+    private DocumentDeleteService documentDeleteService;
+
     
     @PersistenceContext
     private EntityManager entityManager;
@@ -495,10 +508,19 @@ public class StockMasterServiceImpl implements StockMasterService {
 
     @Override
     @Transactional
-    public void deleteStockMaster(Long stockPoid, Long groupPoid) {
+    public void deleteStockMaster(Long stockPoid, Long groupPoid, DeleteReasonDto deleteReasonDto) {
+
         StockMasterEntity stock = stockMasterRepository
                 .findByStockPoidAndGroupPoid(stockPoid, groupPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Stock Master", "stockPoid", stockPoid));
+
+        documentDeleteService.deleteDocument(
+                stockPoid,
+                "STOCK_MASTER",
+                "STOCK_POID",
+                deleteReasonDto,
+                LocalDate.now()
+        );
 
         // TODO: Check dependencies (stock balance, transactions, etc.)
 
@@ -717,6 +739,9 @@ public class StockMasterServiceImpl implements StockMasterService {
         StockMasterEntity refreshedStock = stockMasterRepository.findByStockPoid(stockPoid)
                 .orElseThrow(() -> new RuntimeException("Stock not found after save"));
 
+        String key = stockPoid.toString();
+        String documentId = UserContext.getDocumentId();
+        loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
         return convertToDto(refreshedStock, true);
     }
 
@@ -727,6 +752,9 @@ public class StockMasterServiceImpl implements StockMasterService {
         StockMasterEntity stock = stockMasterRepository
                 .findByStockPoidAndGroupPoid(stockPoid, groupPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Stock Master", "stockPoid", stockPoid));
+
+        StockMasterEntity oldEntity = new StockMasterEntity();
+        BeanUtils.copyProperties(stock, oldEntity);
 
         if ("Y".equals(stock.getDeleted())) {
             throw new IllegalStateException("Cannot update a deleted stock item");
@@ -758,6 +786,11 @@ public class StockMasterServiceImpl implements StockMasterService {
 
         // just call the function
         callAfterSaveProcedure(stockPoid);
+
+        // Log the update
+        String key = savedStock.getStockPoid().toString();
+        loggingService.logChanges(oldEntity, savedStock, StockMasterEntity.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "STOCK_POID");
 
         return convertToDto(savedStock, true);
     }

@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="RequestForQuotationNoSupplier" language="groovy" pageWidth="595" pageHeight="842" columnWidth="535" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="51f26c1c-332c-43f0-beb9-5722768520c7">
+	<property name="ireport.zoom" value="1.2396694214876038"/>
+	<property name="ireport.x" value="0"/>
+	<property name="ireport.y" value="0"/>
+	<style name="Title" fontName="Times New Roman" fontSize="50" isBold="true" pdfFontName="Times-Bold"/>
+	<style name="SubTitle" forecolor="#736343" fontName="Arial" fontSize="18"/>
+	<style name="Column header" forecolor="#666666" fontName="Arial" fontSize="12" isBold="true" pdfFontName="Helvetica-Bold"/>
+	<style name="Detail" fontName="Arial" fontSize="12"/>
+	<style name="Row" mode="Transparent">
+		<conditionalStyle>
+			<conditionExpression><![CDATA[$V{REPORT_COUNT}%2 == 0]]></conditionExpression>
+			<style backcolor="#E6DAC3"/>
+		</conditionalStyle>
+	</style>
+	<parameter name="LOGIN_GROUP_POID" class="java.lang.String">
+		<defaultValueExpression><![CDATA[1]]></defaultValueExpression>
+	</parameter>
+	<parameter name="LOGIN_COMP_POID" class="java.lang.String">
+		<defaultValueExpression><![CDATA[1]]></defaultValueExpression>
+	</parameter>
+	<parameter name="LOGIN_USER_POID" class="java.lang.String"/>
+	<parameter name="DOC_ID" class="java.lang.String">
+		<defaultValueExpression><![CDATA["000-000"]]></defaultValueExpression>
+	</parameter>
+    <parameter name="SUB_HEADER" class="net.sf.jasperreports.engine.JasperReport"/>
+    <parameter name="SUB_FOOTER" class="net.sf.jasperreports.engine.JasperReport"/>
+    <parameter name="SUB_RFQ_DTL_1" class="net.sf.jasperreports.engine.JasperReport"/>
+	<parameter name="DOC_KEY_POID" class="java.lang.String"/>
+	<parameter name="SUBREPORT_DIR" class="java.lang.String" isForPrompting="false">
+		<defaultValueExpression><![CDATA["////ASGERPFS01.SHIPPINGBAHRAIN.COM//ERP_Reports//Reports//"]]></defaultValueExpression>
+	</parameter>
+	<parameter name="LOGIN_DIV_POID" class="java.lang.String"/>
+	<queryString>
+		<![CDATA[SELECT RFQ.TRANSACTION_POID,
+  RFQ.TRANSACTION_DATE,
+  RFQ.TYPE,
+  RFQ.DESCRIPTION,
+  RFQ.STATUS,
+  RFQ.DOC_REF,
+  RFQ.DIVISION_POID,
+  CM.COMPANY_NAME,
+  GCM.CURRENCY_NAME ,
+  RFQ.CURRENCY_RATE,
+  RFQ.EXPECTED_DATE,
+  RFQ.REMARKS
+FROM AP_REQUEST_FOR_QTN_HDR RFQ
+LEFT JOIN GLOBAL_COMPANY_MASTER CM
+ON RFQ.COMPANY_POID=CM.COMPANY_POID
+LEFT JOIN GLOBAL_CURRENCY_MASTER GCM
+ON RFQ.CURRENCY_CODE=GCM.CURRENCY_CODE
+WHERE RFQ.TRANSACTION_POID=$P{DOC_KEY_POID}]]>
+	</queryString>
+	<field name="TRANSACTION_POID" class="java.math.BigDecimal"/>
+	<field name="TRANSACTION_DATE" class="java.sql.Timestamp"/>
+	<field name="TYPE" class="java.lang.String"/>
+	<field name="DESCRIPTION" class="java.lang.String"/>
+	<field name="STATUS" class="java.lang.String"/>
+	<field name="DOC_REF" class="java.lang.String"/>
+	<field name="DIVISION_POID" class="java.math.BigDecimal"/>
+	<field name="COMPANY_NAME" class="java.lang.String"/>
+	<field name="CURRENCY_NAME" class="java.lang.String"/>
+	<field name="CURRENCY_RATE" class="java.math.BigDecimal"/>
+	<field name="EXPECTED_DATE" class="java.sql.Timestamp"/>
+	<field name="REMARKS" class="java.lang.String"/>
+	<variable name="COUNT" class="java.lang.String" calculation="Count"/>
+	<title>
+		<band height="41" splitType="Stretch">
+			<subreport>
+				<reportElement x="0" y="0" width="555" height="41" uuid="11dd97b8-4c92-45fe-85bb-3b9358474446"/>
+				<subreportParameter name="LOGIN_DIV_POID">
+					<subreportParameterExpression><![CDATA[$F{DIVISION_POID}]]></subreportParameterExpression>
+				</subreportParameter>
+				<subreportParameter name="LOGIN_COMP_POID">
+					<subreportParameterExpression><![CDATA[$P{LOGIN_COMP_POID}]]></subreportParameterExpression>
+				</subreportParameter>
+				<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+				<subreportExpression><![CDATA[$P{SUB_HEADER}]]></subreportExpression>
+			</subreport>
+		</band>
+	</title>
+	<pageHeader>
+		<band height="131">
+			<staticText>
+				<reportElement x="402" y="36" width="45" height="20" uuid="2e32e63a-9c61-4dc2-9ef2-f9d736586ada"/>
+				<textElement verticalAlignment="Middle">
+					<font size="11"/>
+				</textElement>
+				<text><![CDATA[Doc Ref]]></text>
+			</staticText>
+			<rectangle>
+				<reportElement x="447" y="36" width="100" height="20" forecolor="#999999" uuid="3efc279d-cd84-4061-995b-e87ae0f460ce"/>
+			</rectangle>
+			<textField isBlankWhenNull="true">
+				<reportElement x="450" y="37" width="95" height="18" uuid="4da10ff1-3962-4d79-ae3a-0e7f7ea12ffd"/>
+				<textElement verticalAlignment="Middle">
+					<font size="11"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{DOC_REF}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="402" y="59" width="45" height="20" uuid="45d487c3-76ae-4793-8170-444fd09b2277"/>
+				<textElement verticalAlignment="Middle">
+					<font size="11"/>
+				</textElement>
+				<text><![CDATA[Date]]></text>
+			</staticText>
+			<rectangle>
+				<reportElement x="447" y="59" width="100" height="20" forecolor="#999999" uuid="f4f3960b-7c71-47b9-89bf-15ca326b7c71"/>
+			</rectangle>
+			<textField pattern="dd-MMM-yyyy" isBlankWhenNull="true">
+				<reportElement x="450" y="60" width="95" height="18" uuid="876b2835-39b9-43bf-93f1-2b9c9a32d062"/>
+				<textElement verticalAlignment="Middle">
+					<font size="11"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{TRANSACTION_DATE}]]></textFieldExpression>
+			</textField>
+			<rectangle radius="10">
+				<reportElement x="3" y="36" width="292" height="90" forecolor="#999999" uuid="7fe579d8-1e24-44f6-839c-3a6c954ac6bd"/>
+			</rectangle>
+			<staticText>
+				<reportElement x="9" y="39" width="258" height="20" uuid="f024e747-5242-4ca4-9264-49fce7c72614">
+					<printWhenExpression><![CDATA[1==2]]></printWhenExpression>
+				</reportElement>
+				<textElement>
+					<font size="12"/>
+				</textElement>
+				<text><![CDATA[(Items with out supplier.)]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="156" y="0" width="227" height="20" uuid="9b4443ed-4e1e-48e1-8278-98b6d0a63bf8"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font size="15" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Request For Quotation]]></text>
+			</staticText>
+		</band>
+	</pageHeader>
+	<columnHeader>
+		<band height="4" splitType="Stretch">
+			<line>
+				<reportElement positionType="FixRelativeToBottom" x="0" y="0" width="555" height="1" forecolor="#999999" uuid="9ec55f57-eda0-48ce-a06e-ffab81edbcc6"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineColor="#999999"/>
+				</graphicElement>
+			</line>
+		</band>
+	</columnHeader>
+	<detail>
+		<band height="26" splitType="Stretch">
+			<subreport>
+				<reportElement isPrintRepeatedValues="false" x="0" y="1" width="555" height="21" uuid="453f453d-356e-4736-8b64-c8d0be20d9bb"/>
+				<subreportParameter name="DOC_KEY_POID">
+					<subreportParameterExpression><![CDATA[$P{DOC_KEY_POID}]]></subreportParameterExpression>
+				</subreportParameter>
+				<subreportParameter name="LOGIN_COMP_POID">
+					<subreportParameterExpression><![CDATA[$P{LOGIN_COMP_POID}]]></subreportParameterExpression>
+				</subreportParameter>
+				<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+				<subreportExpression><![CDATA[$P{SUB_RFQ_DTL_1}]]></subreportExpression>
+			</subreport>
+		</band>
+	</detail>
+	<columnFooter>
+		<band height="6" splitType="Stretch">
+			<line>
+				<reportElement positionType="FixRelativeToBottom" x="0" y="3" width="555" height="1" uuid="d289b3ef-2b1e-48fd-b978-d9a4aded8371"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineColor="#999999"/>
+				</graphicElement>
+			</line>
+		</band>
+	</columnFooter>
+	<pageFooter>
+		<band height="24" splitType="Stretch">
+			<subreport>
+				<reportElement x="0" y="0" width="463" height="24" uuid="326ecd66-b7ad-4850-8e0f-10877494dc9d"/>
+				<subreportParameter name="DOC_ID">
+					<subreportParameterExpression><![CDATA[$P{DOC_ID}]]></subreportParameterExpression>
+				</subreportParameter>
+				<subreportParameter name="LOGIN_COMP_POID">
+					<subreportParameterExpression><![CDATA[$P{LOGIN_COMP_POID}]]></subreportParameterExpression>
+				</subreportParameter>
+				<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+				<subreportExpression><![CDATA[$P{SUB_FOOTER}]]></subreportExpression>
+			</subreport>
+			<textField>
+				<reportElement style="Column header" x="530" y="0" width="17" height="20" forecolor="#736343" uuid="de9f0e20-0221-4359-89a6-ded7bbb93770"/>
+				<textElement verticalAlignment="Middle">
+					<font size="6"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{PAGE_NUMBER}]]></textFieldExpression>
+			</textField>
+			<textField isStretchWithOverflow="true">
+				<reportElement style="Column header" stretchType="RelativeToBandHeight" x="503" y="0" width="17" height="20" forecolor="#736343" uuid="1d1391df-8633-4398-9706-5c00dc7cc51e"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="6" isItalic="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{PAGE_NUMBER}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement style="Column header" x="521" y="0" width="7" height="20" forecolor="#736343" uuid="6468c0ed-0957-458d-8141-8f5e00bfc55f"/>
+				<textElement verticalAlignment="Middle">
+					<font size="6"/>
+				</textElement>
+				<text><![CDATA[of]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="Column header" x="488" y="0" width="15" height="20" forecolor="#736343" uuid="c8a5ea37-b2f9-4e18-a6c5-6933fe6c3d50"/>
+				<textElement verticalAlignment="Middle">
+					<font size="6"/>
+				</textElement>
+				<text><![CDATA[Page]]></text>
+			</staticText>
+		</band>
+	</pageFooter>
+</jasperReport>

@@ -1,6 +1,9 @@
 package com.asg.shipchandling.stockcategory.controller;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.stockcategory.dto.*;
 import com.asg.shipchandling.stockcategory.dto.request.CreateStockCategoryRequest;
 import com.asg.shipchandling.stockcategory.dto.request.UpdateStockCategoryRequest;
@@ -18,6 +21,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -37,6 +41,7 @@ public class StockCategoryController {
 
 
     private final StockCategoryService stockCategoryService;
+    private final LoggingService loggingService;
 
     @Operation(
             summary = "Create stock category",
@@ -118,6 +123,7 @@ public class StockCategoryController {
         StockCategoryMasterDto dto = stockCategoryService.getStockCategoryByPoid(categoryPoid, UserContext.getGroupPoid());
         log.info("getStockCategoryByPoid completed for categoryPoid={} categoryCode={}",
                 categoryPoid, dto != null ? dto.getCategoryCode() : null);
+        loggingService.createLogSummaryEntry(LogDetailsEnum.VIEWED, UserContext.getDocumentId(), categoryPoid.toString());
         return success("Stock category fetched successfully", dto);
     }
 
@@ -199,10 +205,12 @@ public class StockCategoryController {
     @AllowedAction(UserRolesRightsEnum.DELETE)
     public ResponseEntity<?> deleteStockCategory(
             @Parameter(description = "Category POID reference identifier", required = true)
-            @PathVariable Long categoryPoid) {
+            @PathVariable Long categoryPoid,
+            @Valid @RequestBody(required = false) DeleteReasonDto deleteReasonDto
+    ) {
 
         log.info("deleteStockCategory started for categoryPoid={} groupPoid={}", categoryPoid, UserContext.getGroupPoid());
-        stockCategoryService.deleteStockCategory(categoryPoid, UserContext.getGroupPoid());
+        stockCategoryService.deleteStockCategory(categoryPoid, UserContext.getGroupPoid(),deleteReasonDto);
         log.info("deleteStockCategory completed for categoryPoid={}", categoryPoid);
         return success("Stock category deleted successfully", null);
     }

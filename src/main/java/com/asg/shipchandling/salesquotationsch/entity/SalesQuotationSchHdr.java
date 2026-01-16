@@ -10,6 +10,7 @@ import org.hibernate.annotations.GenerationTime;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.sql.Timestamp;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "SALES_QUOTATION_HDR")
@@ -24,7 +25,7 @@ public class SalesQuotationSchHdr {
     private Long transactionPoid;
 
     @Column(name = "TRANSACTION_DATE")
-    private Timestamp transactionDate;
+    private LocalDate transactionDate;
 
     @Column(name = "COMPANY_POID")
     private Long companyPoid;

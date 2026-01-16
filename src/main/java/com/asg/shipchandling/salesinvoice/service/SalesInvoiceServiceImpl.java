@@ -1,9 +1,15 @@
 package com.asg.shipchandling.salesinvoice.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
+import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.salesinvoice.dto.*;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
@@ -39,11 +45,14 @@ import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.sf.jasperreports.engine.JasperReport;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.sql.DataSource;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -65,6 +74,11 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
     private final StockMasterRepository stockMasterRepository;
     private final SalesDeliveryNoteHdrRepository deliveryNoteHdrRepository;
     private final DocumentSearchService documentService;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
+    private final PrintService printService;
+    @Autowired
+    private DataSource dataSource;
     
     @PersistenceContext
     private EntityManager entityManager;
@@ -206,6 +220,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         }
         SalesInvoiceHdr refreshedInvoice = invoiceHdrRepository.findByTransactionPoid(
                 savedInvoice.getTransactionPoid()).orElse(savedInvoice);
+
+        String key = refreshedInvoice.getTransactionPoid().toString();
+        String documentId = UserContext.getDocumentId();
+        loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
 
         // Convert to DTO
         SalesInvoiceHdrDto dto = convertToDto(refreshedInvoice, true);
@@ -728,6 +746,9 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             throw new CustomException("Cannot update verified invoice. Invoice must be unverified first.");
         }
 
+        SalesInvoiceHdr oldEntity = new SalesInvoiceHdr();
+        BeanUtils.copyProperties(invoice, oldEntity);
+
         // Validate party type
         // if (request.getPartyType() != null) {
         // if (!"CUSTOMER".equalsIgnoreCase(request.getPartyType()) &&
@@ -941,12 +962,16 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // Call stored procedure AFTER SAVE for authorization
         salesInvoiceStoredProcRepository.callAuthorizationProc(transactionPoid, savedInvoice.getAuthorizedId(), userId);
 
+        String key = savedInvoice.getTransactionPoid().toString();
+        loggingService.logChanges(oldEntity, savedInvoice, SalesInvoiceHdr.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
+
         return convertToDto(savedInvoice, true);
     }
 
     @Override
     @Transactional
-    public void deleteSalesInvoice(Long transactionPoid, Long groupPoid, Long companyPoid) {
+    public void deleteSalesInvoice(Long transactionPoid, Long groupPoid, Long companyPoid, DeleteReasonDto deleteReasonDto) {
         SalesInvoiceHdr invoice = invoiceHdrRepository
                 .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
@@ -954,6 +979,13 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         if ("Y".equals(invoice.getVerified())) {
             throw new CustomException("Cannot delete verified invoice. Invoice must be unverified first.");
         }
+        documentDeleteService.deleteDocument(
+                transactionPoid,
+                "AR_SCH_SALES_INVOICE_HDR",
+                "TRANSACTION_POID",
+                deleteReasonDto,
+                invoice.getTransactionDate()
+        );
 
         // Check dependencies
         SalesInvoiceDependenciesDto dependencies = checkSalesInvoiceDependencies(transactionPoid, groupPoid,
@@ -1778,6 +1810,14 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             log.warn("Failed to query principal details for principalPoid={}: {}", principalPoid, e.getMessage());
         }
         return createEmptyLovDetail();
+    }
+
+    @Override
+    public byte[] print(Long transactionPoid) throws Exception {
+        Map<String, Object> params = printService.buildBaseParams(transactionPoid, "300-100");
+        params.put("SUB_RFQ_DTL", printService.load("ShipChandling/AR/SCH_SALES_INV_ITEM_DTLsubreport1.jrxml"));
+        JasperReport mainReport = printService.load("ShipChandling/AR/SCH_SALES_INV.jrxml");
+        return printService.fillReportToPdf(mainReport, params, dataSource);
     }
 
 }
