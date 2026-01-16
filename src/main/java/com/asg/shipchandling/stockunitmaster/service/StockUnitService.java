@@ -1,5 +1,6 @@
 package com.asg.shipchandling.stockunitmaster.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.stockunitmaster.dto.CreateStockUnitMasterRequest;
 import com.asg.shipchandling.stockunitmaster.dto.StockUnitMasterDto;
@@ -28,7 +29,7 @@ public interface StockUnitService {
         String deleted,
         Pageable pageable);
 
-     void softDeleteStockUnit(Long stockUnitPoid);
+     void softDeleteStockUnit(Long stockUnitPoid, DeleteReasonDto deleteReasonDto);
 
      boolean validateStockUnitCode(String stockUnitCode, Long groupPoid, Long excludeStockUnitPoid);
 

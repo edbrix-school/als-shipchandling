@@ -1,5 +1,6 @@
 package com.asg.shipchandling.requestforquotation.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.requestforquotation.dto.RfqDependenciesDto;
 import com.asg.shipchandling.requestforquotation.dto.request.*;
@@ -22,7 +23,7 @@ public interface ApRequestForQtnService {
     ApRequestForQtnHdrDto updateRequestForQuotation(Long transactionPoid, UpdateApRequestForQtnRequest request,
                                                      Long groupPoid, Long companyPoid, String userId);
     
-    void deleteRequestForQuotation(Long transactionPoid, Long groupPoid, Long companyPoid);
+    void deleteRequestForQuotation(Long transactionPoid, Long groupPoid, Long companyPoid, DeleteReasonDto deleteReasonDto);
 
     Map<String, Object> listRequestForQuotations(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable);
 
@@ -71,4 +72,8 @@ public interface ApRequestForQtnService {
     RfqDependenciesDto checkRfqDependencies(Long transactionPoid, Long groupPoid, Long companyPoid);
 
     BigDecimal getTaxPercentage(Long groupPoid, Long companyPoid, Long taxPoid);
+
+    byte[] printConfirmedSupplier(Long transactionPoid) throws Exception;
+
+    byte[] print(Long transactionPoid) throws Exception;
 }

@@ -5,13 +5,14 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.sql.Timestamp;
+import java.time.LocalDate;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class SalesQuotationSchSummaryDto {
     private Long transactionPoid;
-    private Timestamp transactionDate;
+    private LocalDate transactionDate;
     private String docRef;
     private Long companyPoid;
     private Long customerPoid;

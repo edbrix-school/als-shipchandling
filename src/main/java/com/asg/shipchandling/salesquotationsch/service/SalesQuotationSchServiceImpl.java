@@ -1,9 +1,15 @@
 package com.asg.shipchandling.salesquotationsch.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
+import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.salesquotationsch.dto.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.*;
@@ -34,6 +40,7 @@ import com.asg.shipchandling.salesquotationsch.spec.SalesQuotationSchSpecificati
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import net.sf.jasperreports.engine.JasperReport;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
@@ -85,6 +92,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private final GlobalCurrencyMasterRepository globalCurrencyMasterRepository;
     private final GlobalCurrencyRatesRepository globalCurrencyRatesRepository;
     private final DocumentSearchService documentService;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
+    private final PrintService printService;
 
     @Autowired
     private DataSource dataSource;
@@ -198,6 +208,11 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         SalesQuotationSchHdrDto dto = convertToDto(refreshedQuotationSch, true);
         // reflect request flag in response
         dto.setNewAddressYN(request.isNewAddressYN());
+
+        String key = refreshedQuotationSch.getTransactionPoid().toString();
+        String documentId = UserContext.getDocumentId();
+        loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
+
         log.info("createSalesQuotationSch completed for transactionPoid={} docRef={}",
                 dto.getTransactionPoid(), dto.getDocRef());
         return dto;
@@ -359,11 +374,18 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             processItemDetailsByActionType(transactionPoid, request.getItemDetails(), userId);
         }
 
+        SalesQuotationSchHdr oldEntity = new SalesQuotationSchHdr();
+        BeanUtils.copyProperties(quotationSch, oldEntity);
+
         // Save
         SalesQuotationSchHdr savedQuotationSch = quotationSchHdrRepository.save(quotationSch);
         quotationSchHdrRepository.flush();
         // Calculate totals
         calculateTotals(transactionPoid);
+
+        String key = savedQuotationSch.getTransactionPoid().toString();
+        loggingService.logChanges(oldEntity, savedQuotationSch, SalesQuotationSchHdr.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
 
         SalesQuotationSchHdrDto dto = convertToDto(savedQuotationSch, true);
         // reflect request flag in response
@@ -375,17 +397,24 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
     @Override
     @Transactional
-    public void deleteSalesQuotationSch(Long groupPoid, Long transactionPoid, Long companyPoid) {
+    public void deleteSalesQuotationSch(Long groupPoid, Long transactionPoid, Long companyPoid, DeleteReasonDto deleteReasonDto) {
         SalesQuotationSchHdr quotationSch = quotationSchHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
                 .orElseThrow(
                         () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
 
-        if ("Y".equals(quotationSch.getDeleted())) {
+       /* if ("Y".equals(quotationSch.getDeleted())) {
             log.warn("deleteSalesQuotationSch found companyPoid={} transactionPoid={} already deleted", companyPoid,
                     transactionPoid);
             throw new CustomException("Cannot delete sales quotation sch. It is already deleted.");
-        }
+        }*/
+        documentDeleteService.deleteDocument(
+                transactionPoid,
+                "SALES_QUOTATION_HDR",
+                "TRANSACTION_POID",
+                deleteReasonDto,
+                quotationSch.getTransactionDate()
+        );
 
         // Delete item details
         itemDtlRepository.deleteByTransactionPoid(transactionPoid);
@@ -1783,5 +1812,13 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 currencyPoid, currency.getCurrencyCode(), latestRate.getBuyRate(), latestRate.getSellRate());
 
         return response;
+    }
+
+    @Override
+    public byte[] print(Long transactionPoid) throws Exception {
+        Map<String, Object> params = printService.buildBaseParams(transactionPoid, "350-104");
+        params.put("SUB_SALES_DTL", printService.load("ShipChandling/SALES/Sales_quotation_Items.jrxml"));
+        JasperReport mainReport = printService.load("ShipChandling/SALES/Sales_quotation.jrxml");
+        return printService.fillReportToPdf(mainReport, params, dataSource);
     }
 }

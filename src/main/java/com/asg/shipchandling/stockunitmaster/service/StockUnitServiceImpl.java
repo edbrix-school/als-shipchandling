@@ -1,11 +1,17 @@
 package com.asg.shipchandling.stockunitmaster.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
 import com.asg.common.lib.repository.GroupRepository;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.utility.PaginationUtil;
+import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
 import com.asg.shipchandling.exceptions.ResourceAlreadyExistsException;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
 import com.asg.shipchandling.stockunitmaster.dto.CreateStockUnitMasterRequest;
@@ -17,6 +23,7 @@ import com.asg.shipchandling.stockunitmaster.util.StockUnitConstraintErrorHandle
 import com.asg.shipchandling.stockunitmaster.exception.StockUnitConstraintViolationException;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +35,10 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -40,6 +50,8 @@ public class StockUnitServiceImpl implements StockUnitService {
     private final StockUnitRepository stockUnitRepository;
     private final DocumentSearchService documentService;
     private final GroupRepository groupRepository;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
 
     private static final Logger log = LoggerFactory.getLogger(StockUnitServiceImpl.class);
 
@@ -73,7 +85,11 @@ public class StockUnitServiceImpl implements StockUnitService {
 
         try {
             StockUnitMaster responseEntity = stockUnitRepository.save(entity);
+            Long stockUnitPoid = responseEntity.getStockUnitPoid();
             BeanUtils.copyProperties(responseEntity, responseDto);
+            String key = stockUnitPoid.toString();
+            String documentId = UserContext.getDocumentId();
+            loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
             return responseDto;
         } catch (DataIntegrityViolationException ex) {
             StockUnitConstraintErrorHandler.handleConstraintViolation(ex);
@@ -113,6 +129,10 @@ public class StockUnitServiceImpl implements StockUnitService {
     @Transactional
     public StockUnitMasterDto updateStockUnit(Long stockUnitPoid, StockUnitMasterDto stockUnitMasterDto) {
         StockUnitMaster existingStockUnit = stockUnitRepository.findByStockUnitPoid(stockUnitPoid);
+
+        StockUnitMaster oldEntity = new StockUnitMaster();
+        BeanUtils.copyProperties(existingStockUnit, oldEntity);
+
         if (!stockUnitRepository.existsByStockUnitPoid(stockUnitPoid)) {
             throw new ResourceNotFoundException("Unit", "UnitPoid", stockUnitPoid);
         }
@@ -173,6 +193,12 @@ public class StockUnitServiceImpl implements StockUnitService {
                     ? updatedStockUnit.getLastModifiedDate().atOffset(java.time.ZoneOffset.UTC)
                     : null);
 
+
+            // Log the update
+            String key = updatedStockUnit.getStockUnitPoid().toString();
+            loggingService.logChanges(oldEntity, updatedStockUnit, StockUnitMaster.class,
+                    UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "STOCK_UNIT_POID");
+
             return responseDto;
         } catch (DataIntegrityViolationException ex) {
             StockUnitConstraintErrorHandler.handleConstraintViolation(ex);
@@ -187,17 +213,24 @@ public class StockUnitServiceImpl implements StockUnitService {
             if ("FK_PARENT".equals(ex.getViolationType())) {
                 throw new ResourceNotFoundException(ex.getMessage());
             }
-            // For other cases, throw as ResourceAlreadyExistsException
             throw new ResourceAlreadyExistsException(ex.getMessage(), null);
         }
     }
 
     @Override
-    public void softDeleteStockUnit(Long stockUnitPoid) {
+    public void softDeleteStockUnit(Long stockUnitPoid, DeleteReasonDto deleteReasonDto) {
         StockUnitMaster existingStockunit = stockUnitRepository.findByStockUnitPoid(stockUnitPoid);
         if (!stockUnitRepository.existsByStockUnitPoid(stockUnitPoid)) {
             throw new ResourceNotFoundException("Unit", "UnitPoid", stockUnitPoid);
         }
+
+        documentDeleteService.deleteDocument(
+                stockUnitPoid,
+                "STOCK_UNIT_MASTER",
+                "STOCK_UNIT_POID",
+                deleteReasonDto,
+                LocalDate.now()
+        );
         existingStockunit.setDeleted("Y");
         existingStockunit.setActive("N");
         existingStockunit.setLastModifiedDate(LocalDateTime.now());

@@ -1,9 +1,15 @@
 package com.asg.shipchandling.deliverynote.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
+import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.security.util.UserContext;
 import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.commonlov.service.LovService;
@@ -24,8 +30,10 @@ import com.asg.shipchandling.stockunitmaster.repository.StockUnitRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import net.sf.jasperreports.engine.JasperReport;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -70,6 +78,9 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     private final StockUnitRepository stockUnitRepository;
     private final DocumentSearchService documentService;
     private final LovService lovService;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
+    private final PrintService printService;
 
     // Add OracleDataSource or DataSource injection for stored procedure calls
     private final DataSource dataSource;
@@ -127,6 +138,12 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         SalesDeliveryNoteHdrDto dto = convertToDto(refreshedDeliveryNote, false);
         log.info("createDeliveryNote completed for groupPoid={} userId={} transactionPoid={}", groupPoid, userId,
                 dto.getTransactionPoid());
+        
+        // Log the creation
+        String key = savedDeliveryNote.getTransactionPoid().toString();
+        String documentId = UserContext.getDocumentId();
+        loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
+        
         return dto;
     }
 
@@ -250,6 +267,11 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         // callUpdateDeletedDetailsProcedure(groupPoid, companyPoid, userId,
         // transactionPoid);
 
+        // Log the update
+        String key = savedDeliveryNote.getTransactionPoid().toString();
+        loggingService.logChanges(deliveryNote, savedDeliveryNote, SalesDeliveryNoteHdr.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
+
         SalesDeliveryNoteHdrDto dto = convertToDto(refreshedDeliveryNote, true);
         log.info("updateDeliveryNote completed for transactionPoid={} companyPoid={}",
                 deliveryNote.getTransactionPoid(), deliveryNote.getCompanyPoid());
@@ -258,7 +280,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
     @Override
     @Transactional
-    public void deleteDeliveryNote(Long groupPoid, Long transactionPoid, Long companyPoid) {
+    public void deleteDeliveryNote(Long groupPoid, Long transactionPoid, Long companyPoid, DeleteReasonDto deleteReasonDto) {
         SalesDeliveryNoteHdr deliveryNote = deliveryNoteHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Delivery Note", "transactionPoid", transactionPoid));
@@ -273,6 +295,14 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
                     transactionPoid);
             throw new CustomException("Cannot delete delivery note. It is closed.");
         }
+
+        documentDeleteService.deleteDocument(
+                transactionPoid,
+                "SALES_DELIVERY_NOTE_HDR",
+                "TRANSACTION_POID",
+                deleteReasonDto,
+                LocalDate.now()
+        );
 
         // Delete item details
         itemDtlRepository.deleteByTransactionPoid(transactionPoid);
@@ -1370,5 +1400,12 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         }
         log.info("checkDeliveryNoteDependencies completed for transactionPoid={} companyPoid={}", transactionPoid, companyPoid);
         return resp;
+    }
+
+    @Override
+    public byte[] print(Long transactionPoid) throws Exception {
+        Map<String, Object> params = printService.buildBaseParams(transactionPoid, "350-104");
+        JasperReport mainReport = printService.load("ShipChandling/SALES/Sales_Delivery_note.jrxml");
+        return printService.fillReportToPdf(mainReport, params, dataSource);
     }
 }

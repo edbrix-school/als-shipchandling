@@ -8,6 +8,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.sql.Timestamp;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "AR_SCH_SALES_INVOICE_HDR")
@@ -29,7 +30,7 @@ public class SalesInvoiceHdr {
     private String docRef;
 
     @Column(name = "TRANSACTION_DATE")
-    private Timestamp transactionDate;
+    private LocalDate transactionDate;
 
     @Column(name = "GROUP_POID", nullable = false)
     private Long groupPoid;

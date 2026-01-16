@@ -1,5 +1,6 @@
 package com.asg.shipchandling.salesquotationsch.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.salesquotationsch.dto.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.*;
@@ -30,7 +31,7 @@ public interface SalesQuotationSchService {
                         UpdateSalesQuotationSchRequest request,
                         Long companyPoid, Long userPoid, String userId);
 
-        void deleteSalesQuotationSch(Long groupPoid, Long transactionPoid, Long companyPoid);
+        void deleteSalesQuotationSch(Long groupPoid, Long transactionPoid, Long companyPoid, DeleteReasonDto deleteReasonDto);
 
         // Search method with advanced filtering
         SalesQuotationSchListResponse search(SalesQuotationSchFilter filter, String userId);
@@ -75,4 +76,6 @@ public interface SalesQuotationSchService {
         
         // Currency Rate
         CurrencyRateResponse getLatestCurrencyRate(Long currencyPoid);
+
+    byte[] print(Long transactionPoid) throws Exception;
 }

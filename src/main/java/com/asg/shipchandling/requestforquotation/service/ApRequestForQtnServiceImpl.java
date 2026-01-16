@@ -1,9 +1,15 @@
 package com.asg.shipchandling.requestforquotation.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
+import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.commonlov.dto.LovItem;
 import com.asg.shipchandling.exceptions.CustomException;
@@ -18,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import net.sf.jasperreports.engine.JasperReport;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -47,6 +54,9 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     private final GlobalTaxMasterRepository globalTaxMasterRepository;
     private final CurrencyRateUploadTempRepository currencyRateUploadTempRepository;
     private final DocumentSearchService documentService;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
+    private final PrintService printService;
 
     @Autowired
     private DataSource dataSource;
@@ -132,6 +142,12 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         // Convert to DTO
         ApRequestForQtnHdrDto dto = convertToDto(refreshedRfq, true);
         log.info("RFQ created successfully with DOC_REF: {}", dto.getDocRef());
+        
+        // Log the creation
+        String key = savedRfq.getTransactionPoid().toString();
+        String documentId = UserContext.getDocumentId();
+        loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
+        
         return dto;
     }
 
@@ -250,12 +266,17 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         // Call stored procedure AFTER SAVE
         callItemsWithoutSupplierProcedure(groupPoid, companyPoid, normalizedUserId, transactionPoid);
 
+        // Log the update
+        String key = savedRfq.getTransactionPoid().toString();
+        loggingService.logChanges(rfq, savedRfq, ApRequestForQtnHdr.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
+
         return convertToDto(savedRfq, true);
     }
 
     @Override
     @Transactional
-    public void deleteRequestForQuotation(Long transactionPoid, Long groupPoid, Long companyPoid) {
+    public void deleteRequestForQuotation(Long transactionPoid, Long groupPoid, Long companyPoid, DeleteReasonDto deleteReasonDto) {
         if (groupPoid == null) {
             throw new CustomException("Group POID header is required");
         }
@@ -284,6 +305,14 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         if (existsPurchaseOrderForRfq(transactionPoid)) {
             throw new CustomException("Cannot delete RFQ. Purchase Orders are linked to this document.");
         }
+
+        documentDeleteService.deleteDocument(
+                transactionPoid,
+                "AP_REQUEST_FOR_QTN_HDR",
+                "TRANSACTION_POID",
+                deleteReasonDto,
+                LocalDate.now()
+        );
 
         performSoftDelete(rfq);
     }
@@ -2170,5 +2199,21 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             log.error("Failed to fetch supplier LOV for supplierPoid {}", supplierPoid, ex);
             return null;
         }
+    }
+
+    @Override
+    public byte[] printConfirmedSupplier(Long transactionPoid) throws Exception {
+        Map<String, Object> params = printService.buildBaseParams(transactionPoid, "200-100");
+        params.put("SUB_RFQ_DTL", printService.load("ShipChandling/AP/RequestForQuotationConfirmedSuppliersSubreport1.jrxml"));
+        JasperReport mainReport = printService.load("ShipChandling/AP/RequestForQuotationConfirmedSupplier.jrxml");
+        return printService.fillReportToPdf(mainReport, params, dataSource);
+    }
+
+    @Override
+    public byte[] print(Long transactionPoid) throws Exception {
+        Map<String, Object> params = printService.buildBaseParams(transactionPoid, "200-100");
+        params.put("SUB_RFQ_DTL_1", printService.load("ShipChandling/AP/RequestForQuotationNoSupplier_subreport1.jrxml"));
+        JasperReport mainReport = printService.load("ShipChandling/AP/RequestForQuotationNoSupplier.jrxml");
+        return printService.fillReportToPdf(mainReport, params, dataSource);
     }
 }
