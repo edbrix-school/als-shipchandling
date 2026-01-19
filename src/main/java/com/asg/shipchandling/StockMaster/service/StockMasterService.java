@@ -71,5 +71,7 @@ public interface StockMasterService {
 
     StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid);
     
+    StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid, Long customerPoid, Long transactionPoid);
+    
     StockDetailsResponse getStockDetailsByCode(String stockCode, Long companyPoid);
 }

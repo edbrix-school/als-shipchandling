@@ -64,6 +64,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.sql.CallableStatement;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Types;
 
 @Service
 @RequiredArgsConstructor
@@ -1820,7 +1824,14 @@ public class StockMasterServiceImpl implements StockMasterService {
     @Override
     @Transactional(readOnly = true)
     public StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid) {
-        logger.info("getStockDetails started for stockPoid={} companyPoid={}", stockPoid, companyPoid);
+        return getStockDetails(stockPoid, companyPoid, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid, Long customerPoid, Long transactionPoid) {
+        logger.info("getStockDetails started for stockPoid={} companyPoid={} customerPoid={} transactionPoid={}", 
+                stockPoid, companyPoid, customerPoid, transactionPoid);
         
         // Fetch stock details with category, tax, and unit in a single query
         List<Object[]> results = stockMasterRepository.findStockDetailsWithCategoryAndTax(stockPoid);
@@ -1833,8 +1844,64 @@ public class StockMasterServiceImpl implements StockMasterService {
         Object[] row = results.get(0);
         StockDetailsResponse response = populateStockDetailsFromQueryResult(row);
         
+        // Call stored procedure to get lastPrice if customerPoid and transactionPoid are provided
+        if (customerPoid != null && transactionPoid != null && response.getStockUnitPoid() != null) {
+            try {
+                BigDecimal lastPrice = callGetLastPriceProc(customerPoid, stockPoid, transactionPoid, response.getStockUnitPoid());
+                response.setLastPrice(lastPrice);
+                logger.info("Last price retrieved: {} for stockPoid={} customerPoid={}", lastPrice, stockPoid, customerPoid);
+            } catch (Exception e) {
+                logger.warn("Failed to retrieve last price for stockPoid={} customerPoid={}: {}", 
+                        stockPoid, customerPoid, e.getMessage());
+                // Don't fail the entire request if lastPrice retrieval fails
+                response.setLastPrice(null);
+            }
+        }
+        
         logger.info("getStockDetails completed for stockPoid={}", stockPoid);
         return response;
+    }
+    
+    /**
+     * Call PROC_SALES_SCQTN_SET_DFLT_DTL to get last price
+     * @param customerPoid Customer POID
+     * @param stockPoid Stock POID
+     * @param transactionPoid Transaction POID
+     * @param stockUnitPoid Stock Unit POID (IN OUT parameter)
+     * @return Last price (BigDecimal) or null if not found
+     */
+    private BigDecimal callGetLastPriceProc(Long customerPoid, Long stockPoid, Long transactionPoid, Long stockUnitPoid) {
+        String proc = "{call PROC_SALES_SCQTN_SET_DFLT_DTL(?, ?, ?, ?, ?)}";
+        return jdbcTemplate.execute((Connection con) -> {
+            try (CallableStatement cs = con.prepareCall(proc)) {
+                // Set input parameters
+                cs.setBigDecimal(1, BigDecimal.valueOf(customerPoid));        // P_CUSTOMER_POID (IN)
+                cs.setBigDecimal(2, BigDecimal.valueOf(stockPoid));           // P_STOCK_POID (IN)
+                cs.setBigDecimal(3, BigDecimal.valueOf(transactionPoid));       // P_TRANSACTION_POID (IN)
+                
+                // Register IN OUT parameter and set input value
+                cs.registerOutParameter(4, Types.NUMERIC); // P_STOCK_UNIT_POID (IN OUT)
+                cs.setBigDecimal(4, BigDecimal.valueOf(stockUnitPoid)); // Set the input value for IN OUT parameter
+                
+                // Register OUT parameter
+                cs.registerOutParameter(5, Types.NUMERIC); // P_LAST_PRICE (OUT)
+                
+                cs.execute();
+                
+                // Get the updated stockUnitPoid (if changed by procedure)
+                BigDecimal updatedStockUnitPoid = cs.getBigDecimal(4);
+                if (updatedStockUnitPoid != null && !updatedStockUnitPoid.equals(BigDecimal.valueOf(stockUnitPoid))) {
+                    logger.debug("Stock unit POID updated from {} to {}", stockUnitPoid, updatedStockUnitPoid);
+                }
+                
+                // Get last price
+                BigDecimal lastPrice = cs.getBigDecimal(5);
+                return lastPrice;
+            } catch (SQLException ex) {
+                logger.error("Error calling PROC_SALES_SCQTN_SET_DFLT_DTL: {}", ex.getMessage(), ex);
+                throw new RuntimeException("Error calling PROC_SALES_SCQTN_SET_DFLT_DTL: " + ex.getMessage(), ex);
+            }
+        });
     }
     
     /**
