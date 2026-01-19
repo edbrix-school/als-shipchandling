@@ -107,18 +107,14 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Validate required fields
         validateQuotationSchRequest(request);
 
-        // Set transactionDate to current date if not provided
-        if (request.getTransactionDate() == null) {
-            request.setTransactionDate(new Timestamp(System.currentTimeMillis()));
-            log.info("createSalesQuotationSch set transactionDate to current timestamp");
-        }
-
         // Keep a copy of the incoming value for any lookups before we overwrite customerPoid (legacy temp address flow)
         Long requestCustomerPoid = request.getCustomerPoid();
 
         // Create entity
         SalesQuotationSchHdr quotationSch = new SalesQuotationSchHdr();
-        BeanUtils.copyProperties(request, quotationSch);
+        BeanUtils.copyProperties(request, quotationSch, "transactionDate");
+        // Always set transactionDate to current timestamp (don't use value from request)
+        quotationSch.setTransactionDate(LocalDate.now());
         quotationSch.setCompanyPoid(companyPoid);
         quotationSch.setCreatedBy(userId);
         quotationSch.setLastmodifiedBy(userId);

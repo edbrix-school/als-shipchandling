@@ -545,7 +545,7 @@ public class SalesQuotationSchController {
                 return success("Currency rate fetched successfully", response);
         }
 
-        @Operation(summary = "Get Stock Details", description = "Retrieves stock details including category, tax, and unit information for a given stock POID.", responses = {
+        @Operation(summary = "Get Stock Details", description = "Retrieves stock details including category, tax, and unit information for a given stock POID. Optionally retrieves last price if customerPoid and transactionPoid are provided.", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully retrieved stock details"),
                         @ApiResponse(responseCode = "404", description = "Stock not found"),
                         @ApiResponse(responseCode = "400", description = "Invalid input"),
@@ -554,10 +554,13 @@ public class SalesQuotationSchController {
         @GetMapping("/stock-details")
         @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> getStockDetails(
-                        @RequestParam Long stockPoid) {
-                log.info("getStockDetails started for stockPoid={} companyPoid={} groupPoid={}", 
-                                stockPoid, UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                StockDetailsResponse response = stockMasterService.getStockDetails(stockPoid, UserContext.getCompanyPoid());
+                        @RequestParam Long stockPoid,
+                        @RequestParam(required = false) Long customerPoid,
+                        @RequestParam(required = false) Long transactionPoid) {
+                log.info("getStockDetails started for stockPoid={} companyPoid={} groupPoid={} customerPoid={} transactionPoid={}", 
+                                stockPoid, UserContext.getCompanyPoid(), UserContext.getGroupPoid(), customerPoid, transactionPoid);
+                StockDetailsResponse response = stockMasterService.getStockDetails(
+                        stockPoid, UserContext.getCompanyPoid(), customerPoid, transactionPoid);
                 log.info("getStockDetails completed for stockPoid={}", stockPoid);
                 return success("Stock details fetched successfully", response);
         }

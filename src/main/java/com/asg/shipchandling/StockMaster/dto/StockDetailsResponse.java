@@ -28,6 +28,7 @@ public class StockDetailsResponse {
     private String barcode;
     private String active;
     private String deleted;
+    private BigDecimal lastPrice;
 
     // Category Details
     private CategoryDetailDto categoryDetails;
