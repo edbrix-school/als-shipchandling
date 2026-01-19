@@ -1871,6 +1871,20 @@ public class StockMasterServiceImpl implements StockMasterService {
      * @return Last price (BigDecimal) or null if not found
      */
     private BigDecimal callGetLastPriceProc(Long customerPoid, Long stockPoid, Long transactionPoid, Long stockUnitPoid) {
+        // Validate all parameters are non-null before conversion
+        if (customerPoid == null) {
+            throw new IllegalArgumentException("customerPoid cannot be null");
+        }
+        if (stockPoid == null) {
+            throw new IllegalArgumentException("stockPoid cannot be null");
+        }
+        if (transactionPoid == null) {
+            throw new IllegalArgumentException("transactionPoid cannot be null");
+        }
+        if (stockUnitPoid == null) {
+            throw new IllegalArgumentException("stockUnitPoid cannot be null");
+        }
+        
         String proc = "{call PROC_SALES_SCQTN_SET_DFLT_DTL(?, ?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
