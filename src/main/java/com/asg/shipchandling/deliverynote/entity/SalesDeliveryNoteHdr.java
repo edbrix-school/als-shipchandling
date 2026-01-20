@@ -1,5 +1,6 @@
 package com.asg.shipchandling.deliverynote.entity;
 
+import com.asg.common.lib.annotation.AuditIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -26,16 +27,20 @@ public class SalesDeliveryNoteHdr {
     // "dn_trans_seq")
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "TRANSACTION_POID", nullable = false)
+    @AuditIgnore
     private Long transactionPoid;
 
     @Column(name = "DOC_REF", length = 25, unique = true, insertable = false, updatable = false)
     @Generated(GenerationTime.INSERT)
+    @AuditIgnore
     private String docRef;
 
     @Column(name = "TRANSACTION_DATE")
+    @AuditIgnore
     private Timestamp transactionDate;
 
     @Column(name = "COMPANY_POID")
+    @AuditIgnore
     private Long companyPoid;
 
     @Column(name = "CUSTOMER_POID")
@@ -60,6 +65,7 @@ public class SalesDeliveryNoteHdr {
     private String deliveryTerms;
 
     @Column(name = "LINE_POID")
+    @AuditIgnore
     private Long linePoid;
 
     @Column(name = "VESSEL_POID", length = 50)
@@ -90,6 +96,7 @@ public class SalesDeliveryNoteHdr {
     private String descriptionPrintYn = "Y";
 
     @Column(name = "PARTY_ADDRESS_DETAILS", length = 1000)
+    @AuditIgnore
     private String partyAddressDetails;
 
     @Column(name = "PRINT_DIVISION_POID")
@@ -99,31 +106,39 @@ public class SalesDeliveryNoteHdr {
     private String partyType;
 
     @Column(name = "PRINCIPAL_POID")
+    @AuditIgnore
     private Long principalPoid;
 
     @Column(name = "TOTAL_DISCOUNT")
+    @AuditIgnore
     private Long totalDiscount;
 
     @Column(name = "TOTAL_AMOUNT")
+    @AuditIgnore
     private Long totalAmount;
 
     @Column(name = "REMARKS", length = 500)
     private String remarks;
 
     @Column(name = "DELETED", length = 1)
+    @AuditIgnore
     private String deleted = "N";
 
     @Column(name = "CREATED_BY", length = 20)
+    @AuditIgnore
     private String createdBy;
 
     @CreationTimestamp
     @Column(name = "CREATED_DATE")
+    @AuditIgnore
     private Timestamp createdDate;
 
     @Column(name = "LASTMODIFIED_BY", length = 20)
+    @AuditIgnore
     private String lastmodifiedBy;
 
     @UpdateTimestamp
     @Column(name = "LASTMODIFIED_DATE")
+    @AuditIgnore
     private Timestamp lastmodifiedDate;
 }

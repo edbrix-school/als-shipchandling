@@ -1,5 +1,6 @@
 package com.asg.shipchandling.salesquotationsch.entity;
 
+import com.asg.common.lib.annotation.AuditIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -22,16 +23,20 @@ public class SalesQuotationSchHdr {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "TRANSACTION_POID", nullable = false)
+    @AuditIgnore
     private Long transactionPoid;
 
     @Column(name = "TRANSACTION_DATE")
+    @AuditIgnore
     private LocalDate transactionDate;
 
     @Column(name = "COMPANY_POID")
+    @AuditIgnore
     private Long companyPoid;
 
     @Column(name = "DOC_REF", length = 25, unique = true, insertable = false, updatable = false)
     @Generated(GenerationTime.INSERT)
+    @AuditIgnore
     private String docRef;
 
     @Column(name = "CUSTOMER_POID")
@@ -62,15 +67,18 @@ public class SalesQuotationSchHdr {
     private String paymentMode;
 
     @Column(name = "DELIVERY_TERMS", length = 30)
+    @AuditIgnore
     private String deliveryTerms;
 
     @Column(name = "LINE_POID")
+    @AuditIgnore
     private Long linePoid;
 
     @Column(name = "VESSEL_POID", length = 50)
     private String vesselPoid;
 
     @Column(name = "VOYAGE_REF", length = 20)
+    @AuditIgnore
     private String voyageRef;
 
     @Column(name = "REMARKS", length = 500)
@@ -83,44 +91,56 @@ public class SalesQuotationSchHdr {
     private Long totalAmount;
 
     @Column(name = "ACTION_STATUS", length = 20)
+    @AuditIgnore
     private String actionStatus;
 
     @Column(name = "ACTION_DUE_DATE")
+    @AuditIgnore
     private Timestamp actionDueDate;
 
     @Column(name = "ENQUIRY_REF_NUMBER")
+    @AuditIgnore
     private Long enquiryRefNumber;
 
     @Column(name = "DELETED", length = 1)
+    @AuditIgnore
     private String deleted;
 
     @Column(name = "CREATED_BY", length = 20)
+    @AuditIgnore
     private String createdBy;
 
     @CreationTimestamp
     @Column(name = "CREATED_DATE")
+    @AuditIgnore
     private Timestamp createdDate;
 
     @Column(name = "LASTMODIFIED_BY", length = 20)
+    @AuditIgnore
     private String lastmodifiedBy;
 
     @UpdateTimestamp
     @Column(name = "LASTMODIFIED_DATE")
+    @AuditIgnore
     private Timestamp lastmodifiedDate;
 
     @Column(name = "LOST_REASON", length = 20)
+    @AuditIgnore
     private String lostReason;
 
     @Column(name = "BUSINESS_PROMOTION_VALUE")
+    @AuditIgnore
     private Long businessPromotionValue;
 
     @Column(name = "PERCENTAGE")
+    @AuditIgnore
     private Long percentage;
 
     @Column(name = "DETAILS", length = 100)
     private String details;
 
     @Column(name = "EXPEACTED_DELIVERY_DATE")
+    @AuditIgnore
     private Timestamp expectedDeliveryDate;
 
     @Column(name = "VESSEL_AGENT", length = 50)
@@ -130,9 +150,11 @@ public class SalesQuotationSchHdr {
     private Long portPoid;
 
     @Column(name = "QUOTED_RATE", length = 20)
+    @AuditIgnore
     private String quotedRate;
 
     @Column(name = "RFQ_REF_NO", length = 25)
+    @AuditIgnore
     private String rfqRefNo;
 
     @Column(name = "PERCENTAGE_DISC")
@@ -157,6 +179,7 @@ public class SalesQuotationSchHdr {
     private String deliveryToAddress;
 
     @Column(name = "SELECT_ALL_DTL", length = 1)
+    @AuditIgnore
     private String selectAllDtl = "N";
 
     @Column(name = "TOT_AMT_PRINT_YN", length = 1)
@@ -166,20 +189,25 @@ public class SalesQuotationSchHdr {
     private String descriptionPrintYn = "Y";
 
     @Column(name = "ADVANCE_DETAIL", length = 1)
+    @AuditIgnore
     private String advanceDetail = "Y";
 
     @Column(name = "MTA_INV_POID")
+    @AuditIgnore
     private Long mtaInvPoid;
 
     @Column(name = "SALES_INV_POID")
     private Long salesInvPoid;
 
     @Column(name = "SALES_INV_DOC_REF", length = 50)
+    @AuditIgnore
     private String salesInvDocRef;
 
     @Column(name = "TOTAL_TAX")
+    @AuditIgnore
     private Long totalTax;
 
     @Column(name = "PARTY_ADDRESS_DETAILS", length = 1000)
+    @AuditIgnore
     private String partyAddressDetails;
 }

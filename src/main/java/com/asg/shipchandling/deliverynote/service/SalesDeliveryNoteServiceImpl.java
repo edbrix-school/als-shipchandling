@@ -726,21 +726,10 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
                                 .orElse(null);
 
                         if (existingItem != null) {
-                            // Check if item is from quotation (read-only fields)
-                           /*  if (existingItem.getQtnDetRowId() != null && existingItem.getQtnDetRowId() > 0) {
-                                // StockPoid and Quantity are read-only if loaded from quotation
-                                if (item.getStockPoid() != null && !item.getStockPoid().equals(existingItem.getStockPoid())) {
-                                    log.warn("Attempt to change stockPoid for item loaded from quotation. transactionPoid={} detRowId={}",
-                                            transactionPoid, item.getDetRowId());
-                                    throw new CustomException("Cannot change stock. Item is loaded from quotation.");
-                                }
-                                if (item.getQuantity() != null && !item.getQuantity().equals(existingItem.getQuantity())) {
-                                    log.warn("Attempt to change quantity for item loaded from quotation. transactionPoid={} detRowId={}",
-                                            transactionPoid, item.getDetRowId());
-                                    throw new CustomException("Cannot change quantity. Item is loaded from quotation.");
-                                }
-                            }
-                             */
+                            // Create a copy of the existing item for logging
+                            SalesDeliveryNoteItemDtl oldItem = new SalesDeliveryNoteItemDtl();
+                            BeanUtils.copyProperties(existingItem, oldItem);
+
                             // Update fields
                             if (existingItem.getQtnDetRowId() == null || existingItem.getQtnDetRowId() == 0) {
                                 existingItem.setStockPoid(item.getStockPoid());
@@ -757,6 +746,14 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
                             existingItem.setLastmodifiedBy(userId);
 
                             itemDtlRepository.save(existingItem);
+
+                            String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", existingItem.getTransactionPoid(),existingItem.getDetRowId());
+                            
+                            // Log the changes
+                            loggingService.createLog(oldItem, existingItem, SalesDeliveryNoteItemDtl.class,
+                                    UserContext.getDocumentId(),transactionPoid.toString(),
+                                    logDetail);
+                            
                             log.debug("Updated item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
                         } else {
                             log.warn("Item not found for UPDATE action transactionPoid={} detRowId={}, treating as CREATE",

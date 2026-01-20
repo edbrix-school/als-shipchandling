@@ -821,6 +821,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                     throw new CustomException("Item detail not found for update. detRowId=" + item.getDetRowId());
                 }
 
+                // Create a copy of the existing item for logging
+                SalesQuotationSchItemDtl oldItem = new SalesQuotationSchItemDtl();
+                BeanUtils.copyProperties(existingItem, oldItem);
+
                 existingItem.setStockPoid(item.getStockPoid());
                 existingItem.setQuantity(item.getQuantity());
                 existingItem.setPrice(item.getPrice());
@@ -849,6 +853,14 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 existingItem.setLastmodifiedBy(userId);
 
                 itemDtlRepository.save(existingItem);
+
+                String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", existingItem.getTransactionPoid(), existingItem.getDetRowId());
+
+                // Log the changes
+                loggingService.createLog(oldItem, existingItem, SalesQuotationSchItemDtl.class,
+                        UserContext.getDocumentId(), transactionPoid.toString(),
+                        logDetail);
+
                 log.debug("Updated item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
                 continue;
             }
