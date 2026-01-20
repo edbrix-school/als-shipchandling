@@ -1835,12 +1835,16 @@ public class StockMasterServiceImpl implements StockMasterService {
         
         // Fetch stock details with category, tax, and unit in a single query
         List<Object[]> results = stockMasterRepository.findStockDetailsWithCategoryAndTax(stockPoid);
-        
-        if (results.isEmpty()) {
-            logger.warn("Stock not found for stockPoid={}", stockPoid);
-            throw new ResourceNotFoundException("Stock", "stockPoid", stockPoid);
+
+        // If no stock details are found, log a warning and return an empty response
+        // instead of throwing an exception. This prevents callers (like quotation
+        // LOV population) from failing or marking transactions for rollback when
+        // a stock record is missing.
+        if (results == null || results.isEmpty()) {
+            logger.warn("Stock not found for stockPoid={}, returning empty response", stockPoid);
+            return new StockDetailsResponse();
         }
-        
+
         Object[] row = results.get(0);
         StockDetailsResponse response = populateStockDetailsFromQueryResult(row);
         
