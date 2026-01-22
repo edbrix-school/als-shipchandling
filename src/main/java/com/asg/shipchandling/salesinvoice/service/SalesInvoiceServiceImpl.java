@@ -1651,7 +1651,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional(readOnly = true)
-    public LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, String qtnPoid) {
+    public LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, Long qtnPoid) {
         if (qtnPoid == null) {
             throw new CustomException("Quotation POID is required");
         }

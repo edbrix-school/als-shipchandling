@@ -28,7 +28,7 @@ public class SalesInvoiceHdrDto {
     private Long invAmount;
     private Long creditDays;
     private Timestamp dueDate;
-    private String qtnPoid;
+    private Long qtnPoid;
     private String status;
     private String invStatus;
     private Long discountPercent;

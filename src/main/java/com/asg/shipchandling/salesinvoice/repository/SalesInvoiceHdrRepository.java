@@ -44,7 +44,7 @@ public interface SalesInvoiceHdrRepository extends JpaRepository<SalesInvoiceHdr
             Long groupPoid, Long companyPoid, Long principalPoid, String deleted);
 
     List<SalesInvoiceHdr> findByGroupPoidAndCompanyPoidAndQtnPoidAndDeletedNotOrDeletedIsNull(
-            Long groupPoid, Long companyPoid, String qtnPoid, String deleted);
+            Long groupPoid, Long companyPoid, Long qtnPoid, String deleted);
 
     // Custom method signature - implementation in SalesInvoiceHdrRepositoryImpl
     // This method returns results with joined customer name
