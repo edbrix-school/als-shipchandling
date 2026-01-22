@@ -459,7 +459,7 @@ public class SalesInvoiceHdrRepositoryImpl {
         entity.setInvAmount(row[11] != null ? ((Number) row[11]).longValue() : null);
         entity.setCreditDays(row[12] != null ? ((Number) row[12]).longValue() : null);
         entity.setDueDate(row[13] != null ? (java.sql.Timestamp) row[13] : null);
-        entity.setQtnPoid(((Number) row[14]).longValue());
+        entity.setQtnPoid(row[14] != null ? ((Number) row[14]).longValue() : null);
         entity.setStatus(toStringSafe(row[15]));
         entity.setInvStatus(toStringSafe(row[16]));
         entity.setDiscountPercent(row[17] != null ? ((Number) row[17]).longValue() : null);
