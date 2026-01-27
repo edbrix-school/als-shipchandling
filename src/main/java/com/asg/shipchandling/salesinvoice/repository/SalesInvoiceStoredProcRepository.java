@@ -139,7 +139,7 @@ public class SalesInvoiceStoredProcRepository {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
                 cs.setLong(1, transactionPoid);
-                cs.setLong(2, request.getQtnPoid());
+                cs.setLong(2, request.getQtnPoid() != null ? request.getQtnPoid() : null);
                 cs.setLong(3, request.getIncentiveAmt() != null ? request.getIncentiveAmt() : null);
                 cs.setLong(4, request.getIncentiveAmt2() != null ? request.getIncentiveAmt2() : null);
                 cs.setLong(5, request.getIncentiveAmt3() != null ? request.getIncentiveAmt3() : null);
