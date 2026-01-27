@@ -1,5 +1,6 @@
 package com.asg.shipchandling.salesinvoice.entity;
 
+import com.asg.common.lib.annotation.AuditIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -24,16 +25,20 @@ public class SalesInvoiceDtl {
 
     @Id
     @Column(name = "TRANSACTION_POID", nullable = false)
+    @AuditIgnore
     private Long transactionPoid;
 
     @Id
     @Column(name = "DET_ROW_ID", nullable = false)
+    @AuditIgnore
     private Long detRowId;
 
     @Column(name = "DN_POID_LINK_FK")
+    @AuditIgnore
     private Long dnPoidLinkFk;
 
     @Column(name = "DET_ROW_ID_CHRG_FK")
+    @AuditIgnore
     private Long detRowIdChrgFk;
 
     @Column(name = "STOCK_POID")
@@ -60,17 +65,21 @@ public class SalesInvoiceDtl {
     private Long stockUnitPoid;
 
     @Column(name = "CREATED_BY", length = 20)
+    @AuditIgnore
     private String createdBy;
 
     @CreationTimestamp
     @Column(name = "CREATED_DATE")
+    @AuditIgnore
     private Timestamp createdDate;
 
     @Column(name = "LASTMODIFIED_BY", length = 20)
+    @AuditIgnore
     private String lastmodifiedBy;
 
     @UpdateTimestamp
     @Column(name = "LASTMODIFIED_DATE")
+    @AuditIgnore
     private Timestamp lastmodifiedDate;
 
     @Column(name = "QUOTATION_POID")
@@ -80,6 +89,7 @@ public class SalesInvoiceDtl {
     private Long costAmt;
 
     @Column(name = "QTN_DET_ROW_ID")
+    @AuditIgnore
     private Long quotationDetRowId;
 
     @Column(name = "PURCHASE_PRICE")
@@ -92,6 +102,7 @@ public class SalesInvoiceDtl {
     private Long netSales;
 
     @Column(name = "NET_DISCOUNT")
+    @AuditIgnore
     private Long netDiscount;
 
     @Column(name = "ITEM_GP")
@@ -113,6 +124,7 @@ public class SalesInvoiceDtl {
     private Long taxPoid;
 
     @Column(name = "BASE_AMT")
+    @AuditIgnore
     private Long baseAmt;
 
     @Column(name = "INCENTIVE")
