@@ -1484,6 +1484,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             throw new CustomException("Cannot calculate GP. Invoice is verified.");
         }
 
+        if (invoice.getQtnPoid() == null) {
+            throw new CustomException("Quotation POID is required for this operation");
+        }
+
         // Call stored procedure to calculate GP
         ValidationResponse response = salesInvoiceStoredProcRepository.callCalculateGpProc(transactionPoid,
                 invoice.getQtnPoid());
@@ -1514,6 +1518,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         SalesInvoiceHdr invoice = invoiceHdrRepository
                 .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
+
+        if (invoice.getQtnPoid() == null) {
+            throw new CustomException("Quotation POID is required for this operation");
+        }
 
         // Call stored procedure to load cost bookings
         ValidationResponse result = salesInvoiceStoredProcRepository.callLoadCostBookingsProc(transactionPoid,
@@ -1700,7 +1708,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional(readOnly = true)
-    public LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, String qtnPoid) {
+    public LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, Long qtnPoid) {
         if (qtnPoid == null) {
             throw new CustomException("Quotation POID is required");
         }

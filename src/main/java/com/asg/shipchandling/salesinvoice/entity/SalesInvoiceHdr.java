@@ -75,7 +75,7 @@ public class SalesInvoiceHdr {
     private Timestamp dueDate;
 
     @Column(name = "QTN_POID")
-    private String qtnPoid;
+    private Long qtnPoid;
 
     @Column(name = "STATUS", length = 20)
     @AuditIgnore

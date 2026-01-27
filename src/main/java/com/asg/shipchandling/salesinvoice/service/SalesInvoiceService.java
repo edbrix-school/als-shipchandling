@@ -100,7 +100,7 @@ public interface SalesInvoiceService {
         SalesInvoiceDependenciesDto checkSalesInvoiceDependencies(Long transactionPoid,
                                                                   Long groupPoid, Long companyPoid);
 
-        LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, String qtnPoid);
+        LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, Long qtnPoid);
 
         ValidationResponse validateCustomer(Long customerPoid, Long groupPoid, Long companyPoid);
 

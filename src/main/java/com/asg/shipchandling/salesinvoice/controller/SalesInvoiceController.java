@@ -469,7 +469,7 @@ public class SalesInvoiceController {
         @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> loadQuotationCurrency(
                         @PathVariable Long transactionPoid,
-                        @RequestParam String qtnPoid) {
+                        @RequestParam Long qtnPoid) {
                 log.info("Loading quotation currency for qtnPoid: {}", qtnPoid);
                 LoadQuotationCurrencyResponse response = invoiceService.loadQuotationCurrency(transactionPoid, qtnPoid);
                 log.info("Quotation currency loaded for qtnPoid: {}", qtnPoid);
