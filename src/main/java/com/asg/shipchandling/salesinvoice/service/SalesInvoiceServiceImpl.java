@@ -178,6 +178,16 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     }
 
                     SalesInvoiceDtl savedDtl = invoiceDtlRepository.save(dtl);
+                    String logDetail = String.format(
+                            "Row Created on Sales Invoice Detail with detRowId: %s",
+                            savedDtl.getDetRowId()
+                    );
+
+                    loggingService.createLogSummaryEntry(
+                            UserContext.getDocumentId(),
+                            savedInvoice.getTransactionPoid().toString(),
+                            logDetail
+                    );
                 }
             }
 
@@ -208,6 +218,17 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
                     log.debug("Creating delivery note detail with detRowId: {}, remarks: {}", detRowId, dnDtl.getRemarks());
                     SalesDnDtl savedDtl = dnDtlRepository.save(dtl);
+
+                    String logDetail = String.format(
+                            "Row Created on Sales Delivery Note Detail with detRowId: %s",
+                            savedDtl.getDetRowId()
+                    );
+
+                    loggingService.createLogSummaryEntry(
+                            UserContext.getDocumentId(),
+                            savedInvoice.getTransactionPoid().toString(),
+                            logDetail
+                    );
                 }
                 // Flush to ensure all delivery note detail changes are persisted
                 dnDtlRepository.flush();
@@ -789,6 +810,11 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                             log.warn("Failed to delete invoice detail with detRowId: {}", invDetail.getDetRowId(), e);
                         }
                     }
+                    loggingService.logDelete(
+                            invDetail,
+                            UserContext.getDocumentId(),
+                            transactionPoid.toString()
+                    );
                     continue;
                 }
                 
@@ -827,6 +853,16 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     
                     invoiceDtlRepository.save(newDtl);
                     log.debug("Created new invoice detail with detRowId: {}", detRowId);
+                    String logDetail = String.format(
+                            "Row Created on Sales Invoice Detail with detRowId: %s",
+                            detRowId
+                    );
+
+                    loggingService.createLogSummaryEntry(
+                            UserContext.getDocumentId(),
+                            transactionPoid.toString(),
+                            logDetail
+                    );
                     continue;
                 }
                 
@@ -847,6 +883,8 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                         .findById(new SalesInvoiceDtlId(transactionPoid, invDetail.getDetRowId()))
                         .orElseThrow(
                                 () -> new ResourceNotFoundException("Invoice Detail", "detRowId", invDetail.getDetRowId()));
+                SalesInvoiceDtl oldDtl = new SalesInvoiceDtl();
+                BeanUtils.copyProperties(dtl, oldDtl);
 
                 // Update fields (only editable fields)
                 dtl.setStockPoid(invDetail.getStockPoid());
@@ -877,6 +915,17 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
                 invoiceDtlRepository.save(dtl);
                 log.debug("Updated invoice detail with detRowId: {}", invDetail.getDetRowId());
+
+                loggingService.logChanges(
+                        oldDtl,
+                        dtl,
+                        SalesInvoiceDtl.class,
+                        UserContext.getDocumentId(),
+                        transactionPoid.toString(),
+                        LogDetailsEnum.MODIFIED,
+                        "KeyId = TRANSACTION_POID: " + transactionPoid +
+                                " DET_ROW_ID: " + invDetail.getDetRowId()
+                );
             }
         }
 
@@ -890,6 +939,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     if (dnDtlRequest.getDetRowId() != null) {
                         try {
                             dnDtlRepository.deleteById(new SalesDnDtlId(transactionPoid, dnDtlRequest.getDetRowId()));
+                            loggingService.logDelete(dnDtlRequest,  UserContext.getDocumentId(), transactionPoid.toString());
                             log.debug("Deleted delivery note detail with detRowId: {}", dnDtlRequest.getDetRowId());
                         } catch (Exception e) {
                             log.warn("Failed to delete delivery note detail with detRowId: {}", dnDtlRequest.getDetRowId(), e);
@@ -921,6 +971,11 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     
                     dnDtlRepository.save(newDtl);
                     log.debug("Successfully created new delivery note detail with detRowId: {}", detRowId);
+                    loggingService.createLogSummaryEntry(
+                            UserContext.getDocumentId(),
+                            transactionPoid.toString(),
+                            "Row Created on Sales Delivery Note Detail with detRowId: " + detRowId
+                    );
                     continue;
                 }
                 
@@ -942,6 +997,9 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                         .orElseThrow(() -> new ResourceNotFoundException("Delivery Note Detail", "detRowId",
                                 dnDtlRequest.getDetRowId()));
 
+                SalesDnDtl oldDtl = new SalesDnDtl();
+                BeanUtils.copyProperties(dtl, oldDtl);
+
                 log.debug("Updating delivery note detail with detRowId: {}, old remarks: {}, new remarks: {}", 
                         dnDtlRequest.getDetRowId(), dtl.getRemarks(), dnDtlRequest.getRemarks());
 
@@ -954,6 +1012,16 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 dnDtlRepository.save(dtl);
                 log.debug("Updated delivery note detail with detRowId: {}, remarks: {}", 
                         dnDtlRequest.getDetRowId(), dnDtlRequest.getRemarks());
+                loggingService.logChanges(
+                        oldDtl,
+                        dtl,
+                        SalesDnDtl.class,
+                        UserContext.getDocumentId(),
+                        transactionPoid.toString(),
+                        LogDetailsEnum.MODIFIED,
+                        "KeyId = TRANSACTION_POID: " + transactionPoid +
+                                " DET_ROW_ID: " + dnDtlRequest.getDetRowId()
+                );
             }
             // Flush to ensure all delivery note detail changes are persisted
             dnDtlRepository.flush();
