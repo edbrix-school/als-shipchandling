@@ -888,8 +888,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 BeanUtils.copyProperties(dtl, oldDtl);
 
                 // Create a copy of the existing detail for logging
-                SalesInvoiceDtl oldDtl = new SalesInvoiceDtl();
-                BeanUtils.copyProperties(dtl, oldDtl);
+
 
                 // Update fields (only editable fields)
                 dtl.setStockPoid(invDetail.getStockPoid());
@@ -1017,8 +1016,6 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                         dnDtlRequest.getDetRowId(), dtl.getRemarks(), dnDtlRequest.getRemarks());
 
                 // Create a copy of the existing detail for logging
-                SalesDnDtl oldDtl = new SalesDnDtl();
-                BeanUtils.copyProperties(dtl, oldDtl);
 
                 // Update fields
                 dtl.setDnPoidFk(dnDtlRequest.getDnPoidFk());
