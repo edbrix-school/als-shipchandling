@@ -1,5 +1,6 @@
 package com.asg.shipchandling.requestforquotation.entity;
 
+import com.asg.common.lib.annotation.AuditIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -19,10 +20,12 @@ public class ApRequestForQtnSupDtl {
 
     @Id
     @Column(name = "TRANSACTION_POID", nullable = false)
+    @AuditIgnore
     private Long transactionPoid;
 
     @Id
     @Column(name = "DET_ROW_ID", nullable = false)
+    @AuditIgnore
     private Long detRowId;
 
     @Column(name = "SUPPLIER_POID")
@@ -32,16 +35,20 @@ public class ApRequestForQtnSupDtl {
     private String remarks;
 
     @Column(name = "CREATED_BY", length = 20)
+    @AuditIgnore
     private String createdBy;
 
     @CreationTimestamp
     @Column(name = "CREATED_DATE")
+    @AuditIgnore
     private Timestamp createdDate;
 
     @Column(name = "LASTMODIFIED_BY", length = 20)
+    @AuditIgnore
     private String lastmodifiedBy;
 
     @UpdateTimestamp
     @Column(name = "LASTMODIFIED_DATE")
+    @AuditIgnore
     private Timestamp lastmodifiedDate;
 }

@@ -1,5 +1,6 @@
 package com.asg.shipchandling.StockMaster.entity;
 
+import com.asg.common.lib.annotation.AuditIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -32,6 +33,7 @@ public class StockMasterEntity {
     private String stockName;
 
     @Column(name = "STOCK_NAME2", length = 100)
+    @AuditIgnore
     private String stockName2;
 
     @Column(name = "STOCK_DESCRIPTION", length = 1000)
@@ -47,18 +49,22 @@ public class StockMasterEntity {
     private Long purchaseStockUnitPoid;
 
     @Column(name = "PURCHASE_SALES_CONVERSION")
+    @AuditIgnore
     private BigDecimal purchaseSalesConversion;
 
     @Column(name = "STOCK_COST")
     private BigDecimal stockCost;
 
     @Column(name = "TAG_PRICE")
+    @AuditIgnore
     private BigDecimal tagPrice;
 
     @Column(name = "RETAIL_PRICE")
+    @AuditIgnore
     private BigDecimal retailPrice;
 
     @Column(name = "WHOLESALE_PRICE")
+    @AuditIgnore
     private BigDecimal wholesalePrice;
 
     @Column(name = "PRICE1")
@@ -98,6 +104,7 @@ public class StockMasterEntity {
     private String active = "Y";
 
     @Column(name = "DELETED", length = 1)
+    @AuditIgnore
     private String deleted = "N";
 
     @Column(name = "SERVICE_ITEM", length = 1)
@@ -113,6 +120,7 @@ public class StockMasterEntity {
     private String printLabel = "N";
 
     @Column(name = "SERIAL_NO_TRACKING", length = 1)
+    @AuditIgnore
     private String serialNoTracking = "N";
 
     @Column(name = "WASTAGE_PERCENTAGE")
@@ -134,61 +142,80 @@ public class StockMasterEntity {
     private String onlineStock;
 
     @Column(name = "IS_GIFT_CARD", length = 1)
+    @AuditIgnore
     private String isGiftCard = "N";
 
     @Column(name = "CONSUMPTION_QTY")
+    @AuditIgnore
     private BigDecimal consumptionQty;
 
     @Column(name = "CONSUMPTION_UNIT_POID")
+    @AuditIgnore
     private Long consumptionUnitPoid;
 
     @Column(name = "MINIMUM_REQUIRED_QTY")
+    @AuditIgnore
     private BigDecimal minimumRequiredQty;
 
     @Column(name = "SEASON_CODE", length = 50)
+    @AuditIgnore
     private String seasonCode;
 
     @Column(name = "FABRIC_TYPE", length = 50)
+    @AuditIgnore
     private String fabricType;
 
     @Column(name = "ORIGIN", length = 50)
+    @AuditIgnore
     private String origin;
 
     @Column(name = "COMPOSITION", length = 200)
+    @AuditIgnore
     private String composition;
 
     @Column(name = "ITEM_SIZE", length = 50)
+    @AuditIgnore
     private String itemSize;
 
     @Column(name = "STOCK_BRAND", length = 100)
+    @AuditIgnore
     private String stockBrand;
 
     @Column(name = "STOCK_COLOR", length = 50)
+    @AuditIgnore
     private String stockColor;
 
     @Column(name = "STOCK_CARE_INSTRUCTIONS", length = 500)
+    @AuditIgnore
     private String stockCareInstructions;
 
     @Column(name = "STOCK_DTLD_NARRATION", length = 2000)
+    @AuditIgnore
     private String stockDtldNarration;
 
     @Column(name = "PRODUCT_TAGS", length = 500)
+    @AuditIgnore
     private String productTags;
 
     @Column(name = "GROUP_POID", nullable = false)
+    @AuditIgnore
     private Long groupPoid;
 
     @Column(name = "CREATED_BY", length = 20)
+    @AuditIgnore
     private String createdBy;
 
     @CreationTimestamp
     @Column(name = "CREATED_DATE")
+    @AuditIgnore
     private Timestamp createdDate;
 
     @Column(name = "LASTMODIFIED_BY", length = 20)
+    @AuditIgnore
     private String lastmodifiedBy;
 
     @UpdateTimestamp
     @Column(name = "LASTMODIFIED_DATE")
+    @AuditIgnore
     private Timestamp lastmodifiedDate;
 }

@@ -12,6 +12,7 @@ import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.commonlov.dto.LovItem;
+import com.asg.shipchandling.deliverynote.entity.SalesDeliveryNoteItemDtl;
 import com.asg.shipchandling.exceptions.CustomException;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
 import com.asg.shipchandling.requestforquotation.dto.ItemWithoutSupplierDto;
@@ -711,6 +712,10 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                 .findById(new ApRequestForQtnItemDtlId(transactionPoid, request.getDetRowId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Item Detail", "detRowId", request.getDetRowId()));
 
+        // Create a copy of the existing item for logging
+        ApRequestForQtnItemDtl oldItem = new ApRequestForQtnItemDtl();
+        BeanUtils.copyProperties(itemDtl, oldItem);
+
         // Check conditional read-only: If RefPoid > 0, some fields become read-only
         if (itemDtl.getRefPoid() != null && !itemDtl.getRefPoid().isEmpty() &&
                 Long.parseLong(itemDtl.getRefPoid()) > 0) {
@@ -765,6 +770,15 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         itemDtl.setLastmodifiedBy(userId);
 
         rfqItemDtlRepository.save(itemDtl);
+
+
+        String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", itemDtl.getTransactionPoid(),itemDtl.getDetRowId());
+
+        // Log the changes
+        loggingService.createLog(oldItem, itemDtl, ApRequestForQtnItemDtl.class,
+                UserContext.getDocumentId(),transactionPoid.toString(),
+                logDetail);
+
     }
 
     /**
@@ -812,12 +826,24 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                 .findById(new ApRequestForQtnSupDtlId(transactionPoid, request.getDetRowId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Supplier Detail", "detRowId", request.getDetRowId()));
 
+        // Create a copy of the existing supplier for logging
+        ApRequestForQtnSupDtl oldSupDtl = new ApRequestForQtnSupDtl();
+        BeanUtils.copyProperties(supDtl, oldSupDtl);
+
         // Update fields
         supDtl.setSupplierPoid(request.getSupplierPoid());
         supDtl.setRemarks(hasText(request.getRemarks()) ? request.getRemarks().trim() : null);
         supDtl.setLastmodifiedBy(userId);
 
         rfqSupDtlRepository.save(supDtl);
+
+        String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", supDtl.getTransactionPoid(),supDtl.getDetRowId());
+
+        // Log the changes
+        loggingService.createLog(oldSupDtl, supDtl, ApRequestForQtnSupDtl.class,
+                UserContext.getDocumentId(),transactionPoid.toString(),
+                logDetail);
+
     }
 
     /**
@@ -1450,6 +1476,9 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             throw new CustomException("Cannot add suppliers. RFQ is in closed status");
         }
 
+        // Get suppliers before adding new ones for logging
+        List<ApRequestForQtnSupDtl> suppliersBefore = rfqSupDtlRepository.findByTransactionPoid(transactionPoid);
+
         // Call stored procedure
         String result = callAddSuppliersProcedure(groupPoid, companyPoid, normalizedUserId, transactionPoid);
 
@@ -1457,16 +1486,32 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             throw new CustomException("Error adding suppliers: " + result);
         }
 
-        // Count suppliers added (or get from result message)
-        List<ApRequestForQtnSupDtl> suppliers = rfqSupDtlRepository.findByTransactionPoid(transactionPoid);
-        int suppliersAdded = suppliers.size();
+        // Get suppliers after adding for logging
+        List<ApRequestForQtnSupDtl> suppliersAfter = rfqSupDtlRepository.findByTransactionPoid(transactionPoid);
+        
+        // Log newly added suppliers
+        List<ApRequestForQtnSupDtl> newSuppliers = suppliersAfter.stream()
+                .filter(supplier -> suppliersBefore.stream()
+                        .noneMatch(before -> before.getDetRowId().equals(supplier.getDetRowId())))
+                .collect(Collectors.toList());
+
+        for (ApRequestForQtnSupDtl newSupplier : newSuppliers) {
+            String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", 
+                    newSupplier.getTransactionPoid(), newSupplier.getDetRowId());
+            
+            loggingService.createLog(null, newSupplier, ApRequestForQtnSupDtl.class,
+                    UserContext.getDocumentId(), transactionPoid.toString(),
+                    logDetail);
+        }
+
+        int suppliersAdded = suppliersAfter.size();
 
         AddSuppliersResponse response = new AddSuppliersResponse();
         response.setSuccess(true);
         response.setMessage(result != null ? result : "Suppliers added successfully");
         response.setSuppliersAdded(suppliersAdded);
         response.setAddedSupplierPoidList(
-                suppliers.stream()
+                suppliersAfter.stream()
                         .map(ApRequestForQtnSupDtl::getSupplierPoid)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toList()));

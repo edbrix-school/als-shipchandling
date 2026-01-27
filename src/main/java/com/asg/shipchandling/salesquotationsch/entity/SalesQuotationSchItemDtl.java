@@ -1,5 +1,6 @@
 package com.asg.shipchandling.salesquotationsch.entity;
 
+import com.asg.common.lib.annotation.AuditIgnore;
 import com.asg.shipchandling.salesquotationsch.dto.SalesQuotationSchItemDtlId;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -20,10 +21,12 @@ public class SalesQuotationSchItemDtl {
 
     @Id
     @Column(name = "TRANSACTION_POID", nullable = false)
+    @AuditIgnore
     private Long transactionPoid;
 
     @Id
     @Column(name = "DET_ROW_ID", nullable = false)
+    @AuditIgnore
     private Long detRowId;
 
     @Column(name = "STOCK_POID")
@@ -36,6 +39,7 @@ public class SalesQuotationSchItemDtl {
     private Long price;
 
     @Column(name = "DISCOUNT")
+    @AuditIgnore
     private Long discount;
 
     @Column(name = "AMOUNT")
@@ -48,20 +52,25 @@ public class SalesQuotationSchItemDtl {
     private Long stockUnitPoid;
 
     @Column(name = "CREATED_BY", length = 20)
+    @AuditIgnore
     private String createdBy;
 
     @CreationTimestamp
     @Column(name = "CREATED_DATE")
+    @AuditIgnore
     private Timestamp createdDate;
 
     @Column(name = "LASTMODIFIED_BY", length = 20)
+    @AuditIgnore
     private String lastmodifiedBy;
 
     @UpdateTimestamp
     @Column(name = "LASTMODIFIED_DATE")
+    @AuditIgnore
     private Timestamp lastmodifiedDate;
 
     @Column(name = "ADJ_QUANTITY")
+    @AuditIgnore
     private Long adjQuantity;
 
     @Column(name = "COST")
@@ -71,12 +80,15 @@ public class SalesQuotationSchItemDtl {
     private Long lastRate1;
 
     @Column(name = "LAST_RATE2")
+    @AuditIgnore
     private Long lastRate2;
 
     @Column(name = "DELIVERY_SELECT", length = 1)
+    @AuditIgnore
     private String deliverySelect;
 
     @Column(name = "DN_REF_NO", length = 50)
+    @AuditIgnore
     private String dnRefNo;
 
     @Column(name = "GP_AMOUNT")
@@ -86,6 +98,7 @@ public class SalesQuotationSchItemDtl {
     private Long gpPercentage;
 
     @Column(name = "TOT_COST")
+    @AuditIgnore
     private Long totCost;
 
     @Column(name = "PURCHASE_PRICE")
@@ -98,12 +111,15 @@ public class SalesQuotationSchItemDtl {
     private String itemType;
 
     @Column(name = "REF_DOC_ID", length = 50)
+    @AuditIgnore
     private String refDocId;
 
     @Column(name = "REF_POID")
+    @AuditIgnore
     private Long refPoid;
 
     @Column(name = "TAX_POID")
+    @AuditIgnore
     private Long taxPoid;
 
     @Column(name = "TAX_AMOUNT")
@@ -113,5 +129,6 @@ public class SalesQuotationSchItemDtl {
     private Long taxPercentage;
 
     @Column(name = "VAT_MODIFIED", length = 1)
+    @AuditIgnore
     private String vatModified;
 }

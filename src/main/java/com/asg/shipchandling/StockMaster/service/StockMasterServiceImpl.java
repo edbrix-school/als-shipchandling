@@ -10,6 +10,7 @@ import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
 import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.utility.PaginationUtil;
+import com.asg.shipchandling.deliverynote.entity.SalesDeliveryNoteItemDtl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -908,6 +909,10 @@ public class StockMasterServiceImpl implements StockMasterService {
     }
 
     private void updateExistingSupplierEntity(StockMasterDTLEntity entity, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToSave, String userId) {
+        // Create a copy of the existing entity for logging
+        StockMasterDTLEntity oldEntity = new StockMasterDTLEntity();
+        BeanUtils.copyProperties(entity, oldEntity);
+        
         // Update fields only if provided
         if (dto.getSupplierPoid() != null) {
             entity.setSupplierPoid(dto.getSupplierPoid());
@@ -921,6 +926,14 @@ public class StockMasterServiceImpl implements StockMasterService {
         entity.setLastmodifiedBy(userId);
         entity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
         entitiesToSave.add(entity);
+
+        String logDetail = String.format("KeyId = STOCK_POID %s: DET_ROW_ID %s", entity.getStockPoid(),entity.getDetRowId());
+
+        // Log the changes
+        loggingService.createLog(oldEntity, entity, StockMasterDTLEntity.class,
+                UserContext.getDocumentId(),entity.getStockPoid().toString(),
+                logDetail);
+
     }
 
     private void createNewSupplierEntity(Long stockPoid, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToSave, String userId) {
@@ -951,6 +964,11 @@ public class StockMasterServiceImpl implements StockMasterService {
         newEntity.setLastmodifiedBy(userId);
         newEntity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
         entitiesToSave.add(newEntity);
+        
+        // Log the creation
+        loggingService.createLog(null, newEntity, StockMasterDTLEntity.class, 
+                UserContext.getDocumentId(), stockPoid.toString(), 
+                String.format("Supplier detail created - DetRowId: %d", detRowId));
     }
 
     private void processWarehouseDetails(Long stockPoid, List<CreateStockMasterWarehouseDtlRequest> details, String userId) {
@@ -1007,6 +1025,10 @@ public class StockMasterServiceImpl implements StockMasterService {
     }
 
     private void updateExistingWarehouseEntity(StockMasterWarehouseDtl entity, CreateStockMasterWarehouseDtlRequest dto, List<StockMasterWarehouseDtl> entitiesToSave, String userId) {
+        // Create a copy of the existing entity for logging
+        StockMasterWarehouseDtl oldEntity = new StockMasterWarehouseDtl();
+        BeanUtils.copyProperties(entity, oldEntity);
+        
         entity.setTransactionDate(dto.getTransactionDate());
         entity.setAisleNo(dto.getAisleNo());
         entity.setBayNo(dto.getBayNo());
@@ -1017,6 +1039,13 @@ public class StockMasterServiceImpl implements StockMasterService {
         entity.setLastmodifiedBy(userId);
         entity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
         entitiesToSave.add(entity);
+
+        String logDetail = String.format("KeyId = STOCK_POID %s: DET_ROW_ID %s", entity.getStockPoid(), entity.getDetRowId());
+
+        // Log the changes
+        loggingService.createLog(oldEntity, entity, StockMasterWarehouseDtl.class,
+                UserContext.getDocumentId(), entity.getStockPoid().toString(),
+                logDetail);
     }
 
     private void createNewWarehouseEntity(Long stockPoid, CreateStockMasterWarehouseDtlRequest dto, List<StockMasterWarehouseDtl> entitiesToSave, String userId) {
