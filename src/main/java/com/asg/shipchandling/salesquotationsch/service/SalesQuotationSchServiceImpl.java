@@ -822,7 +822,17 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             itemDtl.setVatModified(detail.getVatModified());
             itemDtl.setCreatedBy(userId);
             itemDtl.setLastmodifiedBy(userId);
-            itemDtlRepository.save(itemDtl);
+            SalesQuotationSchItemDtl savedItem= itemDtlRepository.save(itemDtl);
+            String logDetail = String.format(
+                    "Row Created on Sales Quotation Schedule Item Detail with DetRowId: %s",
+                    savedItem.getDetRowId()
+            );
+
+            loggingService.createLogSummaryEntry(
+                    UserContext.getDocumentId(),
+                    transactionPoid.toString(),
+                    logDetail
+            );
         }
     }
 
@@ -856,6 +866,11 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 if (existingItem == null) {
                     throw new CustomException("Item detail not found for delete. detRowId=" + item.getDetRowId());
                 }
+                loggingService.logDelete(
+                        existingItem,
+                        UserContext.getDocumentId(),
+                        transactionPoid.toString()
+                );
                 itemDtlRepository.deleteById(id);
                 log.debug("Deleted item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
                 continue;
