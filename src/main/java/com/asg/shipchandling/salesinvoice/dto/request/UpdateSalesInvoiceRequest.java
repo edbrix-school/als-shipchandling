@@ -53,7 +53,8 @@ public class UpdateSalesInvoiceRequest {
     private Long incentiveAmt3;
     private String incentiveTo3;
     private String authorizedId;
-    
+    private String verified;
+
     // Detail tables
     private List<UpdateSalesInvoiceDtlRequest> invoiceDetails;
     private List<UpdateSalesDnDtlRequest> deliveryNoteDetails;

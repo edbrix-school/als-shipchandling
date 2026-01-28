@@ -119,7 +119,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         invoice.setCreatedBy(userId);
         invoice.setLastmodifiedBy(userId);
         invoice.setInvStatus("IN_PROGRESS");
-        invoice.setVerified("N");
+        invoice.setVerified(normalizeVerified(request.getVerified()));
         invoice.setDeleted("N");
 
         // Save to get transactionPoid
@@ -252,6 +252,11 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // Convert to DTO
         SalesInvoiceHdrDto dto = convertToDto(refreshedInvoice, true);
         return dto;
+    }
+
+    /** Normalises verified to "Y" or "N". "Y"/"y" (trimmed) → "Y"; null, empty or other → "N". */
+    private static String normalizeVerified(String value) {
+        return (value != null && "Y".equalsIgnoreCase(value.trim())) ? "Y" : "N";
     }
 
     private SalesInvoiceHdrDto convertToDto(SalesInvoiceHdr invoice, boolean includeDetails) {
@@ -781,13 +786,16 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // }
         // }
 
-        // Update fields
+        // Update fields (verified can be set via update; normalised to Y/N)
         BeanUtils.copyProperties(request, invoice, "transactionPoid", "docRef", "createdBy",
-                "createdDate", "invStatus", "verified", "invAmount", "totalGpAmt", "totalGpPercent",
+                "createdDate", "invStatus", "invAmount", "totalGpAmt", "totalGpPercent",
                 "totalCost", "discountAmt", "discountPercent", "invDiscount", "costRefNumber",
-                "contractRefNumber", "lpoDetails", "creditDays", "fdaRef", "authorizedId", "vesselName", "portName",
+                "contractRefNumber", "lpoDetails", "creditDays", "authorizedId", "vesselName", "portName",
                 "deliveryToAddress", "incentiveAmt", "incentivePercent", "incentiveAmt2", "incentivePercent2",
                 "incentiveAmt3", "incentivePercent3", "paymentMode", "dueDate");
+        if (request.getVerified() != null) {
+            invoice.setVerified(normalizeVerified(request.getVerified()));
+        }
         invoice.setLastmodifiedBy(userId);
 
         // Call stored procedure BEFORE SAVE for validation
