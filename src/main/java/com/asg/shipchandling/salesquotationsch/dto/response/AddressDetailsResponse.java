@@ -9,7 +9,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AddressDetailsResponse {
     private Long addressPoid;
+    private String addressName;
     private String contactPerson;
     private String email1;
+    private String telephone;
     private String mobile;
 }

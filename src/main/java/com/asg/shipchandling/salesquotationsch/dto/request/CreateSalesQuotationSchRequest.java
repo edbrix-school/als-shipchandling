@@ -18,7 +18,6 @@ public class CreateSalesQuotationSchRequest {
 
     private Timestamp transactionDate;
 
-    @NotNull(message = "Customer is required")
     private Long customerPoid;
 
     private Long addressPoid;
