@@ -842,6 +842,18 @@ public class StockMasterServiceImpl implements StockMasterService {
         
         if (!entitiesToSaveFiltered.isEmpty()) {
             dtlRepository.saveAll(entitiesToSaveFiltered);
+            entitiesToSaveFiltered.forEach(e -> {
+                String logDetail = String.format(
+                        "Row Created on Stock Supplier Detail with detRowId: %s",
+                        e.getDetRowId()
+                );
+
+                loggingService.createLogSummaryEntry(
+                        UserContext.getDocumentId(),
+                        stockPoid.toString(),
+                        logDetail
+                );
+            });
         }
     }
 
@@ -850,7 +862,17 @@ public class StockMasterServiceImpl implements StockMasterService {
             // Use detRowId to identify the specific record to delete
             dtlRepository.findById(new StockMasterDtlId(stockPoid, dto.getDetRowId()))
                     .ifPresentOrElse(
-                            entitiesToDelete::add,
+                            entity -> {
+                                // existing behavior
+                                entitiesToDelete.add(entity);
+
+                                // ✅ ADD DELETE LOGGING
+                                loggingService.logDelete(
+                                        entity,
+                                        UserContext.getDocumentId(),
+                                        stockPoid.toString()
+                                );
+                            },
                             () -> logger.warn("No StockMasterDTLEntity found for stockPoid={} and detRowId={}, skipping delete.",
                                     stockPoid, dto.getDetRowId())
                     );
@@ -860,7 +882,17 @@ public class StockMasterServiceImpl implements StockMasterService {
                     .filter(entity -> entity.getSupplierPoid() != null && entity.getSupplierPoid().equals(dto.getSupplierPoid()))
                     .findFirst()
                     .ifPresentOrElse(
-                            entitiesToDelete::add,
+                            entity -> {
+                                // existing behavior
+                                entitiesToDelete.add(entity);
+
+                                // ✅ ADD DELETE LOGGING
+                                loggingService.logDelete(
+                                        entity,
+                                        UserContext.getDocumentId(),
+                                        stockPoid.toString()
+                                );
+                            },
                             () -> logger.warn("No StockMasterDTLEntity found for stockPoid={} and supplierPoid={}, skipping delete.",
                                     stockPoid, dto.getSupplierPoid())
                     );
@@ -875,7 +907,7 @@ public class StockMasterServiceImpl implements StockMasterService {
             logger.warn("Skipping create/update for detRowId={} as it is marked for deletion", dto.getDetRowId());
             return;
         }
-        
+
         if (dto.getDetRowId() != null) {
             // Use detRowId to identify the specific record to update
             dtlRepository.findById(new StockMasterDtlId(stockPoid, dto.getDetRowId()))

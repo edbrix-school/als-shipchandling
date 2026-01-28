@@ -699,7 +699,18 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         itemDtl.setCreatedBy(userId);
         itemDtl.setLastmodifiedBy(userId);
 
-        rfqItemDtlRepository.save(itemDtl);
+        ApRequestForQtnItemDtl savedItem = rfqItemDtlRepository.save(itemDtl);
+        // ✅ LOG CREATE (old entity = null)
+        String logDetail = String.format(
+                "Row Created on RFQ Item Detail with DetRowId: %s",
+                savedItem.getDetRowId()
+        );
+
+        loggingService.createLogSummaryEntry(
+                UserContext.getDocumentId(),
+                transactionPoid.toString(),
+                logDetail
+        );
     }
 
     /**
@@ -796,7 +807,11 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         if (itemDtl.getRefDocId() != null && itemDtl.getRefDocId().contains("400")) {
             throw new CustomException("Cannot delete item detail linked to Purchase Order.");
         }
-
+        loggingService.logDelete(
+                itemDtl,
+                UserContext.getDocumentId(),
+                transactionPoid.toString()
+        );
         rfqItemDtlRepository.delete(itemDtl);
     }
 
@@ -813,7 +828,18 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         supDtl.setCreatedBy(userId);
         supDtl.setLastmodifiedBy(userId);
 
-        rfqSupDtlRepository.save(supDtl);
+        ApRequestForQtnSupDtl savedSupDtl =rfqSupDtlRepository.save(supDtl);
+        // ✅ LOG CREATE
+        String logDetail = String.format(
+                "Row Created on RFQ Supplier Detail with DetRowId: %s",
+                savedSupDtl.getDetRowId()
+        );
+
+        loggingService.createLogSummaryEntry(
+                UserContext.getDocumentId(),
+                transactionPoid.toString(),
+                logDetail
+        );
     }
 
     /**
@@ -853,6 +879,18 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         ApRequestForQtnSupDtl supDtl = rfqSupDtlRepository
                 .findById(new ApRequestForQtnSupDtlId(transactionPoid, detRowId))
                 .orElseThrow(() -> new ResourceNotFoundException("Supplier Detail", "detRowId", detRowId));
+
+        // ✅ LOG DELETE (before delete)
+        String logDetail = String.format(
+                "Row Deleted from RFQ Supplier Detail with DetRowId: %s",
+                supDtl.getDetRowId()
+        );
+
+        loggingService.createLogSummaryEntry(
+                UserContext.getDocumentId(),
+                transactionPoid.toString(),
+                logDetail
+        );
 
         rfqSupDtlRepository.delete(supDtl);
     }

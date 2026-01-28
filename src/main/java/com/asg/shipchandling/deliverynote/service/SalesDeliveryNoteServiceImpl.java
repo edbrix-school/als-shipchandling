@@ -647,7 +647,17 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
             itemDtl.setItemType(detail.getItemType());
             itemDtl.setCreatedBy(userId);
             itemDtl.setLastmodifiedBy(userId);
-            itemDtlRepository.save(itemDtl);
+            SalesDeliveryNoteItemDtl savedItem = itemDtlRepository.save(itemDtl);
+            String logDetail = String.format(
+                    "Row Created on Sales Delivery Note Item with detRowId: %s",
+                    savedItem.getDetRowId()
+            );
+
+            loggingService.createLogSummaryEntry(
+                    UserContext.getDocumentId(),
+                    transactionPoid.toString(),
+                    logDetail
+            );
         }
         // Flush to ensure items are persisted
         entityManager.flush();
@@ -708,6 +718,11 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
                 // Delete item by detRowId
                 if (item.getDetRowId() != null) {
                     try {
+                        loggingService.logDelete(
+                                item,
+                                UserContext.getDocumentId(),
+                                transactionPoid.toString()
+                        );
                         itemDtlRepository.deleteById(new SalesDeliveryNoteItemDtlId(transactionPoid, item.getDetRowId()));
                         log.debug("Deleted item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
                     } catch (Exception ex) {
