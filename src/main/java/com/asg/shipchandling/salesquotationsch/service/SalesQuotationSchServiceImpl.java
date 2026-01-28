@@ -107,9 +107,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Validate required fields
         validateQuotationSchRequest(request);
 
-        // Keep a copy of the incoming value for any lookups before we overwrite customerPoid (legacy temp address flow)
-        Long requestCustomerPoid = request.getCustomerPoid();
-
         // Create entity
         SalesQuotationSchHdr quotationSch = new SalesQuotationSchHdr();
         BeanUtils.copyProperties(request, quotationSch, "transactionDate");
@@ -133,16 +130,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Legacy-compatible: create/update temp address in GLOBAL_NEW_ADDRESS_DETAILS, keyed by DocId+DocKeyPoid+DocFieldName
         if (request.isNewAddressYN() && request.getAddressDetails() != null) {
             try {
-                String addressName = getCustomerName(requestCustomerPoid);
-                if (addressName == null || addressName.isBlank()) {
-                    addressName = "Customer Address";
-                }
-
-                // Legacy UI requires Tel; for REST we map best-effort.
-                String offTel1 = request.getAddressDetails().getContactPerson();
-                if (offTel1 == null || offTel1.isBlank()) {
-                    offTel1 = request.getAddressDetails().getMobile();
-                }
 
                 Long generatedNewAddressPoid = System.currentTimeMillis();
                 
@@ -155,9 +142,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                         LEGACY_DOC_ID_SALES_QUOTATION,
                         savedQuotationSch.getTransactionPoid(),
                         LEGACY_DOC_FIELD_NAME_CUSTOMER_POID,
-                        addressName,
+                        request.getAddressDetails().getAddressName(),
                         generatedNewAddressPoid,
-                        offTel1,
+                        request.getAddressDetails().getTelephone(),
                         null,
                         request.getAddressDetails().getContactPerson(),
                         null,
@@ -313,8 +300,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                             row.getDocFieldName().equalsIgnoreCase(LEGACY_DOC_FIELD_NAME_CUSTOMER_POID)) {
                         AddressDetailsResponse addr = new AddressDetailsResponse();
                         addr.setAddressPoid(row.getNewAddressPoid());
+                        addr.setAddressName(row.getAddressName());
                         addr.setContactPerson(row.getContactPerson());
                         addr.setEmail1(row.getEmail1());
+                        addr.setTelephone(row.getOffTel1());
                         addr.setMobile(row.getMobile());
                         dto.setAddressDetails(addr);
                         tempNewAddressFound = true;
@@ -362,21 +351,15 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             Long existingOrNewTempId = request.getCustomerPoid() != null ? request.getCustomerPoid() : System.currentTimeMillis();
             String action = request.getCustomerPoid() != null ? "UPDATE" : "CREATE";
 
-            String addressName = "Customer Address";
-            String offTel1 = request.getAddressDetails().getContactPerson();
-            if (offTel1 == null || offTel1.isBlank()) {
-                offTel1 = request.getAddressDetails().getMobile();
-            }
-
             tempAddrResp = quotationSchStoredProcRepository.callNewTempAddressCreateUpdateProc(
                     groupPoid,
                     userPoid,
                     LEGACY_DOC_ID_SALES_QUOTATION,
                     transactionPoid,
                     LEGACY_DOC_FIELD_NAME_CUSTOMER_POID,
-                    addressName,
+                    request.getAddressDetails().getAddressName(),
                     existingOrNewTempId,
-                    offTel1,
+                    request.getAddressDetails().getTelephone(),
                     null,
                     request.getAddressDetails().getContactPerson(),
                     null,
