@@ -2161,15 +2161,35 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         Object[] result = globalAddressDetailsRepository.findAddressDetailsWithNameByAddressPoid(addressPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Address", "addressPoid", addressPoid));
 
+        // Handle wrapped result - if result[0] is an Object[], use it; otherwise use result directly
+        Object[] row;
+        if (result != null && result.length > 0 && result[0] instanceof Object[]) {
+            row = (Object[]) result[0];
+        } else {
+            row = result;
+        }
+
         // Map Object[] to AddressDetailsResponse
         // [ADDRESS_POID, ADDRESS_NAME, CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
         AddressDetailsResponse response = new AddressDetailsResponse();
-        response.setAddressPoid(getBigDecimalValue(result[0]));
-        response.setAddressName(getStringValue(result[1]));
-        response.setContactPerson(getStringValue(result[2]));
-        response.setEmail1(getStringValue(result[3]));
-        response.setTelephone(getStringValue(result[4]));
-        response.setMobile(getStringValue(result[5]));
+        if (row != null && row.length > 0) {
+            response.setAddressPoid(getBigDecimalValue(row[0]));
+        }
+        if (row != null && row.length > 1) {
+            response.setAddressName(getStringValue(row[1]));
+        }
+        if (row != null && row.length > 2) {
+            response.setContactPerson(getStringValue(row[2]));
+        }
+        if (row != null && row.length > 3) {
+            response.setEmail1(getStringValue(row[3]));
+        }
+        if (row != null && row.length > 4) {
+            response.setTelephone(getStringValue(row[4]));
+        }
+        if (row != null && row.length > 5) {
+            response.setMobile(getStringValue(row[5]));
+        }
 
         log.info("getAddressDetailsByPoid completed for addressPoid={}", addressPoid);
 
