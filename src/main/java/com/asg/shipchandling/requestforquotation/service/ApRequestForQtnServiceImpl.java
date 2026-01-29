@@ -12,6 +12,7 @@ import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.commonlov.dto.LovItem;
+import com.asg.shipchandling.deliverynote.entity.SalesDeliveryNoteHdr;
 import com.asg.shipchandling.deliverynote.entity.SalesDeliveryNoteItemDtl;
 import com.asg.shipchandling.exceptions.CustomException;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
@@ -203,6 +204,9 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                 .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("RFQ", "transactionPoid", transactionPoid));
 
+        ApRequestForQtnHdr oldDtl = new ApRequestForQtnHdr();
+        BeanUtils.copyProperties(rfq, oldDtl);
+
         // Validate Deletion Flag
         if ("Y".equalsIgnoreCase(rfq.getDeleted())) {
             throw new CustomException("Cannot update deleted RFQ");
@@ -269,7 +273,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
         // Log the update
         String key = savedRfq.getTransactionPoid().toString();
-        loggingService.logChanges(rfq, savedRfq, ApRequestForQtnHdr.class,
+        loggingService.logChanges(oldDtl, rfq, ApRequestForQtnHdr.class,
                 UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
 
         return convertToDto(savedRfq, true);
