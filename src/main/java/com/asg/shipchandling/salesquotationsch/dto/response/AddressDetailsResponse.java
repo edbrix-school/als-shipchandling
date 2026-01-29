@@ -3,12 +3,13 @@ package com.asg.shipchandling.salesquotationsch.dto.response;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.math.BigDecimal;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class AddressDetailsResponse {
-    private Long addressPoid;
+    private BigDecimal addressPoid;
     private String addressName;
     private String contactPerson;
     private String email1;

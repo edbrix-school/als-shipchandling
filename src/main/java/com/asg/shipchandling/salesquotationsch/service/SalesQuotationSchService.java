@@ -14,6 +14,7 @@ import com.asg.shipchandling.salesquotationsch.dto.response.CurrencyRateResponse
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +74,8 @@ public interface SalesQuotationSchService {
                 MultipartFile file);
         
         List<AddressDetailsResponse> getCustomerAddress(Long userPoid, Long customerPoid, String addressType);
+        
+        AddressDetailsResponse getAddressDetailsByPoid(BigDecimal addressPoid);
         
         // Currency Rate
         CurrencyRateResponse getLatestCurrencyRate(Long currencyPoid);

@@ -39,6 +39,7 @@ import com.asg.common.lib.security.util.UserContext;
 import com.asg.common.lib.annotation.AllowedAction;
 import com.asg.common.lib.enums.UserRolesRightsEnum;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -306,6 +307,26 @@ public class SalesQuotationSchController {
                 log.info("getCustomerAddressDetails completed for customerPoid={} found {} address details", 
                                 customerPoid, addressDetails != null ? addressDetails.size() : 0);
                 return success("Customer address details fetched successfully", addressDetails);
+        }
+
+        @Operation(summary = "Get Address Details by Address POID", description = "Retrieves address details by addressPoid using direct database query. Returns only the specific address record for the given addressPoid. Supports decimal values.", responses = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved address details"),
+                        @ApiResponse(responseCode = "400", description = "Invalid input parameters"),
+                        @ApiResponse(responseCode = "404", description = "Address not found"),
+                        @ApiResponse(responseCode = "401", description = "Unauthorized")
+        }, security = @SecurityRequirement(name = "bearerAuth"))
+        @GetMapping("/address/{addressPoid}/details")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
+        public ResponseEntity<?> getAddressDetailsByPoid(
+                        @PathVariable BigDecimal addressPoid) {
+                log.info("getAddressDetailsByPoid started for addressPoid={} companyPoid={}", 
+                                addressPoid, UserContext.getCompanyPoid());
+                
+                AddressDetailsResponse addressDetails = 
+                                quotationSchService.getAddressDetailsByPoid(addressPoid);
+                
+                log.info("getAddressDetailsByPoid completed for addressPoid={}", addressPoid);
+                return success("Address details fetched successfully", addressDetails);
         }
 
         // ==================== Stored Procedure Endpoints ====================

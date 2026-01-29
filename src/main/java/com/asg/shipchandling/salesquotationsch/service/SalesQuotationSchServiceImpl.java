@@ -12,6 +12,7 @@ import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.requestforquotation.entity.ApRequestForQtnHdr;
+import com.asg.shipchandling.common.repository.GlobalAddressDetailsRepository;
 import com.asg.shipchandling.salesquotationsch.dto.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.*;
 import com.asg.shipchandling.salesquotationsch.dto.response.CustomerDetailsResponse;
@@ -97,6 +98,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private final LoggingService loggingService;
     private final DocumentDeleteService documentDeleteService;
     private final PrintService printService;
+    private final GlobalAddressDetailsRepository globalAddressDetailsRepository;
 
     @Autowired
     private DataSource dataSource;
@@ -301,7 +303,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                     if (row != null && row.getDocFieldName() != null &&
                             row.getDocFieldName().equalsIgnoreCase(LEGACY_DOC_FIELD_NAME_CUSTOMER_POID)) {
                         AddressDetailsResponse addr = new AddressDetailsResponse();
-                        addr.setAddressPoid(row.getNewAddressPoid());
+                        addr.setAddressPoid(BigDecimal.valueOf(row.getNewAddressPoid()));
                         addr.setAddressName(row.getAddressName());
                         addr.setContactPerson(row.getContactPerson());
                         addr.setEmail1(row.getEmail1());
@@ -1356,7 +1358,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                     Object[] row = addressDetails.get(0);
                     AddressDetailsResponse addr = new AddressDetailsResponse();
                     if (row != null && row.length > 0 && row[0] != null) {
-                        addr.setAddressPoid(getLongValue(row[0]));
+                        addr.setAddressPoid(getBigDecimalValue(row[0]));
                     }
                     if (row != null && row.length > 1 && row[1] != null) {
                         addr.setContactPerson(getStringValue(row[1]));
@@ -1505,7 +1507,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // ADDRESS_POID, CONTACT_PERSON, EMAIL1, MOBILE
         AddressDetailsResponse addressDetails = new AddressDetailsResponse();
         if (row.length > index && row[index] != null) {
-            addressDetails.setAddressPoid(getLongValue(row[index]));
+            addressDetails.setAddressPoid(getBigDecimalValue(row[index]));
         }
         if (row.length > index + 1 && row[index + 1] != null) {
             addressDetails.setContactPerson(getStringValue(row[index + 1]));
@@ -2144,5 +2146,53 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         params.put("SUB_SALES_DTL", printService.load("ShipChandling/SALES/Sales_quotation_Items.jrxml"));
         JasperReport mainReport = printService.load("ShipChandling/SALES/Sales_quotation.jrxml");
         return printService.fillReportToPdf(mainReport, params, dataSource);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AddressDetailsResponse getAddressDetailsByPoid(java.math.BigDecimal addressPoid) {
+        log.info("getAddressDetailsByPoid called for addressPoid={}", addressPoid);
+
+        if (addressPoid == null) {
+            throw new CustomException("Address POID is required");
+        }
+
+        // Single query with JOIN - faster than entity-based approach (one round trip vs two)
+        Object[] result = globalAddressDetailsRepository.findAddressDetailsWithNameByAddressPoid(addressPoid)
+                .orElseThrow(() -> new ResourceNotFoundException("Address", "addressPoid", addressPoid));
+
+        // Handle wrapped result - if result[0] is an Object[], use it; otherwise use result directly
+        Object[] row;
+        if (result != null && result.length > 0 && result[0] instanceof Object[]) {
+            row = (Object[]) result[0];
+        } else {
+            row = result;
+        }
+
+        // Map Object[] to AddressDetailsResponse
+        // [ADDRESS_POID, ADDRESS_NAME, CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
+        AddressDetailsResponse response = new AddressDetailsResponse();
+        if (row != null && row.length > 0) {
+            response.setAddressPoid(getBigDecimalValue(row[0]));
+        }
+        if (row != null && row.length > 1) {
+            response.setAddressName(getStringValue(row[1]));
+        }
+        if (row != null && row.length > 2) {
+            response.setContactPerson(getStringValue(row[2]));
+        }
+        if (row != null && row.length > 3) {
+            response.setEmail1(getStringValue(row[3]));
+        }
+        if (row != null && row.length > 4) {
+            response.setTelephone(getStringValue(row[4]));
+        }
+        if (row != null && row.length > 5) {
+            response.setMobile(getStringValue(row[5]));
+        }
+
+        log.info("getAddressDetailsByPoid completed for addressPoid={}", addressPoid);
+
+        return response;
     }
 }

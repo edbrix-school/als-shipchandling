@@ -586,7 +586,7 @@ public class SalesQuotationSchStoredProcRepository {
                         while (rs.next()) {
                             AddressDetailsResponse dto = new AddressDetailsResponse();
 
-                            dto.setAddressPoid(customerPoid);
+                            dto.setAddressPoid(BigDecimal.valueOf(customerPoid));
 
                             String contactPerson = rs.getString("CONTACT_PERSON");
                             dto.setContactPerson(contactPerson);
