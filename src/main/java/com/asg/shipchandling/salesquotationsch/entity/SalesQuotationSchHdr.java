@@ -10,6 +10,7 @@ import org.hibernate.annotations.Generated;
 import org.hibernate.annotations.GenerationTime;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 
@@ -49,7 +50,7 @@ public class SalesQuotationSchHdr {
     private String currencyCode;
 
     @Column(name = "CURRENCY_RATE")
-    private Long currencyRate;
+    private BigDecimal currencyRate;
 
     @Column(name = "QUOTATION_STATUS", length = 20)
     private String quotationStatus;

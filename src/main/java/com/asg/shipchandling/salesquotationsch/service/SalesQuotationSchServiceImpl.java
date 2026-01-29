@@ -54,6 +54,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -1183,7 +1184,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setCustomerPoid(getLongValue(row[index++]));
         dto.setAddressPoid(getLongValue(row[index++]));
         dto.setCurrencyCode(getStringValue(row[index++]));
-        dto.setCurrencyRate(getLongValue(row[index++]));
+        dto.setCurrencyRate(getBigDecimalValue(row[index++]));
         dto.setQuotationStatus(getStringValue(row[index++]));
         dto.setSalesmanPoid(getLongValue(row[index++]));
         dto.setValidityFromDate(getTimestampValue(row[index++]));
@@ -1420,7 +1421,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setCustomerPoid(getLongValue(row[index++]));
         dto.setAddressPoid(getLongValue(row[index++]));
         dto.setCurrencyCode(getStringValue(row[index++]));
-        dto.setCurrencyRate(getLongValue(row[index++]));
+        dto.setCurrencyRate(getBigDecimalValue(row[index++]));
         dto.setQuotationStatus(getStringValue(row[index++]));
         dto.setSalesmanPoid(getLongValue(row[index++]));
         dto.setValidityFromDate(getTimestampValue(row[index++]));
@@ -1607,6 +1608,18 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             return null;
         if (obj instanceof Number) {
             return ((Number) obj).longValue();
+        }
+        return null;
+    }
+
+    private BigDecimal getBigDecimalValue(Object obj) {
+        if (obj == null)
+            return null;
+        if (obj instanceof BigDecimal) {
+            return (BigDecimal) obj;
+        }
+        if (obj instanceof Number) {
+            return BigDecimal.valueOf(((Number) obj).doubleValue());
         }
         return null;
     }
