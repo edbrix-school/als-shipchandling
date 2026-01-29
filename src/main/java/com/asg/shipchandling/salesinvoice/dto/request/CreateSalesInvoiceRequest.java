@@ -54,7 +54,8 @@ public class CreateSalesInvoiceRequest {
     private Long incentiveAmt3;
     private String incentiveTo3;
     private String authorizedId;
-    
+    private String verified;
+
     // Detail tables
     private List<CreateSalesInvoiceDtlRequest> invoiceDetails;
     private List<CreateSalesDnDtlRequest> deliveryNoteDetails;
