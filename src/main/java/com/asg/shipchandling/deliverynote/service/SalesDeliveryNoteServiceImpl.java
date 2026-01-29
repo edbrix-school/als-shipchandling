@@ -22,6 +22,7 @@ import com.asg.shipchandling.deliverynote.repository.SalesDeliveryNoteRepository
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
 import com.asg.shipchandling.exceptions.CustomException;
 import com.asg.shipchandling.deliverynote.repository.SalesDeliveryNoteHdrRepositoryImpl;
+import com.asg.shipchandling.salesinvoice.entity.SalesInvoiceDtl;
 import com.asg.shipchandling.salesinvoice.repository.SalesDnDtlRepository;
 import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
 import com.asg.shipchandling.StockMaster.repository.StockMasterRepository;
@@ -185,6 +186,8 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         SalesDeliveryNoteHdr deliveryNote = deliveryNoteHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Delivery Note", "transactionPoid", transactionPoid));
+        SalesDeliveryNoteHdr oldDtl = new SalesDeliveryNoteHdr();
+        BeanUtils.copyProperties(deliveryNote, oldDtl);
 
         if ("Y".equals(deliveryNote.getDeleted())) {
             log.warn("updateDeliveryNote found companyPoid={} transactionPoid={} marked as deleted", companyPoid,
@@ -269,7 +272,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
         // Log the update
         String key = savedDeliveryNote.getTransactionPoid().toString();
-        loggingService.logChanges(deliveryNote, savedDeliveryNote, SalesDeliveryNoteHdr.class,
+        loggingService.logChanges(oldDtl, deliveryNote, SalesDeliveryNoteHdr.class,
                 UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
 
         SalesDeliveryNoteHdrDto dto = convertToDto(refreshedDeliveryNote, true);

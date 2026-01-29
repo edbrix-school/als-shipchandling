@@ -11,6 +11,7 @@ import com.asg.common.lib.service.DocumentSearchService;
 import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.utility.PaginationUtil;
+import com.asg.shipchandling.requestforquotation.entity.ApRequestForQtnHdr;
 import com.asg.shipchandling.salesquotationsch.dto.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.*;
 import com.asg.shipchandling.salesquotationsch.dto.response.CustomerDetailsResponse;
@@ -347,6 +348,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 .orElseThrow(
                         () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
 
+        SalesQuotationSchHdr oldDtl = new SalesQuotationSchHdr();
+        BeanUtils.copyProperties(quotationSch, oldDtl);
+
         if ("Y".equals(quotationSch.getDeleted())) {
             log.warn("updateSalesQuotationSch found companyPoid={} transactionPoid={} marked as deleted", companyPoid,
                     transactionPoid);
@@ -427,7 +431,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         calculateTotals(transactionPoid);
 
         String key = savedQuotationSch.getTransactionPoid().toString();
-        loggingService.logChanges(oldEntity, savedQuotationSch, SalesQuotationSchHdr.class,
+        loggingService.logChanges(oldDtl, quotationSch, SalesQuotationSchHdr.class,
                 UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
 
         SalesQuotationSchHdrDto dto = convertToDto(savedQuotationSch, true);
