@@ -2231,7 +2231,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         }
 
         // Map Object[] to AddressDetailsResponse
-        // [ADDRESS_POID, ADDRESS_NAME, CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
+        // [ADDRESS_POID, DESCRIPTION (ADDRESS_NAME || ', TYPE-' || ADDRESS_TYPE), CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
         AddressDetailsResponse response = mapToAddressDetailsResponse(row);
 
         log.info("getAddressDetailsByPoid completed for addressPoid={}", addressPoid);
