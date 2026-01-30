@@ -13,11 +13,11 @@ public interface GlobalAddressDetailsRepository extends JpaRepository<GlobalAddr
     
     /**
      * Get address details with address name by addressPoid
-     * Returns Object[] with [ADDRESS_POID, ADDRESS_NAME, CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
+     * Returns Object[] with [ADDRESS_POID, DESCRIPTION (ADDRESS_NAME || ', TYPE-' || ADDRESS_TYPE), CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
      * Single query with JOIN - faster than entity-based approach
      * Supports decimal addressPoid values
      */
-    @Query(value = "SELECT AD.ADDRESS_POID, AM.ADDRESS_NAME, AD.CONTACT_PERSON, AD.EMAIL1, AD.OFF_TEL1, AD.MOBILE " +
+    @Query(value = "SELECT AD.ADDRESS_POID, AM.ADDRESS_NAME || ', TYPE-' || AD.ADDRESS_TYPE as DESCRIPTION, AD.CONTACT_PERSON, AD.EMAIL1, AD.OFF_TEL1, AD.MOBILE " +
                    "FROM GLOBAL_ADDRESS_DETAILS AD " +
                    "INNER JOIN GLOBAL_ADDRESS_MASTER AM ON AD.ADDRESS_MASTER_POID = AM.ADDRESS_MASTER_POID " +
                    "WHERE AD.ADDRESS_POID = :addressPoid", nativeQuery = true)
