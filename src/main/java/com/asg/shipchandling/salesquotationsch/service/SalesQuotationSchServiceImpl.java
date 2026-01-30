@@ -68,6 +68,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
@@ -1268,14 +1269,44 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
      * Each query is wrapped in try-catch to prevent transaction rollback if no records are found
      */
     private void populateLovDetails(SalesQuotationSchHdrDto dto) {
-        // Customer Details (using ADDRESS_MASTER LOV)
+        // Customer Details (using GLOBAL_ADDRESS_DETAILS and GLOBAL_ADDRESS_MASTER)
         // If customerPoid is present, use it; otherwise use addressPoid
         if (dto.getCustomerPoid() != null) {
             try {
-                List<Object[]> customerLov = quotationSchHdrRepository.findCustomerDetailsLovByCustomerPoid(dto.getCustomerPoid().longValue());
-                if (customerLov != null && !customerLov.isEmpty() && customerLov.get(0) != null) {
-                    Object[] row = customerLov.get(0);
-                    dto.setCustomerDetails(createLovDetailFromArray(row));
+                // Fetch from global_address_details joined with global_address_master
+                Optional<Object[]> addressResult = globalAddressDetailsRepository.findAddressDetailsWithNameByAddressPoid(dto.getCustomerPoid());
+                if (addressResult.isPresent()) {
+                    Object[] result = addressResult.get();
+                    
+                    // Handle wrapped result - if result[0] is an Object[], use it; otherwise use result directly
+                    Object[] addressRow;
+                    if (result != null && result.length > 0 && result[0] instanceof Object[]) {
+                        addressRow = (Object[]) result[0];
+                    } else {
+                        addressRow = result;
+                    }
+                    
+                    // Validate array length before accessing indices
+                    if (addressRow != null && addressRow.length >= 2) {
+                        // Map to LOV format: [ADDRESS_POID, ADDRESS_POID, ADDRESS_NAME]
+                        // createLovDetailFromArray expects [POID, CODE, DESCRIPTION]
+                        Object[] lovRow = new Object[]{
+                            addressRow[0],  // ADDRESS_POID as POID
+                            addressRow[0],  // ADDRESS_POID as CODE
+                            addressRow[1]   // ADDRESS_NAME as DESCRIPTION
+                        };
+                        dto.setCustomerDetails(createLovDetailFromArray(lovRow));
+                        
+                        // Set AddressDetailsResponse
+                        // [ADDRESS_POID, ADDRESS_NAME, CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
+                        AddressDetailsResponse addressDetails = mapToAddressDetailsResponse(addressRow);
+                        if (addressDetails.getAddressPoid() != null) {
+                            dto.setAddressDetails(addressDetails);
+                        }
+                    } else {
+                        log.warn("Invalid address result format for customerPoid={}: expected at least 2 elements, got {}", 
+                                dto.getCustomerPoid(), addressRow != null ? addressRow.length : 0);
+                    }
                 }
             } catch (Exception e) {
                 log.warn("Error fetching customer LOV details for customerPoid={}: {}", dto.getCustomerPoid(), e.getMessage());
@@ -1632,6 +1663,36 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
     private String getStringValue(Object obj) {
         return obj != null ? obj.toString() : null;
+    }
+
+    /**
+     * Map Object[] to AddressDetailsResponse (full format)
+     * Format: [ADDRESS_POID, ADDRESS_NAME, CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
+     * 
+     * @param row Object array containing address details
+     * @return AddressDetailsResponse object
+     */
+    private AddressDetailsResponse mapToAddressDetailsResponse(Object[] row) {
+        AddressDetailsResponse response = new AddressDetailsResponse();
+        if (row != null && row.length > 0 && row[0] != null) {
+            response.setAddressPoid(getBigDecimalValue(row[0]));
+        }
+        if (row != null && row.length > 1 && row[1] != null) {
+            response.setAddressName(getStringValue(row[1]));
+        }
+        if (row != null && row.length > 2 && row[2] != null) {
+            response.setContactPerson(getStringValue(row[2]));
+        }
+        if (row != null && row.length > 3 && row[3] != null) {
+            response.setEmail1(getStringValue(row[3]));
+        }
+        if (row != null && row.length > 4 && row[4] != null) {
+            response.setTelephone(getStringValue(row[4]));
+        }
+        if (row != null && row.length > 5 && row[5] != null) {
+            response.setMobile(getStringValue(row[5]));
+        }
+        return response;
     }
 
     private Timestamp getTimestampValue(Object obj) {
@@ -2171,25 +2232,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
         // Map Object[] to AddressDetailsResponse
         // [ADDRESS_POID, ADDRESS_NAME, CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
-        AddressDetailsResponse response = new AddressDetailsResponse();
-        if (row != null && row.length > 0) {
-            response.setAddressPoid(getBigDecimalValue(row[0]));
-        }
-        if (row != null && row.length > 1) {
-            response.setAddressName(getStringValue(row[1]));
-        }
-        if (row != null && row.length > 2) {
-            response.setContactPerson(getStringValue(row[2]));
-        }
-        if (row != null && row.length > 3) {
-            response.setEmail1(getStringValue(row[3]));
-        }
-        if (row != null && row.length > 4) {
-            response.setTelephone(getStringValue(row[4]));
-        }
-        if (row != null && row.length > 5) {
-            response.setMobile(getStringValue(row[5]));
-        }
+        AddressDetailsResponse response = mapToAddressDetailsResponse(row);
 
         log.info("getAddressDetailsByPoid completed for addressPoid={}", addressPoid);
 
