@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 
@@ -15,7 +16,7 @@ public class SalesQuotationSchSummaryDto {
     private LocalDate transactionDate;
     private String docRef;
     private Long companyPoid;
-    private Long customerPoid;
+    private BigDecimal customerPoid;
     private String quotationStatus;
     private Timestamp validityToDate;
     private Long totalAmount;

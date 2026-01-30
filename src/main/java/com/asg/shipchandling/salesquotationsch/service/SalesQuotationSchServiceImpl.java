@@ -183,7 +183,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 }
 
                 // Per agreed REST contract: store returned temp id into customerPoid (ADF binding-style)
-                savedQuotationSch.setCustomerPoid(tempAddrResp.getNewAddressPoid());
+                savedQuotationSch.setCustomerPoid(BigDecimal.valueOf(tempAddrResp.getNewAddressPoid()));
                 savedQuotationSch.setLastmodifiedBy(userId);
                 savedQuotationSch = quotationSchHdrRepository.save(savedQuotationSch);
                 quotationSchHdrRepository.flush();
@@ -355,7 +355,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         TempAddressProcedureResponse tempAddrResp = null;
         if (request.isNewAddressYN() && request.getAddressDetails() != null) {
             // For update, assume request.customerPoid holds the temp id (legacy binding-style). If missing, create a new one.
-            Long existingOrNewTempId = request.getCustomerPoid() != null ? request.getCustomerPoid() : System.currentTimeMillis();
+            Long existingOrNewTempId = request.getCustomerPoid() != null ? request.getCustomerPoid().longValue() : System.currentTimeMillis();
             String action = request.getCustomerPoid() != null ? "UPDATE" : "CREATE";
 
             tempAddrResp = quotationSchStoredProcRepository.callNewTempAddressCreateUpdateProc(
@@ -399,7 +399,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
         // Per agreed REST contract: store returned temp id into customerPoid (ADF binding-style)
         if (tempAddrResp != null && tempAddrResp.getNewAddressPoid() != null) {
-            quotationSch.setCustomerPoid(tempAddrResp.getNewAddressPoid());
+            quotationSch.setCustomerPoid(BigDecimal.valueOf(tempAddrResp.getNewAddressPoid()));
         }
 
         // Process item details based on actionType (UPDATE, DELETE, or CREATE)
@@ -1187,7 +1187,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setDocRef(getStringValue(row[index++]));
         dto.setTransactionDate(getTimestampValue(row[index++]));
         dto.setCompanyPoid(getLongValue(row[index++]));
-        dto.setCustomerPoid(getLongValue(row[index++]));
+        dto.setCustomerPoid(getBigDecimalValue(row[index++]));
         dto.setAddressPoid(getLongValue(row[index++]));
         dto.setCurrencyCode(getStringValue(row[index++]));
         dto.setCurrencyRate(getBigDecimalValue(row[index++]));
@@ -1272,7 +1272,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // If customerPoid is present, use it; otherwise use addressPoid
         if (dto.getCustomerPoid() != null) {
             try {
-                List<Object[]> customerLov = quotationSchHdrRepository.findCustomerDetailsLovByCustomerPoid(dto.getCustomerPoid());
+                List<Object[]> customerLov = quotationSchHdrRepository.findCustomerDetailsLovByCustomerPoid(dto.getCustomerPoid().longValue());
                 if (customerLov != null && !customerLov.isEmpty() && customerLov.get(0) != null) {
                     Object[] row = customerLov.get(0);
                     dto.setCustomerDetails(createLovDetailFromArray(row));
@@ -1424,7 +1424,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setDocRef(getStringValue(row[index++]));
         dto.setTransactionDate(getTimestampValue(row[index++]));
         dto.setCompanyPoid(getLongValue(row[index++]));
-        dto.setCustomerPoid(getLongValue(row[index++]));
+        dto.setCustomerPoid(getBigDecimalValue(row[index++]));
         dto.setAddressPoid(getLongValue(row[index++]));
         dto.setCurrencyCode(getStringValue(row[index++]));
         dto.setCurrencyRate(getBigDecimalValue(row[index++]));

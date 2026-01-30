@@ -17,7 +17,7 @@ public class SalesQuotationSchHdrDto {
     private Timestamp transactionDate;
     private Long companyPoid;
     private String docRef;
-    private Long customerPoid;
+    private BigDecimal customerPoid;
     private Long addressPoid;
 
     // Indicates whether this quotation is using a legacy "New Temp Address" (GLOBAL_NEW_ADDRESS_DETAILS)
