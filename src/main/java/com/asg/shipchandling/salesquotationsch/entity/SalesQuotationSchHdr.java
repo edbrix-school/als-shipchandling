@@ -41,7 +41,7 @@ public class SalesQuotationSchHdr {
     private String docRef;
 
     @Column(name = "CUSTOMER_POID")
-    private Long customerPoid;
+    private BigDecimal customerPoid;
 
     @Column(name = "ADDRESS_POID")
     private Long addressPoid;

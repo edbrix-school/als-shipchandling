@@ -19,7 +19,7 @@ public class CreateSalesQuotationSchRequest {
 
     private Timestamp transactionDate;
 
-    private Long customerPoid;
+    private BigDecimal customerPoid;
 
     private Long addressPoid;
 
