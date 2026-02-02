@@ -20,7 +20,7 @@ public class UpdateSalesQuotationSchRequest {
 
     private Timestamp transactionDate;
 
-    private BigDecimal customerPoid;
+    private Long customerPoid;
 
     private Long addressPoid;
 
