@@ -33,12 +33,16 @@ import com.asg.shipchandling.common.entity.GlobalCurrencyRates;
 import com.asg.shipchandling.commonlov.dto.LovItem;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
 import com.asg.shipchandling.exceptions.CustomException;
+import com.asg.shipchandling.salesquotationsch.entity.GlobalNewAddressDetails;
 import com.asg.shipchandling.salesquotationsch.entity.SalesQuotationSchHdr;
 import com.asg.shipchandling.salesquotationsch.entity.SalesQuotationSchItemDtl;
+import com.asg.shipchandling.salesquotationsch.repository.GlobalNewAddressDetailsRepository;
 import com.asg.shipchandling.salesquotationsch.repository.SalesQuotationSchHdrRepository;
 import com.asg.shipchandling.salesquotationsch.repository.SalesQuotationSchItemDtlRepository;
 import com.asg.shipchandling.salesquotationsch.repository.SalesQuotationSchStoredProcRepository;
 import com.asg.shipchandling.salesquotationsch.spec.SalesQuotationSchSpecifications;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -69,6 +73,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
@@ -100,6 +105,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private final DocumentDeleteService documentDeleteService;
     private final PrintService printService;
     private final GlobalAddressDetailsRepository globalAddressDetailsRepository;
+
+    private final GlobalNewAddressDetailsRepository globalNewAddressDetailsRepository;
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Autowired
     private DataSource dataSource;
@@ -354,10 +363,31 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         validateQuotationSchRequest(request);
 
         TempAddressProcedureResponse tempAddrResp = null;
+
+        GlobalNewAddressDetails oldAddressEntity = null;
+        GlobalNewAddressDetails oldAddressCopy = null;
         if (request.isNewAddressYN() && request.getAddressDetails() != null) {
             // For update, assume request.customerPoid holds the temp id (legacy binding-style). If missing, create a new one.
             Long existingOrNewTempId = request.getCustomerPoid() != null ? request.getCustomerPoid().longValue() : System.currentTimeMillis();
             String action = request.getCustomerPoid() != null ? "UPDATE" : "CREATE";
+
+            String addressName = "Customer Address";
+            String offTel1 = request.getAddressDetails().getContactPerson();
+            if (offTel1 == null || offTel1.isBlank()) {
+                offTel1 = request.getAddressDetails().getMobile();
+            }
+
+
+            if (request.isNewAddressYN() && request.getCustomerPoid() != null) {
+                oldAddressEntity = globalNewAddressDetailsRepository
+                        .findById(request.getCustomerPoid())
+                        .orElse(null);
+
+                if (oldAddressEntity != null) {
+                    oldAddressCopy = new GlobalNewAddressDetails();
+                    BeanUtils.copyProperties(oldAddressEntity, oldAddressCopy);
+                }
+            }
 
             tempAddrResp = quotationSchStoredProcRepository.callNewTempAddressCreateUpdateProc(
                     groupPoid,
@@ -393,6 +423,34 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             }
         }
 
+
+        GlobalNewAddressDetails newAddressEntity = null;
+
+        if (tempAddrResp != null && tempAddrResp.getNewAddressPoid() != null) {
+
+            // 🔥 VERY IMPORTANT: clear Hibernate cache after autonomous transaction
+            entityManager.clear();
+
+            newAddressEntity = globalNewAddressDetailsRepository
+                    .findById(tempAddrResp.getNewAddressPoid())
+                    .orElse(null);
+        }
+
+        if (oldAddressCopy != null && newAddressEntity != null) {
+
+            String addressKey = newAddressEntity.getNewAddressPoid().toString();
+
+            loggingService.logChanges(
+                    oldAddressCopy,
+                    newAddressEntity,
+                    GlobalNewAddressDetails.class,
+                    UserContext.getDocumentId(),   // same doc context
+                    addressKey,
+                    LogDetailsEnum.MODIFIED,
+                    "NEW_ADDRESS_POID"
+            );
+        }
+
         // Update fields (excluding read-only fields)
         BeanUtils.copyProperties(request, quotationSch, "transactionPoid", "docRef", "createdBy",
                 "createdDate", "transactionDate");
@@ -408,9 +466,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             processItemDetailsByActionType(transactionPoid, request.getItemDetails(), userId);
         }
 
-        SalesQuotationSchHdr oldEntity = new SalesQuotationSchHdr();
-        BeanUtils.copyProperties(quotationSch, oldEntity);
-
         // Save
         SalesQuotationSchHdr savedQuotationSch = quotationSchHdrRepository.save(quotationSch);
         quotationSchHdrRepository.flush();
@@ -418,7 +473,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         calculateTotals(transactionPoid);
 
         String key = savedQuotationSch.getTransactionPoid().toString();
-        loggingService.logChanges(oldDtl, quotationSch, SalesQuotationSchHdr.class,
+        loggingService.logChanges(oldDtl, savedQuotationSch, SalesQuotationSchHdr.class,
                 UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
 
         SalesQuotationSchHdrDto dto = convertToDto(savedQuotationSch, true);
@@ -2237,5 +2292,13 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         log.info("getAddressDetailsByPoid completed for addressPoid={}", addressPoid);
 
         return response;
+    }
+
+    private boolean isAddressChanged(AddressDetailsResponse oldSnap, AddressDetailsResponse newSnap) {
+        if (oldSnap == null && newSnap != null) return true;
+        if (oldSnap != null && newSnap == null) return true;
+        if (oldSnap == null) return false;
+
+        return !Objects.equals(oldSnap, newSnap);
     }
 }
