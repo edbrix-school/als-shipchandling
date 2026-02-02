@@ -380,7 +380,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
             if (request.isNewAddressYN() && request.getCustomerPoid() != null) {
                 oldAddressEntity = globalNewAddressDetailsRepository
-                        .findById(request.getCustomerPoid())
+                        .findById(request.getCustomerPoid().longValue())
                         .orElse(null);
 
                 if (oldAddressEntity != null) {
