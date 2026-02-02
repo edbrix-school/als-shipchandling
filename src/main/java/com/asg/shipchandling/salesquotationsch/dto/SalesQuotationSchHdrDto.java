@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.util.List;
 
@@ -16,14 +17,14 @@ public class SalesQuotationSchHdrDto {
     private Timestamp transactionDate;
     private Long companyPoid;
     private String docRef;
-    private Long customerPoid;
+    private BigDecimal customerPoid;
     private Long addressPoid;
 
     // Indicates whether this quotation is using a legacy "New Temp Address" (GLOBAL_NEW_ADDRESS_DETAILS)
     private Boolean newAddressYN;
 
     private String currencyCode;
-    private Long currencyRate;
+    private BigDecimal currencyRate;
     private String quotationStatus;
     private Long salesmanPoid;
     private Timestamp validityFromDate;

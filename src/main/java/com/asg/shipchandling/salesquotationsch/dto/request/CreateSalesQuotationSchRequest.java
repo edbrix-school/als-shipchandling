@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.util.List;
 
@@ -18,8 +19,7 @@ public class CreateSalesQuotationSchRequest {
 
     private Timestamp transactionDate;
 
-    @NotNull(message = "Customer is required")
-    private Long customerPoid;
+    private BigDecimal customerPoid;
 
     private Long addressPoid;
 
@@ -28,7 +28,7 @@ public class CreateSalesQuotationSchRequest {
     @Size(max = 20, message = "Currency code must not exceed 20 characters")
     private String currencyCode;
 
-    private Long currencyRate;
+    private BigDecimal currencyRate;
 
     @Size(max = 20, message = "Quotation status must not exceed 20 characters")
     private String quotationStatus;

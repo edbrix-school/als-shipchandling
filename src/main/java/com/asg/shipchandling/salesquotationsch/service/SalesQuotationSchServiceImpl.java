@@ -11,6 +11,8 @@ import com.asg.common.lib.service.DocumentSearchService;
 import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.utility.PaginationUtil;
+import com.asg.shipchandling.requestforquotation.entity.ApRequestForQtnHdr;
+import com.asg.shipchandling.common.repository.GlobalAddressDetailsRepository;
 import com.asg.shipchandling.salesquotationsch.dto.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.*;
 import com.asg.shipchandling.salesquotationsch.dto.response.CustomerDetailsResponse;
@@ -58,13 +60,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -96,6 +104,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private final LoggingService loggingService;
     private final DocumentDeleteService documentDeleteService;
     private final PrintService printService;
+    private final GlobalAddressDetailsRepository globalAddressDetailsRepository;
 
     private final GlobalNewAddressDetailsRepository globalNewAddressDetailsRepository;
     @PersistenceContext
@@ -111,9 +120,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         log.info("createSalesQuotationSch service started for groupPoid={} userId={}", groupPoid, userId);
         // Validate required fields
         validateQuotationSchRequest(request);
-
-        // Keep a copy of the incoming value for any lookups before we overwrite customerPoid (legacy temp address flow)
-        Long requestCustomerPoid = request.getCustomerPoid();
 
         // Create entity
         SalesQuotationSchHdr quotationSch = new SalesQuotationSchHdr();
@@ -138,16 +144,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Legacy-compatible: create/update temp address in GLOBAL_NEW_ADDRESS_DETAILS, keyed by DocId+DocKeyPoid+DocFieldName
         if (request.isNewAddressYN() && request.getAddressDetails() != null) {
             try {
-                String addressName = getCustomerName(requestCustomerPoid);
-                if (addressName == null || addressName.isBlank()) {
-                    addressName = "Customer Address";
-                }
-
-                // Legacy UI requires Tel; for REST we map best-effort.
-                String offTel1 = request.getAddressDetails().getContactPerson();
-                if (offTel1 == null || offTel1.isBlank()) {
-                    offTel1 = request.getAddressDetails().getMobile();
-                }
 
                 Long generatedNewAddressPoid = System.currentTimeMillis();
                 
@@ -160,9 +156,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                         LEGACY_DOC_ID_SALES_QUOTATION,
                         savedQuotationSch.getTransactionPoid(),
                         LEGACY_DOC_FIELD_NAME_CUSTOMER_POID,
-                        addressName,
+                        request.getAddressDetails().getAddressName(),
                         generatedNewAddressPoid,
-                        offTel1,
+                        request.getAddressDetails().getTelephone(),
                         null,
                         request.getAddressDetails().getContactPerson(),
                         null,
@@ -197,7 +193,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 }
 
                 // Per agreed REST contract: store returned temp id into customerPoid (ADF binding-style)
-                savedQuotationSch.setCustomerPoid(tempAddrResp.getNewAddressPoid());
+                savedQuotationSch.setCustomerPoid(BigDecimal.valueOf(tempAddrResp.getNewAddressPoid()));
                 savedQuotationSch.setLastmodifiedBy(userId);
                 savedQuotationSch = quotationSchHdrRepository.save(savedQuotationSch);
                 quotationSchHdrRepository.flush();
@@ -317,9 +313,11 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                     if (row != null && row.getDocFieldName() != null &&
                             row.getDocFieldName().equalsIgnoreCase(LEGACY_DOC_FIELD_NAME_CUSTOMER_POID)) {
                         AddressDetailsResponse addr = new AddressDetailsResponse();
-                        addr.setAddressPoid(row.getNewAddressPoid());
+                        addr.setAddressPoid(BigDecimal.valueOf(row.getNewAddressPoid()));
+                        addr.setAddressName(row.getAddressName());
                         addr.setContactPerson(row.getContactPerson());
                         addr.setEmail1(row.getEmail1());
+                        addr.setTelephone(row.getOffTel1());
                         addr.setMobile(row.getMobile());
                         dto.setAddressDetails(addr);
                         tempNewAddressFound = true;
@@ -370,7 +368,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         GlobalNewAddressDetails oldAddressCopy = null;
         if (request.isNewAddressYN() && request.getAddressDetails() != null) {
             // For update, assume request.customerPoid holds the temp id (legacy binding-style). If missing, create a new one.
-            Long existingOrNewTempId = request.getCustomerPoid() != null ? request.getCustomerPoid() : System.currentTimeMillis();
+            Long existingOrNewTempId = request.getCustomerPoid() != null ? request.getCustomerPoid().longValue() : System.currentTimeMillis();
             String action = request.getCustomerPoid() != null ? "UPDATE" : "CREATE";
 
             String addressName = "Customer Address";
@@ -397,9 +395,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                     LEGACY_DOC_ID_SALES_QUOTATION,
                     transactionPoid,
                     LEGACY_DOC_FIELD_NAME_CUSTOMER_POID,
-                    addressName,
+                    request.getAddressDetails().getAddressName(),
                     existingOrNewTempId,
-                    offTel1,
+                    request.getAddressDetails().getTelephone(),
                     null,
                     request.getAddressDetails().getContactPerson(),
                     null,
@@ -460,7 +458,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
         // Per agreed REST contract: store returned temp id into customerPoid (ADF binding-style)
         if (tempAddrResp != null && tempAddrResp.getNewAddressPoid() != null) {
-            quotationSch.setCustomerPoid(tempAddrResp.getNewAddressPoid());
+            quotationSch.setCustomerPoid(BigDecimal.valueOf(tempAddrResp.getNewAddressPoid()));
         }
 
         // Process item details based on actionType (UPDATE, DELETE, or CREATE)
@@ -1245,10 +1243,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setDocRef(getStringValue(row[index++]));
         dto.setTransactionDate(getTimestampValue(row[index++]));
         dto.setCompanyPoid(getLongValue(row[index++]));
-        dto.setCustomerPoid(getLongValue(row[index++]));
+        dto.setCustomerPoid(getBigDecimalValue(row[index++]));
         dto.setAddressPoid(getLongValue(row[index++]));
         dto.setCurrencyCode(getStringValue(row[index++]));
-        dto.setCurrencyRate(getLongValue(row[index++]));
+        dto.setCurrencyRate(getBigDecimalValue(row[index++]));
         dto.setQuotationStatus(getStringValue(row[index++]));
         dto.setSalesmanPoid(getLongValue(row[index++]));
         dto.setValidityFromDate(getTimestampValue(row[index++]));
@@ -1326,14 +1324,44 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
      * Each query is wrapped in try-catch to prevent transaction rollback if no records are found
      */
     private void populateLovDetails(SalesQuotationSchHdrDto dto) {
-        // Customer Details (using ADDRESS_MASTER LOV)
+        // Customer Details (using GLOBAL_ADDRESS_DETAILS and GLOBAL_ADDRESS_MASTER)
         // If customerPoid is present, use it; otherwise use addressPoid
         if (dto.getCustomerPoid() != null) {
             try {
-                List<Object[]> customerLov = quotationSchHdrRepository.findCustomerDetailsLovByCustomerPoid(dto.getCustomerPoid());
-                if (customerLov != null && !customerLov.isEmpty() && customerLov.get(0) != null) {
-                    Object[] row = customerLov.get(0);
-                    dto.setCustomerDetails(createLovDetailFromArray(row));
+                // Fetch from global_address_details joined with global_address_master
+                Optional<Object[]> addressResult = globalAddressDetailsRepository.findAddressDetailsWithNameByAddressPoid(dto.getCustomerPoid());
+                if (addressResult.isPresent()) {
+                    Object[] result = addressResult.get();
+                    
+                    // Handle wrapped result - if result[0] is an Object[], use it; otherwise use result directly
+                    Object[] addressRow;
+                    if (result != null && result.length > 0 && result[0] instanceof Object[]) {
+                        addressRow = (Object[]) result[0];
+                    } else {
+                        addressRow = result;
+                    }
+                    
+                    // Validate array length before accessing indices
+                    if (addressRow != null && addressRow.length >= 2) {
+                        // Map to LOV format: [ADDRESS_POID, ADDRESS_POID, ADDRESS_NAME]
+                        // createLovDetailFromArray expects [POID, CODE, DESCRIPTION]
+                        Object[] lovRow = new Object[]{
+                            addressRow[0],  // ADDRESS_POID as POID
+                            addressRow[0],  // ADDRESS_POID as CODE
+                            addressRow[1]   // ADDRESS_NAME as DESCRIPTION
+                        };
+                        dto.setCustomerDetails(createLovDetailFromArray(lovRow));
+                        
+                        // Set AddressDetailsResponse
+                        // [ADDRESS_POID, ADDRESS_NAME, CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
+                        AddressDetailsResponse addressDetails = mapToAddressDetailsResponse(addressRow);
+                        if (addressDetails.getAddressPoid() != null) {
+                            dto.setAddressDetails(addressDetails);
+                        }
+                    } else {
+                        log.warn("Invalid address result format for customerPoid={}: expected at least 2 elements, got {}", 
+                                dto.getCustomerPoid(), addressRow != null ? addressRow.length : 0);
+                    }
                 }
             } catch (Exception e) {
                 log.warn("Error fetching customer LOV details for customerPoid={}: {}", dto.getCustomerPoid(), e.getMessage());
@@ -1416,7 +1444,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                     Object[] row = addressDetails.get(0);
                     AddressDetailsResponse addr = new AddressDetailsResponse();
                     if (row != null && row.length > 0 && row[0] != null) {
-                        addr.setAddressPoid(getLongValue(row[0]));
+                        addr.setAddressPoid(getBigDecimalValue(row[0]));
                     }
                     if (row != null && row.length > 1 && row[1] != null) {
                         addr.setContactPerson(getStringValue(row[1]));
@@ -1482,10 +1510,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setDocRef(getStringValue(row[index++]));
         dto.setTransactionDate(getTimestampValue(row[index++]));
         dto.setCompanyPoid(getLongValue(row[index++]));
-        dto.setCustomerPoid(getLongValue(row[index++]));
+        dto.setCustomerPoid(getBigDecimalValue(row[index++]));
         dto.setAddressPoid(getLongValue(row[index++]));
         dto.setCurrencyCode(getStringValue(row[index++]));
-        dto.setCurrencyRate(getLongValue(row[index++]));
+        dto.setCurrencyRate(getBigDecimalValue(row[index++]));
         dto.setQuotationStatus(getStringValue(row[index++]));
         dto.setSalesmanPoid(getLongValue(row[index++]));
         dto.setValidityFromDate(getTimestampValue(row[index++]));
@@ -1565,7 +1593,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // ADDRESS_POID, CONTACT_PERSON, EMAIL1, MOBILE
         AddressDetailsResponse addressDetails = new AddressDetailsResponse();
         if (row.length > index && row[index] != null) {
-            addressDetails.setAddressPoid(getLongValue(row[index]));
+            addressDetails.setAddressPoid(getBigDecimalValue(row[index]));
         }
         if (row.length > index + 1 && row[index + 1] != null) {
             addressDetails.setContactPerson(getStringValue(row[index + 1]));
@@ -1676,8 +1704,50 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         return null;
     }
 
+    private BigDecimal getBigDecimalValue(Object obj) {
+        if (obj == null)
+            return null;
+        if (obj instanceof BigDecimal) {
+            return (BigDecimal) obj;
+        }
+        if (obj instanceof Number) {
+            return BigDecimal.valueOf(((Number) obj).doubleValue());
+        }
+        return null;
+    }
+
     private String getStringValue(Object obj) {
         return obj != null ? obj.toString() : null;
+    }
+
+    /**
+     * Map Object[] to AddressDetailsResponse (full format)
+     * Format: [ADDRESS_POID, ADDRESS_NAME, CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
+     * 
+     * @param row Object array containing address details
+     * @return AddressDetailsResponse object
+     */
+    private AddressDetailsResponse mapToAddressDetailsResponse(Object[] row) {
+        AddressDetailsResponse response = new AddressDetailsResponse();
+        if (row != null && row.length > 0 && row[0] != null) {
+            response.setAddressPoid(getBigDecimalValue(row[0]));
+        }
+        if (row != null && row.length > 1 && row[1] != null) {
+            response.setAddressName(getStringValue(row[1]));
+        }
+        if (row != null && row.length > 2 && row[2] != null) {
+            response.setContactPerson(getStringValue(row[2]));
+        }
+        if (row != null && row.length > 3 && row[3] != null) {
+            response.setEmail1(getStringValue(row[3]));
+        }
+        if (row != null && row.length > 4 && row[4] != null) {
+            response.setTelephone(getStringValue(row[4]));
+        }
+        if (row != null && row.length > 5 && row[5] != null) {
+            response.setMobile(getStringValue(row[5]));
+        }
+        return response;
     }
 
     private Timestamp getTimestampValue(Object obj) {
@@ -2192,6 +2262,36 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         params.put("SUB_SALES_DTL", printService.load("ShipChandling/SALES/Sales_quotation_Items.jrxml"));
         JasperReport mainReport = printService.load("ShipChandling/SALES/Sales_quotation.jrxml");
         return printService.fillReportToPdf(mainReport, params, dataSource);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AddressDetailsResponse getAddressDetailsByPoid(java.math.BigDecimal addressPoid) {
+        log.info("getAddressDetailsByPoid called for addressPoid={}", addressPoid);
+
+        if (addressPoid == null) {
+            throw new CustomException("Address POID is required");
+        }
+
+        // Single query with JOIN - faster than entity-based approach (one round trip vs two)
+        Object[] result = globalAddressDetailsRepository.findAddressDetailsWithNameByAddressPoid(addressPoid)
+                .orElseThrow(() -> new ResourceNotFoundException("Address", "addressPoid", addressPoid));
+
+        // Handle wrapped result - if result[0] is an Object[], use it; otherwise use result directly
+        Object[] row;
+        if (result != null && result.length > 0 && result[0] instanceof Object[]) {
+            row = (Object[]) result[0];
+        } else {
+            row = result;
+        }
+
+        // Map Object[] to AddressDetailsResponse
+        // [ADDRESS_POID, DESCRIPTION (ADDRESS_NAME || ', TYPE-' || ADDRESS_TYPE), CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
+        AddressDetailsResponse response = mapToAddressDetailsResponse(row);
+
+        log.info("getAddressDetailsByPoid completed for addressPoid={}", addressPoid);
+
+        return response;
     }
 
     private boolean isAddressChanged(AddressDetailsResponse oldSnap, AddressDetailsResponse newSnap) {

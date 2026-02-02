@@ -52,7 +52,7 @@ public class SalesQuotationSchStoredProcRepository {
                             String currencyCode = rs.getString("CURRENCY_CODE");
                             dto.setCurrencyCode(currencyCode);
 
-                            Long currencyRate = rs.getLong("CURRENCY_RATE");
+                            BigDecimal currencyRate = rs.getBigDecimal("CURRENCY_RATE");
                             dto.setCurrencyRate(currencyRate);
 
                             String paymentMode = rs.getString("PAYMENT_MODE");
@@ -586,7 +586,7 @@ public class SalesQuotationSchStoredProcRepository {
                         while (rs.next()) {
                             AddressDetailsResponse dto = new AddressDetailsResponse();
 
-                            dto.setAddressPoid(customerPoid);
+                            dto.setAddressPoid(BigDecimal.valueOf(customerPoid));
 
                             String contactPerson = rs.getString("CONTACT_PERSON");
                             dto.setContactPerson(contactPerson);
