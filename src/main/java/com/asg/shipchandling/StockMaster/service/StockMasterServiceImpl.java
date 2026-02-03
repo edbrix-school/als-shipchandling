@@ -557,9 +557,27 @@ public class StockMasterServiceImpl implements StockMasterService {
     }
 
     private void callAfterSaveProcedure(Long stockPoid) {
-        // TODO: Implement stored procedure call using CallableStatement
-        // String sql = "BEGIN PROC_STOCK_MASTER_AFTER_SAVE(?,?); END;";
-        // Check result for "ERROR" and log warning if found
+        if (stockPoid == null) {
+            throw new IllegalArgumentException("stockPoid cannot be null");
+        }
+
+        String proc = "{call PROC_STOCK_MASTER_AFTER_SAVE(?, ?)}";
+        jdbcTemplate.execute((Connection con) -> {
+            try (CallableStatement cs = con.prepareCall(proc)) {
+                cs.setBigDecimal(1, BigDecimal.valueOf(stockPoid));
+                cs.registerOutParameter(2, Types.VARCHAR);
+                cs.execute();
+
+                String result = cs.getString(2);
+                if (result != null && result.contains("ERROR")) {
+                    logger.warn("PROC_STOCK_MASTER_AFTER_SAVE returned error for stockPoid {}: {}", stockPoid, result);
+                }
+                return null;
+            } catch (SQLException ex) {
+                logger.error("Error calling PROC_STOCK_MASTER_AFTER_SAVE for stockPoid {}: {}", stockPoid, ex.getMessage(), ex);
+                throw new RuntimeException("Error calling PROC_STOCK_MASTER_AFTER_SAVE: " + ex.getMessage(), ex);
+            }
+        });
     }
 
     private StockMasterDto convertToDto(StockMasterEntity stock, boolean includeDetails) {
