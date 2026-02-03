@@ -445,7 +445,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                     newAddressEntity,
                     GlobalNewAddressDetails.class,
                     UserContext.getDocumentId(),   // same doc context
-                    addressKey,
+                    transactionPoid.toString(),
                     LogDetailsEnum.MODIFIED,
                     "NEW_ADDRESS_POID"
             );
