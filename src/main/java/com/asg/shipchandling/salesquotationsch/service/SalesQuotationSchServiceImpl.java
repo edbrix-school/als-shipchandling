@@ -309,9 +309,15 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             );
 
             if (newTempAddresses != null) {
+                Long customerPoid = dto.getCustomerPoid() != null ? dto.getCustomerPoid().longValue() : null;
                 for (TempNewAddressRow row : newTempAddresses) {
                     if (row != null && row.getDocFieldName() != null &&
                             row.getDocFieldName().equalsIgnoreCase(LEGACY_DOC_FIELD_NAME_CUSTOMER_POID)) {
+                        // Only apply temp address when it matches the current customerPoid.
+                        // This prevents stale temp addresses from overwriting existing customer selections.
+                        if (customerPoid == null || !customerPoid.equals(row.getNewAddressPoid())) {
+                            continue;
+                        }
                         AddressDetailsResponse addr = new AddressDetailsResponse();
                         addr.setAddressPoid(BigDecimal.valueOf(row.getNewAddressPoid()));
                         addr.setAddressName(row.getAddressName());
