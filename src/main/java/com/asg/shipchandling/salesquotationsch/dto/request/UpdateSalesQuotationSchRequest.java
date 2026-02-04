@@ -57,7 +57,7 @@ public class UpdateSalesQuotationSchRequest {
     @Size(max = 500, message = "Remarks must not exceed 500 characters")
     private String remarks;
 
-    private Long totalDiscount;
+    private BigDecimal totalDiscount;
 
     @Size(max = 20, message = "Action status must not exceed 20 characters")
     private String actionStatus;
@@ -89,7 +89,7 @@ public class UpdateSalesQuotationSchRequest {
     @Size(max = 25, message = "RFQ reference number must not exceed 25 characters")
     private String rfqRefNo;
 
-    private Long percentageDisc;
+    private BigDecimal percentageDisc;
 
     @Size(max = 50, message = "Vessel name must not exceed 50 characters")
     private String vesselName;

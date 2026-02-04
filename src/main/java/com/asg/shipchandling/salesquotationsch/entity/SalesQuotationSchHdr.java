@@ -86,7 +86,7 @@ public class SalesQuotationSchHdr {
     private String remarks;
 
     @Column(name = "TOTAL_DISCOUNT")
-    private Long totalDiscount;
+    private BigDecimal totalDiscount;
 
     @Column(name = "TOTAL_AMOUNT")
     private Long totalAmount;
@@ -159,7 +159,7 @@ public class SalesQuotationSchHdr {
     private String rfqRefNo;
 
     @Column(name = "PERCENTAGE_DISC")
-    private Long percentageDisc;
+    private BigDecimal percentageDisc;
 
     @Column(name = "TOTAL_GP_AMT")
     private Long totalGpAmt;

@@ -35,7 +35,7 @@ public class SalesQuotationSchHdrDto {
     private String vesselPoid;
     private String voyageRef;
     private String remarks;
-    private Long totalDiscount;
+    private BigDecimal totalDiscount;
     private Long totalAmount;
     private String actionStatus;
     private Timestamp actionDueDate;
@@ -54,7 +54,7 @@ public class SalesQuotationSchHdrDto {
     private Long portPoid;
     private String quotedRate;
     private String rfqRefNo;
-    private Long percentageDisc;
+    private BigDecimal percentageDisc;
     private Long totalGpAmt;
     private Long totalGpPercentage;
     private String vesselName;
