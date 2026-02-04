@@ -1064,7 +1064,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private SalesQuotationSchHdrDto convertToDto(SalesQuotationSchHdr quotationSch, boolean includeDetails) {
         SalesQuotationSchHdrDto dto = new SalesQuotationSchHdrDto();
         BeanUtils.copyProperties(quotationSch, dto);
-        
+
         // Convert LocalDate to Timestamp for transactionDate
         if (quotationSch.getTransactionDate() != null) {
             dto.setTransactionDate(Timestamp.valueOf(quotationSch.getTransactionDate().atStartOfDay()));
@@ -1266,7 +1266,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setPortPoid(getLongValue(row[index++]));
         dto.setPortDescription(getStringValue(row[index++]));
         dto.setRemarks(getStringValue(row[index++]));
-        dto.setTotalDiscount(getLongValue(row[index++]));
+        dto.setTotalDiscount(getBigDecimalValue(row[index++]));
         dto.setTotalAmount(getLongValue(row[index++]));
         dto.setActionStatus(getStringValue(row[index++]));
         dto.setActionDueDate(getTimestampValue(row[index++]));
@@ -1279,7 +1279,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setVesselAgent(getStringValue(row[index++]));
         dto.setQuotedRate(getStringValue(row[index++]));
         dto.setRfqRefNo(getStringValue(row[index++]));
-        dto.setPercentageDisc(getLongValue(row[index++]));
+        dto.setPercentageDisc(getBigDecimalValue(row[index++]));
         dto.setTotalGpAmt(getLongValue(row[index++]));
         dto.setTotalGpPercentage(getLongValue(row[index++]));
         dto.setCustomerRef(getStringValue(row[index++]));
@@ -1533,7 +1533,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setPortPoid(getLongValue(row[index++]));
         dto.setPortDescription(getStringValue(row[index++]));
         dto.setRemarks(getStringValue(row[index++]));
-        dto.setTotalDiscount(getLongValue(row[index++]));
+        dto.setTotalDiscount(getBigDecimalValue(row[index++]));
         dto.setTotalAmount(getLongValue(row[index++]));
         dto.setActionStatus(getStringValue(row[index++]));
         dto.setActionDueDate(getTimestampValue(row[index++]));
@@ -1546,7 +1546,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setVesselAgent(getStringValue(row[index++]));
         dto.setQuotedRate(getStringValue(row[index++]));
         dto.setRfqRefNo(getStringValue(row[index++]));
-        dto.setPercentageDisc(getLongValue(row[index++]));
+        dto.setPercentageDisc(getBigDecimalValue(row[index++]));
         dto.setTotalGpAmt(getLongValue(row[index++]));
         dto.setTotalGpPercentage(getLongValue(row[index++]));
         dto.setCustomerRef(getStringValue(row[index++]));
