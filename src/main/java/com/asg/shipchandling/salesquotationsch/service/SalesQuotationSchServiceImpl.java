@@ -377,13 +377,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             Long existingOrNewTempId = request.getCustomerPoid() != null ? request.getCustomerPoid().longValue() : System.currentTimeMillis();
             String action = request.getCustomerPoid() != null ? "UPDATE" : "CREATE";
 
-            String addressName = "Customer Address";
-            String offTel1 = request.getAddressDetails().getContactPerson();
-            if (offTel1 == null || offTel1.isBlank()) {
-                offTel1 = request.getAddressDetails().getMobile();
-            }
-
-
             if (request.isNewAddressYN() && request.getCustomerPoid() != null) {
                 oldAddressEntity = globalNewAddressDetailsRepository
                         .findById(request.getCustomerPoid().longValue())
