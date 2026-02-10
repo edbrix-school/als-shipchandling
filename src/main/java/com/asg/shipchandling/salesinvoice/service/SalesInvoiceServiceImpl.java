@@ -715,7 +715,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             Optional<SalesDeliveryNoteHdr> dn = deliveryNoteHdrRepository.findByTransactionPoid(dtl.getDnPoidFk());
             if (dn.isPresent()) {
                 SalesDeliveryNoteHdr dnEntity = dn.get();
-                String description = "VOY:-" + (dnEntity.getVoyageRef() != null ? dnEntity.getVoyageRef() : "") + 
+                String description = dnEntity.getDocRef() + " - VOY:-" + (dnEntity.getVoyageRef() != null ? dnEntity.getVoyageRef() : "") +
                         " CUST:" + getCustomerName(dnEntity.getCustomerPoid());
                 dto.setDnDetails(new SalesDnDtlDto.LovDetailDto(
                         dnEntity.getTransactionPoid(),
@@ -1879,14 +1879,19 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             return "";
         }
         try {
-            // Query SALES_CUSTOMER_MASTER for customer name
-            // This would require a repository method, for now return empty string
-            // In a real implementation, you'd inject SalesCustomerMasterRepository
-            log.debug("Customer name lookup for customerPoid={} requires repository", customerPoid);
-            return "";
+            String sql = "SELECT get_SALES_CUSTOMER_NAME(:customerPoid) FROM DUAL";
+            Query query = entityManager.createNativeQuery(sql);
+            query.setParameter("customerPoid", customerPoid);
+
+            @SuppressWarnings("unchecked")
+            List<Object> results = query.getResultList();
+            if (results.isEmpty() || results.get(0) == null) {
+                return "N/A";
+            }
+            return results.get(0).toString();
         } catch (Exception e) {
             log.warn("Failed to get customer name for customerPoid={}: {}", customerPoid, e.getMessage());
-            return "";
+            return "N/A";
         }
     }
     
