@@ -42,6 +42,9 @@ public class CreateSalesDeliveryNoteRequest {
     @Size(max = 50, message = "Vessel POID must not exceed 50 characters")
     private String vesselPoid;
 
+    @Size(max = 50, message = "Vessel name must not exceed 50 characters")
+    private String vesselName;
+
     @Size(max = 50, message = "Vessel agent must not exceed 50 characters")
     private String vesselAgent;
 
