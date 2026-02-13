@@ -16,12 +16,12 @@ import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceDtlReque
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceRequest;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDiscountCommissionResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDueDateResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateGpResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadDeliveryNoteResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationCurrencyResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationItemsResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationAndCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.VerifyInvoiceResponse;
@@ -295,14 +295,16 @@ public class SalesInvoiceController {
 
         // ==================== BUSINESS LOGIC APIs ====================
 
-        @Operation(summary = "Recalculates GP", description = "Recalculates Gross Profit for the invoice. Calls PROC_AR_SCH_GP_CALC.")
+        @Operation(summary = "Recalculates GP", description = "Recalculates discount/commission/GP for the invoice. Calls PROC_AR_SCH_DIS_COM_CAL.")
         @PostMapping("/{transactionPoid}/refresh-gp")
         @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> calculateGp(
-                        @PathVariable Long transactionPoid) {
+                        @PathVariable Long transactionPoid,
+                        @RequestBody CalculateDiscountCommissionRequest request) {
                 log.info("Calculating GP for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
-                CalculateGpResponse response = invoiceService.calculateGp(transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), "");
+                RefreshGpProcResponse response = invoiceService.calculateGp(
+                                transactionPoid, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 log.info("GP calculated for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 return success(response.getMessage(), response);
@@ -358,7 +360,7 @@ public class SalesInvoiceController {
                 return success("", response);
         }
 
-        @Operation(summary = "Load Quotation", description = "Loads quotation items into invoice. Invoice details table must be empty. Calls PROC_AR_SCH_QTN_LOAD_BUTTON.")
+        @Operation(summary = "Load Quotation", description = "Loads quotation items into invoice and cost booking details. Calls PROC_AR_SCH_UNLOAD_QUOTATION1, PROC_AR_SCH_QTN_LOAD_BUTTON, and PROC_AR_SCH_SALES_INV_PJ_LOAD1.")
         @PostMapping("/{transactionPoid}/load-quotation")
         @AllowedAction(UserRolesRightsEnum.CREATE)
         public ResponseEntity<?> loadQuotationItems(
@@ -366,17 +368,12 @@ public class SalesInvoiceController {
                         @RequestBody LoadQuotationItemsRequest request) {
                 log.info("Loading quotation items into sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
-                LoadQuotationItemsResponse response = invoiceService.loadQuotationItems(
+                LoadQuotationAndCostBookingsResponse response = invoiceService.loadQuotationAndCostBookings(
                                 transactionPoid, request,
-                                // request.getQtnPoid(), request.getIncentiveAmt(),
-                                // request.getIncentiveAmt2(), request.getIncentiveAmt3(),
                                 UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
-                SalesInvoiceHdrDto dto = invoiceService.getSalesInvoiceByPoid(
-                                transactionPoid, UserContext.getCompanyPoid(), true);
-                response.setInvoice(dto);
                 log.info("Quotation items loaded into sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
-                return success(response.getMessage(), response);
+                return success("", response);
         }
 
         @Operation(summary = "Load Delivery Note", description = "Loads delivery note items into invoice. Delivery notes must be selected first. Invoice details table must be empty. Calls PROC_AR_SCH_SALESINV_DN_LOAD.")
