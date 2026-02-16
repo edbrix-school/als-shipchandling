@@ -103,11 +103,17 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         if ("PRINCIPAL".equalsIgnoreCase(request.getPartyType()) && request.getPrincipalPoid() == null) {
             throw new CustomException("Principal is required when party type is PRINCIPAL");
         }
-        // ValidationResponse validCustomer = callCustomerValidateProc(
-        // "CUSTOMER".equalsIgnoreCase(request.getPartyType()) ?
-        // request.getCustomerPoid()
-        // : request.getPrincipalPoid(),
-        // request.getCreditType(), request.getAuthorizedId());
+        if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            ValidationResponse validation = salesInvoiceStoredProcRepository.callCustomerValidateProc(
+                    request.getCustomerPoid(),
+                    "",
+                    request.getAuthorizedId());
+            if (validation != null
+                    && (isStopMessage(validation.getMessage())
+                    || (validation.getSuccess() != null && !validation.getSuccess()))) {
+                throw new CustomException(validation.getMessage());
+            }
+        }
 
         // Create entity
         SalesInvoiceHdr invoice = new SalesInvoiceHdr();
@@ -126,10 +132,13 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         SalesInvoiceHdr savedInvoice = invoiceHdrRepository.save(invoice);
         invoiceHdrRepository.flush();
 
-        // Call stored procedure BEFORE SAVE for validation
-        Boolean validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
-                savedInvoice.getTransactionPoid(),
-                request.getCustomerPoid());
+        boolean validCustomer = true;
+        if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            // Call stored procedure BEFORE SAVE for validation
+            validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
+                    savedInvoice.getTransactionPoid(),
+                    request.getCustomerPoid());
+        }
 
         if (validCustomer) {
             // Save detail tables
@@ -796,10 +805,25 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         }
         invoice.setLastmodifiedBy(userId);
 
+        if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            ValidationResponse validation = salesInvoiceStoredProcRepository.callCustomerValidateProc(
+                    request.getCustomerPoid(),
+                    "",
+                    request.getAuthorizedId());
+            if (validation != null
+                    && (isStopMessage(validation.getMessage())
+                            || (validation.getSuccess() != null && !validation.getSuccess()))) {
+                throw new CustomException(validation.getMessage());
+            }
+        }
+
         // Call stored procedure BEFORE SAVE for validation
-        Boolean validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
-                invoice.getTransactionPoid(),
-                request.getCustomerPoid());
+        boolean validCustomer = true;
+        if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
+                    invoice.getTransactionPoid(),
+                    request.getCustomerPoid());
+        }
 
         // Update detail tables
         if (request.getInvoiceDetails() != null && !request.getInvoiceDetails().isEmpty()) {
