@@ -14,12 +14,13 @@ import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceDtlReque
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceRequest;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDiscountCommissionResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDueDateResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateGpResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadDeliveryNoteResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationAndCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationCurrencyResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationItemsResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.VerifyInvoiceResponse;
@@ -75,6 +76,9 @@ public interface SalesInvoiceService {
         LoadQuotationItemsResponse loadQuotationItems(Long transactionPoid, LoadQuotationItemsRequest request,
                         Long groupPoid, Long companyPoid, String userId);
 
+        LoadQuotationAndCostBookingsResponse loadQuotationAndCostBookings(Long transactionPoid,
+                                                                          LoadQuotationItemsRequest request, Long groupPoid, Long companyPoid, String userId);
+
         LoadDeliveryNoteResponse loadDeliveryNote(Long transactionPoid, Long groupPoid,
                         Long companyPoid, String userId);
 
@@ -84,7 +88,7 @@ public interface SalesInvoiceService {
         VerifyInvoiceResponse verifyInvoice(Long transactionPoid,
                         Long groupPoid, Long companyPoid, String userId);
 
-        CalculateGpResponse calculateGp(Long transactionPoid, Long groupPoid, Long companyPoid, String userId);
+        RefreshGpProcResponse calculateGp(Long transactionPoid, CalculateDiscountCommissionRequest request, Long groupPoid, Long companyPoid, String userId);
 
         LoadCostBookingsResponse loadCostBookings(Long transactionPoid, Long groupPoid,
                         Long companyPoid, String userId);

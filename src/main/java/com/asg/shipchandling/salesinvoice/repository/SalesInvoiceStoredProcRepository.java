@@ -16,6 +16,7 @@ import com.asg.shipchandling.salesinvoice.dto.response.CalculateDueDateResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationCurrencyResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationItemsResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 
@@ -94,12 +95,9 @@ public class SalesInvoiceStoredProcRepository {
                 cs.execute();
                 String procResult = cs.getString(3);
 
-                if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
-                    throw new CustomException("PROC_AR_SCH_UNLOAD_QUOTATION1 failed: " + procResult);
-                }
                 UnloadQuotationResponse response = new UnloadQuotationResponse();
                 response.setMessage(procResult);
-                response.setSuccess(procResult.contains("SUCCESS"));
+                response.setSuccess(procResult != null && procResult.contains("SUCCESS"));
                 return response;
             } catch (SQLException ex) {
                 throw new CustomException("Error calling PROC_AR_SCH_UNLOAD_QUOTATION1: " + ex.getMessage());
@@ -149,11 +147,15 @@ public class SalesInvoiceStoredProcRepository {
                 cs.execute();
 
                 String procResult = cs.getString(6);
+                if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
+                    LoadQuotationItemsResponse response = new LoadQuotationItemsResponse();
+                    String message = procResult;
+                    response.setMessage(message);
+                    response.setSuccess(false);
+                    response.setItems(new ArrayList<>());
+                    return response;
+                }
                 try (ResultSet rs = (ResultSet) cs.getObject(7)) {
-                    if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
-                        throw new CustomException("PROC_AR_SCH_QTN_LOAD_BUTTON failed: " + procResult);
-                    }
-
                     List<QuotationItemDto> items = new ArrayList<>();
                     if (rs != null) {
                         while (rs.next()) {
@@ -199,7 +201,9 @@ public class SalesInvoiceStoredProcRepository {
                         }
                     }
                     LoadQuotationItemsResponse response = new LoadQuotationItemsResponse();
-                    response.setMessage("Quotation items loaded successfully");
+                    String message = procResult != null ? procResult : "Quotation items loaded successfully";
+                    response.setMessage(message);
+                    response.setSuccess(message.toUpperCase().contains("SUCCESS"));
                     response.setItems(items);
                     log.info(
                             "loadQuotationItems: PROC_AR_SCH_QTN_LOAD_BUTTON completed successfully for transactionPoid={}",
@@ -235,6 +239,95 @@ public class SalesInvoiceStoredProcRepository {
                 return response;
             } catch (SQLException ex) {
                 throw new CustomException("Error calling PROC_AR_SCH_GP_CALC: " + ex.getMessage());
+            }
+        });
+    }
+
+    public RefreshGpProcResponse callRefreshGpProc(
+            Long userId,
+            Long transactionPoid,
+            Long qtnPoid,
+            CalculateDiscountCommissionRequest request) {
+        String proc = "{call PROC_AR_SCH_DIS_COM_CAL(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
+        return jdbcTemplate.execute((Connection con) -> {
+            try (CallableStatement cs = con.prepareCall(proc)) {
+                String type = request != null && request.getType() != null ? request.getType().toUpperCase() : "AMOUNT";
+                cs.setObject(1, userId);
+                cs.setObject(2, transactionPoid);
+                cs.setObject(3, qtnPoid);
+                cs.setObject(4, request != null ? request.getInvDiscount() : null);
+                cs.setObject(5, request != null ? request.getIncentiveAmt() : null);
+                cs.setObject(6, request != null ? request.getIncentiveAmt2() : null);
+                cs.setObject(7, request != null ? request.getIncentiveAmt3() : null);
+                cs.setObject(8, type);
+                cs.setObject(9, request != null ? request.getIncentivePercent() : null);
+                cs.setObject(10, request != null ? request.getIncentivePercent2() : null);
+                cs.setObject(11, request != null ? request.getIncentivePercent3() : null);
+                cs.registerOutParameter(12, Types.VARCHAR);
+                cs.registerOutParameter(13, Types.REF_CURSOR);
+
+                cs.execute();
+
+                String procResult = cs.getString(12);
+                if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
+                    throw new CustomException("PROC_AR_SCH_DIS_COM_CAL failed: " + procResult);
+                }
+
+                try (ResultSet rs = (ResultSet) cs.getObject(13)) {
+                    if (rs != null && rs.next()) {
+                        Object discountPercent = rs.getObject("DISCOUNT_PERCENT");
+                        Long discountPercentValue =
+                                discountPercent != null ? ((Number) discountPercent).longValue() : null;
+
+                        Long discountAmt = rs.getLong("DISCOUNT_AMT");
+
+                        Object incentivePercentValue = rs.getObject("INCENTIVE_PERCENT");
+                        Long incentivePercentFromDb =
+                                incentivePercentValue != null ? ((Number) incentivePercentValue).longValue()
+                                        : null;
+
+                        Long incentivePercent2Value = rs.getLong("INCENTIVE_PERCENT2");
+
+                        Long incentivePercent3Value = rs.getLong("INCENTIVE_PERCENT3");
+
+                        Long incentiveAmount = rs.getLong("INCENTIVE_AMT");
+
+                        Long incentiveAmount2 = rs.getLong("INCENTIVE_AMT2");
+
+                        Long incentiveAmount3 = rs.getLong("INCENTIVE_AMT3");
+
+                        Long totalGpAmt = rs.getLong("TOTAL_GP_AMT");
+
+                        Object totalGpPercentObj = rs.getObject("TOTAL_GP_PERCENT");
+                        Long totalGpPercent =
+                                totalGpPercentObj != null ? ((Number) totalGpPercentObj).longValue() : null;
+
+                        Long invAmount = rs.getLong("INV_AMOUNT");
+                        
+                        RefreshGpProcResponse response = new RefreshGpProcResponse();
+                        response.setMessage(procResult != null ? procResult : "Discount/Commission calculated successfully");
+                        response.setSuccess(procResult == null || !procResult.toUpperCase().contains("ERROR"));
+                        response.setDiscountPercent(discountPercentValue);
+                        response.setDiscountAmt(discountAmt);
+                        response.setIncentivePercent(incentivePercentFromDb);
+                        response.setIncentivePercent2(incentivePercent2Value);
+                        response.setIncentivePercent3(incentivePercent3Value);
+                        response.setIncentiveAmt(incentiveAmount);
+                        response.setIncentiveAmt2(incentiveAmount2);
+                        response.setIncentiveAmt3(incentiveAmount3);
+                        response.setTotalGpAmt(totalGpAmt);
+                        response.setTotalGpPercent(totalGpPercent);
+                        response.setInvAmount(invAmount);
+                        return response;
+                    }
+                }
+
+                RefreshGpProcResponse response = new RefreshGpProcResponse();
+                response.setMessage(procResult != null ? procResult : "Discount/Commission calculated successfully");
+                response.setSuccess(procResult == null || !procResult.toUpperCase().contains("ERROR"));
+                return response;
+            } catch (SQLException ex) {
+                throw new CustomException("Error calling PROC_AR_SCH_DIS_COM_CAL: " + ex.getMessage());
             }
         });
     }
@@ -280,7 +373,7 @@ public class SalesInvoiceStoredProcRepository {
     }
 
     public CalculateDiscountCommissionResponse callCalculateItemDiscountCommissionProc(
-            Long transactionPoid, CalculateDiscountCommissionRequest request, Long detRowId, Long qtnPoid,
+            Long transactionPoid, CalculateDiscountCommissionRequest request, Long qtnPoid,
             Long userId) {
         String proc = "{call PROC_AR_SCH_DIS_COM_CAL(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
@@ -404,7 +497,7 @@ public class SalesInvoiceStoredProcRepository {
     }
 
     public ValidationResponse callLoadCostBookingsProc(Long transactionPoid, Long qtnId) {
-        String proc = "{call PROC_AR_SCH_SALES_INV_PJ_LOAD1(?, ?)}";
+        String proc = "{call PROC_AR_SCH_SALES_INV_PJ_LOAD1(?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
@@ -415,13 +508,9 @@ public class SalesInvoiceStoredProcRepository {
                 cs.execute();
                 String procResult = cs.getString(3);
 
-                if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
-                    throw new CustomException("PROC_AR_SCH_SALES_INV_PJ_LOAD1 failed: " + procResult);
-                }
-
                 ValidationResponse response = new ValidationResponse();
                 response.setMessage(procResult);
-                response.setSuccess(procResult.contains("SUCCESS"));
+                response.setSuccess(procResult != null && procResult.contains("SUCCESS"));
                 return response;
             } catch (SQLException ex) {
                 throw new CustomException("Error calling PROC_AR_SCH_SALES_INV_PJ_LOAD1: " + ex.getMessage());

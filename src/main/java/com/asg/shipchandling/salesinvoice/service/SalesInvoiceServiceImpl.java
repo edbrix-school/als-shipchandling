@@ -11,7 +11,6 @@ import com.asg.common.lib.service.DocumentSearchService;
 import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.utility.PaginationUtil;
-import com.asg.shipchandling.deliverynote.entity.SalesDeliveryNoteItemDtl;
 import com.asg.shipchandling.salesinvoice.dto.*;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.CreateSalesDnDtlRequest;
@@ -24,12 +23,13 @@ import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceDtlReque
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceRequest;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDiscountCommissionResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDueDateResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateGpResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadDeliveryNoteResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationAndCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationCurrencyResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationItemsResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.VerifyInvoiceResponse;
@@ -103,11 +103,17 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         if ("PRINCIPAL".equalsIgnoreCase(request.getPartyType()) && request.getPrincipalPoid() == null) {
             throw new CustomException("Principal is required when party type is PRINCIPAL");
         }
-        // ValidationResponse validCustomer = callCustomerValidateProc(
-        // "CUSTOMER".equalsIgnoreCase(request.getPartyType()) ?
-        // request.getCustomerPoid()
-        // : request.getPrincipalPoid(),
-        // request.getCreditType(), request.getAuthorizedId());
+        if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            ValidationResponse validation = salesInvoiceStoredProcRepository.callCustomerValidateProc(
+                    request.getCustomerPoid(),
+                    "",
+                    request.getAuthorizedId());
+            if (validation != null
+                    && (isStopMessage(validation.getMessage())
+                    || (validation.getSuccess() != null && !validation.getSuccess()))) {
+                throw new CustomException(validation.getMessage());
+            }
+        }
 
         // Create entity
         SalesInvoiceHdr invoice = new SalesInvoiceHdr();
@@ -126,10 +132,13 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         SalesInvoiceHdr savedInvoice = invoiceHdrRepository.save(invoice);
         invoiceHdrRepository.flush();
 
-        // Call stored procedure BEFORE SAVE for validation
-        Boolean validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
-                savedInvoice.getTransactionPoid(),
-                request.getCustomerPoid());
+        boolean validCustomer = true;
+        if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            // Call stored procedure BEFORE SAVE for validation
+            validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
+                    savedInvoice.getTransactionPoid(),
+                    request.getCustomerPoid());
+        }
 
         if (validCustomer) {
             // Save detail tables
@@ -796,10 +805,25 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         }
         invoice.setLastmodifiedBy(userId);
 
+        if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            ValidationResponse validation = salesInvoiceStoredProcRepository.callCustomerValidateProc(
+                    request.getCustomerPoid(),
+                    "",
+                    request.getAuthorizedId());
+            if (validation != null
+                    && (isStopMessage(validation.getMessage())
+                            || (validation.getSuccess() != null && !validation.getSuccess()))) {
+                throw new CustomException(validation.getMessage());
+            }
+        }
+
         // Call stored procedure BEFORE SAVE for validation
-        Boolean validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
-                invoice.getTransactionPoid(),
-                request.getCustomerPoid());
+        boolean validCustomer = true;
+        if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
+                    invoice.getTransactionPoid(),
+                    request.getCustomerPoid());
+        }
 
         // Update detail tables
         if (request.getInvoiceDetails() != null && !request.getInvoiceDetails().isEmpty()) {
@@ -1463,16 +1487,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             throw new CustomException("Cannot load quotation. Invoice is verified");
         }
 
-        // Check if invoice details table is not empty
-        List<SalesInvoiceDtl> existingDetails = invoiceDtlRepository.findByTransactionPoid(transactionPoid);
-        if (!existingDetails.isEmpty()) {
-            throw new CustomException(
-                    "Cannot load quotation. Invoice details table is not empty. Please clear items first.");
-        }
-
-        // Call stored procedure to load quotation
-        LoadQuotationItemsResponse response = salesInvoiceStoredProcRepository
-                .callLoadQuotationItemsProc(transactionPoid, request);
+        LoadQuotationItemsResponse response = loadQuotationItemsProc(transactionPoid, request);
 
         // Update invoice with quotation reference
         invoice.setQtnPoid(request.getQtnPoid());
@@ -1483,6 +1498,73 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         invoiceHdrRepository.save(invoice);
 
         return response;
+    }
+
+    @Override
+    public LoadQuotationAndCostBookingsResponse loadQuotationAndCostBookings(Long transactionPoid,
+            LoadQuotationItemsRequest request, Long groupPoid, Long companyPoid, String userId) {
+        // Validate invoice exists
+        SalesInvoiceHdr invoice = invoiceHdrRepository
+                .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
+                .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
+
+        if (request.getQtnPoid() == null) {
+            throw new CustomException("Please Select a Quotation");
+        }
+
+        if ("Y".equals(invoice.getDeleted())) {
+            throw new CustomException("Cannot load quotation. Invoice is deleted");
+        }
+
+        if ("Y".equals(invoice.getVerified())) {
+            throw new CustomException("Cannot load quotation. Invoice is verified");
+        }
+
+        List<String> messages = new ArrayList<>();
+        Long unloadQtnPoid = request.getQtnPoid() != null ? request.getQtnPoid() : invoice.getQtnPoid();
+        if (unloadQtnPoid != null) {
+            UnloadQuotationResponse unloadResponse = salesInvoiceStoredProcRepository
+                    .callUnloadQuotationProc(transactionPoid, unloadQtnPoid);
+            if (unloadResponse.getMessage() != null && !unloadResponse.getMessage().isBlank()) {
+                messages.add(unloadResponse.getMessage());
+            }
+        }
+
+        LoadQuotationItemsResponse loadResponse = loadQuotationItemsProc(transactionPoid, request);
+        if (loadResponse.getMessage() != null && !loadResponse.getMessage().isBlank()) {
+            messages.add(loadResponse.getMessage());
+        }
+
+        LoadCostBookingsResponse costBookingsResponse = loadCostBookingsByQuotation(transactionPoid,
+                request.getQtnPoid());
+        if (costBookingsResponse.getMessage() != null && !costBookingsResponse.getMessage().isBlank()) {
+            messages.add(costBookingsResponse.getMessage());
+        }
+
+        // Refresh invoice header after load/unload actions
+        invoiceHdrRepository.flush();
+        SalesInvoiceHdr refreshedInvoice = invoiceHdrRepository.findByTransactionPoid(transactionPoid)
+                .orElse(invoice);
+
+        LoadQuotationAndCostBookingsResponse response = new LoadQuotationAndCostBookingsResponse();
+        response.setSuccess(true);
+        response.setMessages(messages);
+        response.setQuotationItems(loadResponse.getItems());
+        response.setCostBookings(costBookingsResponse.getCostBookings());
+        response.setInvoice(convertToDtoWithLov(refreshedInvoice, true));
+        return response;
+    }
+
+    private LoadQuotationItemsResponse loadQuotationItemsProc(Long transactionPoid,
+            LoadQuotationItemsRequest request) {
+        // Check if invoice details table is not empty
+        List<SalesInvoiceDtl> existingDetails = invoiceDtlRepository.findByTransactionPoid(transactionPoid);
+        if (!existingDetails.isEmpty()) {
+            throw new CustomException(
+                    "Cannot load quotation. Invoice details table is not empty. Please clear items first.");
+        }
+
+        return salesInvoiceStoredProcRepository.callLoadQuotationItemsProc(transactionPoid, request);
     }
 
     @Override
@@ -1545,7 +1627,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional
-    public CalculateGpResponse calculateGp(Long transactionPoid, Long groupPoid, Long companyPoid, String userId) {
+    public RefreshGpProcResponse calculateGp(Long transactionPoid, CalculateDiscountCommissionRequest request, Long groupPoid, Long companyPoid, String userId) {
         // Validate invoice exists
         SalesInvoiceHdr invoice = invoiceHdrRepository
                 .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
@@ -1559,26 +1641,24 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             throw new CustomException("Quotation POID is required for this operation");
         }
 
-        // Call stored procedure to calculate GP
-        ValidationResponse response = salesInvoiceStoredProcRepository.callCalculateGpProc(transactionPoid,
-                invoice.getQtnPoid());
+        if (userId == null || userId.isBlank()) {
+            throw new CustomException("User id is required for GP calculation");
+        }
+
+        // Call stored procedure to calculate discount/commission/GP (legacy refresh GP behavior)
+        RefreshGpProcResponse response = salesInvoiceStoredProcRepository.callRefreshGpProc(
+                Long.parseLong(userId),
+                transactionPoid,
+                invoice.getQtnPoid(),
+                request);
 
         if (response.getMessage() != null && response.getMessage().contains("ERROR")) {
             throw new CustomException("Error calculating GP: " + response.getMessage());
         }
 
-        // Refresh invoice to get calculated GP values
-        invoiceHdrRepository.flush();
-        SalesInvoiceHdr refreshedInvoice = invoiceHdrRepository.findByTransactionPoid(transactionPoid)
-                .orElse(invoice);
-
-        CalculateGpResponse calculateGpResponse = new CalculateGpResponse();
-        calculateGpResponse.setSuccess(true);
-        calculateGpResponse
-                .setMessage(response.getMessage() != null ? response.getMessage() : "GP calculated successfully");
-        calculateGpResponse.setTotalGpAmt(refreshedInvoice.getTotalGpAmt());
-        calculateGpResponse.setTotalGpPercent(refreshedInvoice.getTotalGpPercent());
-        return calculateGpResponse;
+        response.setSuccess(true);
+        response.setMessage(response.getMessage() != null ? response.getMessage() : "GP calculated successfully");
+        return response;
     }
 
     @Override
@@ -1590,30 +1670,36 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
 
-        if (invoice.getQtnPoid() == null) {
+        return loadCostBookingsByQuotation(transactionPoid, invoice.getQtnPoid());
+    }
+
+    private LoadCostBookingsResponse loadCostBookingsByQuotation(Long transactionPoid, Long qtnPoid) {
+        if (qtnPoid == null) {
             throw new CustomException("Quotation POID is required for this operation");
         }
 
-        // Call stored procedure to load cost bookings
-        ValidationResponse result = salesInvoiceStoredProcRepository.callLoadCostBookingsProc(transactionPoid,
-                invoice.getQtnPoid());
+        ValidationResponse result = salesInvoiceStoredProcRepository.callLoadCostBookingsProc(transactionPoid, qtnPoid);
 
-        if (result.getMessage() != null && result.getMessage().contains("ERROR")) {
-            throw new CustomException("Error loading cost bookings: " + result.getMessage());
-        }
-
-        // Query cost booked details (read-only)
         List<SalesInvCostbkdDtl> costBookings = costbkdDtlRepository.findByTransactionPoid(transactionPoid);
         List<SalesInvCostbkdDtlDto> costBookingDtos = costBookings.stream()
                 .map(this::convertCostbkdDtlToDto)
                 .collect(Collectors.toList());
 
         LoadCostBookingsResponse response = new LoadCostBookingsResponse();
-        response.setSuccess(true);
+        response.setSuccess(result.getSuccess() != null ? result.getSuccess() : false);
         response.setMessage(result.getMessage() != null ? result.getMessage() : "Cost bookings loaded successfully");
         response.setCostBookings(costBookingDtos);
         response.setCount(costBookingDtos.size());
         return response;
+    }
+
+    private boolean isStopMessage(String message) {
+        if (message == null) {
+            return false;
+        }
+        String upperMessage = message.toUpperCase(Locale.ROOT);
+        return upperMessage.contains("WARNING") || upperMessage.contains("ERROR")
+                || upperMessage.contains("NO_DATA") || upperMessage.contains("NO DATA");
     }
 
     @Override
@@ -1658,7 +1744,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // Call stored procedure
         CalculateDiscountCommissionResponse response = salesInvoiceStoredProcRepository
                 .callCalculateItemDiscountCommissionProc(
-                        transactionPoid, request, detRowId, invoice.getQtnPoid(), userId);
+                        transactionPoid, request, invoice.getQtnPoid(), userId);
 
         if (!response.getSuccess() || response.getMessage().contains("ERROR")) {
             throw new CustomException("Error calculating discount/commission: " + response.getMessage());
