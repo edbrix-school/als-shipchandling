@@ -1627,7 +1627,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional
-    public RefreshGpProcResponse calculateGp(Long transactionPoid, CalculateDiscountCommissionRequest request, Long groupPoid, Long companyPoid, String userId) {
+    public RefreshGpProcResponse calculateGp(Long transactionPoid, CalculateDiscountCommissionRequest request, Long groupPoid, Long companyPoid, Long userPoid) {
         // Validate invoice exists
         SalesInvoiceHdr invoice = invoiceHdrRepository
                 .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
@@ -1641,13 +1641,13 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             throw new CustomException("Quotation POID is required for this operation");
         }
 
-        if (userId == null || userId.isBlank()) {
-            throw new CustomException("User id is required for GP calculation");
+        if (userPoid == null) {
+            throw new CustomException("User Poid is required for GP calculation");
         }
 
         // Call stored procedure to calculate discount/commission/GP (legacy refresh GP behavior)
         RefreshGpProcResponse response = salesInvoiceStoredProcRepository.callRefreshGpProc(
-                Long.parseLong(userId),
+                userPoid,
                 transactionPoid,
                 invoice.getQtnPoid(),
                 request);

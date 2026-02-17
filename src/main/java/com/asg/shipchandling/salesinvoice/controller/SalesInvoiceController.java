@@ -304,7 +304,7 @@ public class SalesInvoiceController {
                 log.info("Calculating GP for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 RefreshGpProcResponse response = invoiceService.calculateGp(
-                                transactionPoid, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                transactionPoid, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid());
                 log.info("GP calculated for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 return success(response.getMessage(), response);
