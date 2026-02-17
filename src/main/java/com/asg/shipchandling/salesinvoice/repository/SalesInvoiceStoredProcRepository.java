@@ -244,7 +244,7 @@ public class SalesInvoiceStoredProcRepository {
     }
 
     public RefreshGpProcResponse callRefreshGpProc(
-            Long userId,
+            Long userPoid,
             Long transactionPoid,
             Long qtnPoid,
             CalculateDiscountCommissionRequest request) {
@@ -252,7 +252,7 @@ public class SalesInvoiceStoredProcRepository {
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
                 String type = request != null && request.getType() != null ? request.getType().toUpperCase() : "AMOUNT";
-                cs.setObject(1, userId);
+                cs.setObject(1, userPoid);
                 cs.setObject(2, transactionPoid);
                 cs.setObject(3, qtnPoid);
                 cs.setObject(4, request != null ? request.getInvDiscount() : null);

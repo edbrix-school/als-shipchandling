@@ -88,7 +88,7 @@ public interface SalesInvoiceService {
         VerifyInvoiceResponse verifyInvoice(Long transactionPoid,
                         Long groupPoid, Long companyPoid, String userId);
 
-        RefreshGpProcResponse calculateGp(Long transactionPoid, CalculateDiscountCommissionRequest request, Long groupPoid, Long companyPoid, String userId);
+        RefreshGpProcResponse calculateGp(Long transactionPoid, CalculateDiscountCommissionRequest request, Long groupPoid, Long companyPoid, Long userPoid);
 
         LoadCostBookingsResponse loadCostBookings(Long transactionPoid, Long groupPoid,
                         Long companyPoid, String userId);
