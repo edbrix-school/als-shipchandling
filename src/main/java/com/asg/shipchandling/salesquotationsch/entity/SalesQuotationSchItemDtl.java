@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 
 @Entity
@@ -35,8 +36,8 @@ public class SalesQuotationSchItemDtl {
     @Column(name = "QUANTITY")
     private Long quantity;
 
-    @Column(name = "PRICE")
-    private Long price;
+    @Column(name = "PRICE", precision = 18, scale = 6)
+    private BigDecimal price;
 
     @Column(name = "DISCOUNT")
     @AuditIgnore
@@ -73,8 +74,8 @@ public class SalesQuotationSchItemDtl {
     @AuditIgnore
     private Long adjQuantity;
 
-    @Column(name = "COST")
-    private Long cost;
+    @Column(name = "COST", precision = 18, scale = 6)
+    private BigDecimal cost;
 
     @Column(name = "LAST_RATE1")
     private Long lastRate1;
