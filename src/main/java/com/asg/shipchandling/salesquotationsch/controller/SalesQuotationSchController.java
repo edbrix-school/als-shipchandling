@@ -30,6 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.asg.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.DescriptionMatchResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.CurrencyRateResponse;
 import com.asg.shipchandling.salesquotationsch.service.SalesQuotationSchService;
@@ -389,6 +390,35 @@ public class SalesQuotationSchController {
                                 "success", false,
                                 "message", errorResponse.getMessage(),
                                 "result", Map.of("data", errorResponse)
+                        ));
+                }
+        }
+
+        @Operation(summary = "Match items by DESCRIPTION (fuzzy)", description = "Read DESCRIPTION column from Excel; normalize text, extract quantity/unit, fuzzy match (Jaro-Winkler) against DB products; return list of matched STOCK_POID with quantity and unit in JSON. Use similarityThreshold (0–1, default 0.85) to accept matches.", responses = {
+                        @ApiResponse(responseCode = "200", description = "Match result with items list"),
+                        @ApiResponse(responseCode = "400", description = "Invalid file or missing DESCRIPTION column"),
+                        @ApiResponse(responseCode = "401", description = "Unauthorized")
+        }, security = @SecurityRequirement(name = "bearerAuth"))
+        @PostMapping(value = "/match-items-by-description", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        @AllowedAction(UserRolesRightsEnum.CREATE)
+        public ResponseEntity<?> matchItemsByDescription(
+                        @RequestParam("file") MultipartFile file,
+                        @RequestParam(value = "similarityThreshold", required = false) Double similarityThreshold) {
+                log.info("matchItemsByDescription started companyPoid={} fileName={}", UserContext.getCompanyPoid(),
+                        file != null ? file.getOriginalFilename() : "null");
+                try {
+                        double threshold = (similarityThreshold != null && similarityThreshold > 0 && similarityThreshold <= 1.0)
+                                ? similarityThreshold : 0.85;
+                        DescriptionMatchResponse response = quotationSchService.matchItemsByDescription(
+                                UserContext.getCompanyPoid(), UserContext.getGroupPoid(), file, threshold);
+                        log.info("matchItemsByDescription completed totalRows={} matchedRows={}", response.getTotalRows(), response.getMatchedRows());
+                        return success(response.getMessage(), response);
+                } catch (Exception e) {
+                        log.error("Unexpected error in matchItemsByDescription", e);
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                                "statusCode", HttpStatus.BAD_REQUEST.value(),
+                                "success", false,
+                                "message", "Error processing match: " + (e.getMessage() != null ? e.getMessage() : "Unknown error")
                         ));
                 }
         }

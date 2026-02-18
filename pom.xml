@@ -93,6 +93,12 @@
 			<artifactId>poi-ooxml</artifactId>
 			<version>5.2.5</version>
 		</dependency>
+		<!-- Apache Commons Text for fuzzy string matching (Jaro-Winkler, Levenshtein) -->
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-text</artifactId>
+			<version>1.12.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>

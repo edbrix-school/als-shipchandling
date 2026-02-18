@@ -19,11 +19,15 @@ import com.asg.shipchandling.salesquotationsch.dto.response.CustomerDetailsRespo
 import com.asg.shipchandling.salesquotationsch.dto.response.SalesQuotationSchListResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ValidationResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.DescriptionMatchItemDto;
+import com.asg.shipchandling.salesquotationsch.dto.response.DescriptionMatchResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.CurrencyRateResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.TempAddressProcedureResponse;
 import com.asg.shipchandling.salesquotationsch.dto.TempNewAddressRow;
+import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
+import com.asg.shipchandling.StockMaster.repository.StockMasterRepository;
 import com.asg.shipchandling.StockMaster.service.StockMasterService;
 import com.asg.shipchandling.StockMaster.dto.StockDetailsResponse;
 import com.asg.shipchandling.common.repository.GlobalCurrencyMasterRepository;
@@ -67,13 +71,19 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import org.apache.commons.text.similarity.JaroWinklerSimilarity;
+
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
@@ -97,6 +107,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private final SalesQuotationSchHdrRepository quotationSchHdrRepository;
     private final SalesQuotationSchItemDtlRepository itemDtlRepository;
     private final SalesQuotationSchStoredProcRepository quotationSchStoredProcRepository;
+    private final StockMasterRepository stockMasterRepository;
     private final StockMasterService stockMasterService;
     private final GlobalCurrencyMasterRepository globalCurrencyMasterRepository;
     private final GlobalCurrencyRatesRepository globalCurrencyRatesRepository;
@@ -2060,6 +2071,211 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         }
 
         return response;
+    }
+
+    private static final Pattern QTY_UNIT_AT_END = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*([A-Za-z]+)?\\s*$");
+    private static final double DEFAULT_SIMILARITY_THRESHOLD = 0.85;
+
+    @Override
+    public DescriptionMatchResponse matchItemsByDescription(Long companyPoid, Long groupPoid, MultipartFile file,
+            double similarityThreshold) {
+        DescriptionMatchResponse response = DescriptionMatchResponse.builder()
+                .success(false)
+                .items(new ArrayList<>())
+                .similarityThreshold(similarityThreshold <= 0 ? DEFAULT_SIMILARITY_THRESHOLD : similarityThreshold)
+                .build();
+
+        if (file == null || file.isEmpty()) {
+            response.setMessage("Excel file is required");
+            return response;
+        }
+
+        double threshold = response.getSimilarityThreshold();
+        List<StockMasterEntity> stocks = loadStocksForGroup(groupPoid);
+        if (stocks.isEmpty()) {
+            response.setMessage("No products found for this group");
+            return response;
+        }
+
+        try (InputStream inputStream = file.getInputStream()) {
+            Workbook workbook;
+            String fileName = file.getOriginalFilename();
+            if (fileName != null && fileName.endsWith(".xlsx")) {
+                workbook = new XSSFWorkbook(inputStream);
+            } else if (fileName != null && fileName.endsWith(".xls")) {
+                workbook = new HSSFWorkbook(inputStream);
+            } else {
+                response.setMessage("Invalid file format. Only .xls and .xlsx are supported");
+                return response;
+            }
+
+            Sheet sheet = workbook.getSheetAt(0);
+            int descriptionColumnIndex = findDescriptionColumnIndex(sheet);
+            if (descriptionColumnIndex < 0) {
+                workbook.close();
+                response.setMessage("DESCRIPTION column not found in Excel. Ensure the first row contains a header named 'DESCRIPTION'.");
+                return response;
+            }
+
+            int totalRows = sheet.getLastRowNum();
+            int dataStartRow = 2; // Skip header rows like importItemsFromExcel
+            List<DescriptionMatchItemDto> items = new ArrayList<>();
+            JaroWinklerSimilarity jaroWinkler = new JaroWinklerSimilarity();
+
+            for (int rowIndex = dataStartRow; rowIndex <= totalRows; rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                int rowNumber = rowIndex + 1;
+                if (row == null) {
+                    items.add(DescriptionMatchItemDto.builder()
+                            .rowNumber(rowNumber)
+                            .matched(false)
+                            .message("Empty row")
+                            .quantity(BigDecimal.ONE)
+                            .build());
+                    continue;
+                }
+
+                String rawDescription = getStringValueFromCell(row.getCell(descriptionColumnIndex));
+                if (rawDescription == null || rawDescription.trim().isEmpty()) {
+                    items.add(DescriptionMatchItemDto.builder()
+                            .rowNumber(rowNumber)
+                            .originalDescription("")
+                            .matched(false)
+                            .message("Empty description")
+                            .quantity(BigDecimal.ONE)
+                            .build());
+                    continue;
+                }
+
+                String normalizedForMatch = normalizeAndSortWords(rawDescription.trim());
+                BigDecimal quantity = BigDecimal.ONE;
+                String unitCode = null;
+                String textUsedForMatch = normalizedForMatch;
+
+                Matcher qtyUnitMatcher = QTY_UNIT_AT_END.matcher(rawDescription.trim());
+                if (qtyUnitMatcher.find()) {
+                    try {
+                        quantity = new BigDecimal(qtyUnitMatcher.group(1));
+                        if (qtyUnitMatcher.group(2) != null && !qtyUnitMatcher.group(2).isEmpty()) {
+                            unitCode = qtyUnitMatcher.group(2).trim().toUpperCase();
+                        }
+                    } catch (Exception ignored) {
+                        // keep quantity 1
+                    }
+                    String withoutQtyUnit = rawDescription.substring(0, qtyUnitMatcher.start()).trim();
+                    if (!withoutQtyUnit.isEmpty()) {
+                        textUsedForMatch = normalizeAndSortWords(withoutQtyUnit);
+                    }
+                }
+
+                if (textUsedForMatch.isEmpty()) {
+                    items.add(DescriptionMatchItemDto.builder()
+                            .rowNumber(rowNumber)
+                            .originalDescription(rawDescription)
+                            .quantity(quantity)
+                            .unitCode(unitCode)
+                            .matched(false)
+                            .message("No text to match after extracting quantity/unit")
+                            .build());
+                    continue;
+                }
+
+                double bestScore = 0;
+                StockMasterEntity bestMatch = null;
+                for (StockMasterEntity stock : stocks) {
+                    String dbName = normalizeAndSortWords(stock.getStockName() != null ? stock.getStockName() : "");
+                    String dbDesc = normalizeAndSortWords(stock.getStockDescription() != null ? stock.getStockDescription() : "");
+                    double scoreName = jaroWinkler.apply(textUsedForMatch, dbName);
+                    double scoreDesc = dbDesc.isEmpty() ? 0 : jaroWinkler.apply(textUsedForMatch, dbDesc);
+                    double score = Math.max(scoreName, scoreDesc);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMatch = stock;
+                    }
+                }
+
+                if (bestMatch != null && bestScore >= threshold) {
+                    Long unitPoid = bestMatch.getStockUnitPoid();
+                    items.add(DescriptionMatchItemDto.builder()
+                            .rowNumber(rowNumber)
+                            .originalDescription(rawDescription)
+                            .stockPoid(bestMatch.getStockPoid())
+                            .stockCode(bestMatch.getStockCode())
+                            .stockName(bestMatch.getStockName())
+                            .quantity(quantity)
+                            .unitCode(unitCode)
+                            .stockUnitPoid(unitPoid)
+                            .similarityScore(bestScore)
+                            .matched(true)
+                            .build());
+                } else {
+                    items.add(DescriptionMatchItemDto.builder()
+                            .rowNumber(rowNumber)
+                            .originalDescription(rawDescription)
+                            .quantity(quantity)
+                            .unitCode(unitCode)
+                            .similarityScore(bestScore)
+                            .matched(false)
+                            .message(bestMatch == null ? "No match" : String.format("Best score %.2f below threshold %.2f", bestScore, threshold))
+                            .build());
+                }
+            }
+
+            workbook.close();
+
+            int matchedCount = (int) items.stream().filter(DescriptionMatchItemDto::isMatched).count();
+            response.setSuccess(true);
+            response.setMessage(String.format("Processed %d rows, %d matched above threshold", items.size(), matchedCount));
+            response.setTotalRows(items.size());
+            response.setMatchedRows(matchedCount);
+            response.setUnmatchedRows(items.size() - matchedCount);
+            response.setItems(items);
+        } catch (Exception e) {
+            log.error("Error matching items by description", e);
+            response.setMessage("Error processing Excel: " + (e.getMessage() != null ? e.getMessage() : "Unknown error"));
+        }
+
+        return response;
+    }
+
+    /**
+     * Find 0-based column index of header "DESCRIPTION" (case-insensitive) in first two rows.
+     */
+    private int findDescriptionColumnIndex(Sheet sheet) {
+        for (int rowIndex = 0; rowIndex <= Math.min(1, sheet.getLastRowNum()); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) continue;
+            for (int col = 0; col <= row.getLastCellNum(); col++) {
+                Cell cell = row.getCell(col);
+                String value = getStringValueFromCell(cell);
+                if (value != null && "DESCRIPTION".equalsIgnoreCase(value.trim())) {
+                    return col;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Normalize: lowercase, remove special chars (keep letters and digits), collapse spaces, sort words alphabetically.
+     */
+    private String normalizeAndSortWords(String input) {
+        if (input == null || input.isEmpty()) return "";
+        String cleaned = input.toLowerCase().replaceAll("[^a-z0-9\\s]", " ").replaceAll("\\s+", " ").trim();
+        if (cleaned.isEmpty()) return "";
+        String[] words = cleaned.split("\\s+");
+        Arrays.sort(words, Comparator.naturalOrder());
+        return String.join(" ", words);
+    }
+
+    private List<StockMasterEntity> loadStocksForGroup(Long groupPoid) {
+        Specification<StockMasterEntity> spec = (root, query, cb) -> cb.and(
+                cb.equal(root.get("groupPoid"), groupPoid),
+                cb.or(
+                        cb.isNull(root.get("deleted")),
+                        cb.notEqual(root.get("deleted"), "Y")
+                ));
+        return stockMasterRepository.findAll(spec);
     }
 
     /**

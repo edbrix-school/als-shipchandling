@@ -7,6 +7,7 @@ import com.asg.shipchandling.salesquotationsch.dto.request.*;
 import com.asg.shipchandling.salesquotationsch.dto.response.SalesQuotationSchListResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ValidationResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.DescriptionMatchResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.CurrencyRateResponse;
@@ -70,9 +71,16 @@ public interface SalesQuotationSchService {
         StoredProcedureResponse calculate(CalculateRequest request);
         
         // Excel Import
-        ExcelImportResponse importItemsFromExcel(Long transactionPoid, Long companyPoid, String userId, 
+        ExcelImportResponse importItemsFromExcel(Long transactionPoid, Long companyPoid, String userId,
                 MultipartFile file);
-        
+
+        /**
+         * Match items from Excel DESCRIPTION column using fuzzy matching against DB products.
+         * Returns list of matched STOCK_POID with quantity and unit in JSON format.
+         */
+        DescriptionMatchResponse matchItemsByDescription(Long companyPoid, Long groupPoid, MultipartFile file,
+                double similarityThreshold);
+
         List<AddressDetailsResponse> getCustomerAddress(Long userPoid, Long customerPoid, String addressType);
         
         AddressDetailsResponse getAddressDetailsByPoid(BigDecimal addressPoid);
