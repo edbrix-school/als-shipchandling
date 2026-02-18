@@ -290,7 +290,7 @@ public class SalesQuotationSchStoredProcRepository {
 
                 String result = cs.getString(4);
                 StoredProcedureResponse response = new StoredProcedureResponse();
-                if (result != null && !result.trim().isEmpty() && result.toUpperCase().contains("ERROR")) {
+                if (result != null && !result.trim().isEmpty() && !result.toUpperCase().contains("SUCCESS")) {
                     response.setSuccess(false);
                     response.setErrorMessage(result);
                     response.setMessage("Clear items failed");
