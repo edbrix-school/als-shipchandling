@@ -7,14 +7,14 @@ import org.springframework.stereotype.Repository;
 
 import com.asg.shipchandling.exceptions.CustomException;
 import com.asg.shipchandling.salesinvoice.dto.CreditDetailsDto;
-import com.asg.shipchandling.salesinvoice.dto.QuotationCurrencyDto;
+import com.asg.shipchandling.salesinvoice.dto.QuotationSummaryDto;
 import com.asg.shipchandling.salesinvoice.dto.QuotationItemDto;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.LoadQuotationItemsRequest;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDiscountCommissionResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDueDateResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationCurrencyResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationSummaryResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationItemsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
@@ -569,8 +569,8 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public LoadQuotationCurrencyResponse callLoadQuotationCurrencyProc(Long transactionId, Long qtnPoId) {
-        String proc = "{call PROC_AR_SCH_QTN_LOAD_CUR1(?, ?)}";
+    public LoadQuotationSummaryResponse callLoadQuotationSummaryProc(Long transactionId, Long qtnPoId) {
+        String proc = "{call PROC_AR_SCH_QTN_LOAD_CUR1(?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
@@ -581,28 +581,37 @@ public class SalesInvoiceStoredProcRepository {
 
                 cs.execute();
                 String procResult = cs.getString(3);
-                 try (ResultSet rs = (ResultSet) cs.getObject(4)) {
+                try (ResultSet rs = (ResultSet) cs.getObject(4)) {
                     if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
                         throw new CustomException("PROC_AR_SCH_QTN_LOAD_CUR1 failed: " + procResult);
                     }
 
-                    List<QuotationCurrencyDto> items = new ArrayList<>();
-                    if (rs != null) {
-                        while (rs.next()) {
-                            QuotationCurrencyDto dto = new QuotationCurrencyDto();
-
-                            Long currencyCode = rs.getLong("CURRENCY_CODE");
-                            dto.setCurrencyCode(currencyCode);
-
-                            Long currencyRate = rs.getLong("CURRENCY_RATE");
-                            dto.setCurrencyRate(currencyRate);
-                            items.add(dto);
-                        }
+                    QuotationSummaryDto summary = null;
+                    if (rs != null && rs.next()) {
+                        summary = new QuotationSummaryDto();
+                        summary.setStatus(rs.getString("STATUS"));
+                        summary.setDataLoadType(rs.getString("DATA_LOAD_TYPE"));
+                        summary.setPaymentMode(rs.getString("PAYMENT_MODE"));
+                        summary.setVesselName(rs.getString("VESSEL_NAME"));
+                        summary.setPortName(rs.getString("PORT_NAME"));
+                        summary.setCurrencyCode(rs.getString("CURRENCY_CODE"));
+                        summary.setCurrencyRate(rs.getBigDecimal("CURRENCY_RATE"));
+                        summary.setInvDiscount(rs.getBigDecimal("INV_DISCOUNT"));
+                        summary.setDiscountAmt(rs.getBigDecimal("DISCOUNT_AMT"));
+                        summary.setDiscountPercent(rs.getBigDecimal("DISCOUNT_PERCENT"));
+                        summary.setDetails(rs.getString("DETAILS"));
+                        summary.setInvAmount(rs.getBigDecimal("INV_AMOUNT"));
+                        summary.setTotalGpAmt(rs.getBigDecimal("TOTAL_GP_AMT"));
+                        summary.setTotalGpPercent(rs.getBigDecimal("TOTAL_GP_PERCENT"));
+                        summary.setDescriptionPrintYn(rs.getString("DESCRIPTION_PRINT_YN"));
+                        summary.setDeliveryToAddress(rs.getString("DELIVERY_TO_ADDRESS"));
                     }
-                    LoadQuotationCurrencyResponse response = new LoadQuotationCurrencyResponse();
-                    response.setMessage("Quotation currency loaded successfully");
-                    response.setQuotationCurrencyList(items);
-                   
+                    LoadQuotationSummaryResponse response = new LoadQuotationSummaryResponse();
+                    String message = procResult != null ? procResult : "Quotation summary loaded successfully";
+                    response.setMessage(message);
+                    response.setSuccess(message.toUpperCase().contains("SUCCESS"));
+                    response.setQuotationSummary(summary);
+
                     return response;
                 }
             } catch (SQLException ex) {

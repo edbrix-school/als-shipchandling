@@ -20,7 +20,7 @@ import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadDeliveryNoteResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationCurrencyResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationSummaryResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationAndCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
@@ -461,15 +461,15 @@ public class SalesInvoiceController {
                 return success(response.getMessage(), response);
         }
 
-        @Operation(summary = "Load Quotation Currency", description = "Loads currency code and rate from quotation. Calls PROC_AR_SCH_QTN_LOAD_CUR1.")
-        @GetMapping("/load-quotation-currency/{transactionPoid}")
-        @AllowedAction(UserRolesRightsEnum.VIEW)
-        public ResponseEntity<?> loadQuotationCurrency(
+        @Operation(summary = "Load Quotation Summary", description = "Loads quotation summary fields using the cursor returned by PROC_AR_SCH_QTN_LOAD_CUR1.")
+        @PostMapping("/load-quotation-summary/{transactionPoid}")
+        @AllowedAction(UserRolesRightsEnum.EDIT)
+        public ResponseEntity<?> loadQuotationSummary(
                         @PathVariable Long transactionPoid,
                         @RequestParam Long qtnPoid) {
-                log.info("Loading quotation currency for qtnPoid: {}", qtnPoid);
-                LoadQuotationCurrencyResponse response = invoiceService.loadQuotationCurrency(transactionPoid, qtnPoid);
-                log.info("Quotation currency loaded for qtnPoid: {}", qtnPoid);
+                log.info("Loading quotation summary for qtnPoid: {}", qtnPoid);
+                LoadQuotationSummaryResponse response = invoiceService.loadQuotationSummary(transactionPoid, qtnPoid);
+                log.info("Quotation summary loaded for qtnPoid: {}", qtnPoid);
                 return success(response.getMessage(), response);
         }
 
