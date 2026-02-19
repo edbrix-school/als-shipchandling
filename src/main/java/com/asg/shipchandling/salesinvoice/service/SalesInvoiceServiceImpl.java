@@ -27,7 +27,7 @@ import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadDeliveryNoteResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationAndCostBookingsResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationCurrencyResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationSummaryResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationItemsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
@@ -1865,26 +1865,16 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional(readOnly = true)
-    public LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, Long qtnPoid) {
+    public LoadQuotationSummaryResponse loadQuotationSummary(Long transactionPoid, Long qtnPoid) {
         if (qtnPoid == null) {
             throw new CustomException("Quotation POID is required");
         }
 
         // Call stored procedure
-        LoadQuotationCurrencyResponse result = salesInvoiceStoredProcRepository
-                .callLoadQuotationCurrencyProc(transactionPoid, qtnPoid);
+        LoadQuotationSummaryResponse result = salesInvoiceStoredProcRepository
+                .callLoadQuotationSummaryProc(transactionPoid, qtnPoid);
 
-        if (result.getMessage() != null && result.getMessage().contains("ERROR")) {
-            throw new CustomException("Error loading quotation currency: " + result.getMessage());
-        }
-
-        LoadQuotationCurrencyResponse response = new LoadQuotationCurrencyResponse();
-        response.setSuccess(true);
-        response.setMessage(result.getMessage() != null ? result.getMessage() : "Currency details loaded successfully");
-        response.setCurrencyCode(result.getCurrencyCode());
-        response.setCurrencyRate(result.getCurrencyRate());
-        response.setQuotationCurrencyList(result.getQuotationCurrencyList());
-        return response;
+        return result;
     }
 
     @Override

@@ -18,7 +18,7 @@ import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadDeliveryNoteResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationAndCostBookingsResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationCurrencyResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationSummaryResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationItemsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
@@ -104,7 +104,7 @@ public interface SalesInvoiceService {
         SalesInvoiceDependenciesDto checkSalesInvoiceDependencies(Long transactionPoid,
                                                                   Long groupPoid, Long companyPoid);
 
-        LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, Long qtnPoid);
+        LoadQuotationSummaryResponse loadQuotationSummary(Long transactionPoid, Long qtnPoid);
 
         ValidationResponse validateCustomer(Long customerPoid, Long groupPoid, Long companyPoid);
 
