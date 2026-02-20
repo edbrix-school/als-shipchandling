@@ -1726,7 +1726,7 @@ public class StockMasterServiceImpl implements StockMasterService {
         
         // Add metadata fields
         node.put("id", "row-" + category.getCategoryPoid());
-        node.put("isExpanded", false);
+        node.put("isExpanded", true);
         node.put("isRowGroup", true);
         
         // Add companyPoid and userPoid for tracking (if provided)
@@ -1826,7 +1826,7 @@ public class StockMasterServiceImpl implements StockMasterService {
         
         // Add metadata fields
         item.put("id", "row-" + stock.getStockPoid());
-        item.put("isExpanded", false);
+        item.put("isExpanded", true);
         item.put("isRowGroup", true);
         // Add companyPoid and userPoid for tracking (if provided)
         if (companyPoid != null) {

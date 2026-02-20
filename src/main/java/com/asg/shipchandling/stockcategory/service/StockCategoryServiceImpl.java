@@ -603,6 +603,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         // Check if has children
         Long childCount = stockCategoryRepository.countChildrenByParentCategoryPoid(category.getCategoryPoid());
         dto.setHasChildren(childCount > 0);
+        dto.setIsExpanded(true);
 
         return dto;
     }
@@ -642,7 +643,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                 Long childCount = stockCategoryRepository.countChildrenByParentCategoryPoid(category.getCategoryPoid());
                 
                 String type = (childCount > 0) ? "MAIN_GROUP" : "LEDGER";
-                Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, 0, includeDeleted);
+                Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, 0, includeDeleted, tree);
                 
                 if (tree && childCount > 0) {
                     // Add children for tree structure only if it has children
@@ -684,7 +685,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                     Long childCount = stockCategoryRepository.countChildrenByParentCategoryPoid(category.getCategoryPoid());
                     
                     String type = (childCount > 0) ? "SUB_GROUP" : "LEDGER";
-                    Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, level, includeDeleted);
+                    Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, level, includeDeleted, tree);
                     
                     if (tree && childCount > 0) {
                         // Add children for tree structure only if it has children
@@ -727,7 +728,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
             Long childCount = stockCategoryRepository.countChildrenByParentCategoryPoid(category.getCategoryPoid());
             
             String type = (childCount > 0) ? "SUB_GROUP" : "LEDGER";
-            Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, level, includeDeleted);
+            Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, level, includeDeleted, tree);
             
             if (tree && childCount > 0) {
                 // Recursively add children only if it has children
@@ -773,7 +774,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         return 0;
     }
     
-    private Map<String, Object> convertCategoryToHierarchicalItem(StockCategoryMaster category, String type, int level, boolean includeDeleted) {
+    private Map<String, Object> convertCategoryToHierarchicalItem(StockCategoryMaster category, String type, int level, boolean includeDeleted, boolean tree) {
         Map<String, Object> item = new HashMap<>();
         item.put("categoryPoid", category.getCategoryPoid());
         item.put("categoryCode", category.getCategoryCode());
@@ -784,6 +785,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         item.put("active", category.getActive() != null && "Y".equalsIgnoreCase(category.getActive()));
         item.put("deleted", category.getDeleted() != null && "Y".equalsIgnoreCase(category.getDeleted()));
         item.put("groupPoid", category.getGroupPoid());
+        item.put("isExpanded", tree);
         
         // Set parentPoid from PARENT_CATEGORY_POID
         // For MAIN_GROUP: parentPoid will be null (root categories)
