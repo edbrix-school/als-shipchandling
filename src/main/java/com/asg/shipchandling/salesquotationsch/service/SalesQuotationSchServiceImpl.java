@@ -19,6 +19,7 @@ import com.asg.shipchandling.salesquotationsch.dto.response.CustomerDetailsRespo
 import com.asg.shipchandling.salesquotationsch.dto.response.SalesQuotationSchListResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ValidationResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.DescriptionMatchCandidateDto;
 import com.asg.shipchandling.salesquotationsch.dto.response.DescriptionMatchItemDto;
 import com.asg.shipchandling.salesquotationsch.dto.response.DescriptionMatchResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
@@ -2075,6 +2076,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
     private static final Pattern QTY_UNIT_AT_END = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*([A-Za-z]+)?\\s*$");
     private static final double DEFAULT_SIMILARITY_THRESHOLD = 0.85;
+    /** Max number of candidate matches (with score) per item to return */
+    private static final int MAX_MATCHES_PER_ITEM = 50;
 
     @Override
     public DescriptionMatchResponse matchItemsByDescription(Long companyPoid, Long groupPoid, MultipartFile file,
@@ -2131,6 +2134,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                             .matched(false)
                             .message("Empty row")
                             .quantity(BigDecimal.ONE)
+                            .matches(List.of())
                             .build());
                     continue;
                 }
@@ -2143,6 +2147,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                             .matched(false)
                             .message("Empty description")
                             .quantity(BigDecimal.ONE)
+                            .matches(List.of())
                             .build());
                     continue;
                 }
@@ -2176,37 +2181,47 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                             .unitCode(unitCode)
                             .matched(false)
                             .message("No text to match after extracting quantity/unit")
+                            .matches(List.of())
                             .build());
                     continue;
                 }
 
-                double bestScore = 0;
-                StockMasterEntity bestMatch = null;
+                List<DescriptionMatchCandidateDto> matchesWithScore = new ArrayList<>();
                 for (StockMasterEntity stock : stocks) {
                     String dbName = normalizeAndSortWords(stock.getStockName() != null ? stock.getStockName() : "");
                     String dbDesc = normalizeAndSortWords(stock.getStockDescription() != null ? stock.getStockDescription() : "");
                     double scoreName = jaroWinkler.apply(textUsedForMatch, dbName);
                     double scoreDesc = dbDesc.isEmpty() ? 0 : jaroWinkler.apply(textUsedForMatch, dbDesc);
                     double score = Math.max(scoreName, scoreDesc);
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestMatch = stock;
-                    }
+                    matchesWithScore.add(DescriptionMatchCandidateDto.builder()
+                            .stockPoid(stock.getStockPoid())
+                            .stockCode(stock.getStockCode())
+                            .stockName(stock.getStockName())
+                            .stockUnitPoid(stock.getStockUnitPoid())
+                            .similarityScore(score)
+                            .build());
+                }
+                matchesWithScore.sort((a, b) -> Double.compare(b.getSimilarityScore(), a.getSimilarityScore()));
+                if (matchesWithScore.size() > MAX_MATCHES_PER_ITEM) {
+                    matchesWithScore = new ArrayList<>(matchesWithScore.subList(0, MAX_MATCHES_PER_ITEM));
                 }
 
-                if (bestMatch != null && bestScore >= threshold) {
-                    Long unitPoid = bestMatch.getStockUnitPoid();
+                double bestScore = matchesWithScore.isEmpty() ? 0 : matchesWithScore.get(0).getSimilarityScore();
+                DescriptionMatchCandidateDto bestCandidate = matchesWithScore.isEmpty() ? null : matchesWithScore.get(0);
+
+                if (bestCandidate != null && bestScore >= threshold) {
                     items.add(DescriptionMatchItemDto.builder()
                             .rowNumber(rowNumber)
                             .originalDescription(rawDescription)
-                            .stockPoid(bestMatch.getStockPoid())
-                            .stockCode(bestMatch.getStockCode())
-                            .stockName(bestMatch.getStockName())
+                            .stockPoid(bestCandidate.getStockPoid())
+                            .stockCode(bestCandidate.getStockCode())
+                            .stockName(bestCandidate.getStockName())
                             .quantity(quantity)
                             .unitCode(unitCode)
-                            .stockUnitPoid(unitPoid)
+                            .stockUnitPoid(bestCandidate.getStockUnitPoid())
                             .similarityScore(bestScore)
                             .matched(true)
+                            .matches(matchesWithScore)
                             .build());
                 } else {
                     items.add(DescriptionMatchItemDto.builder()
@@ -2216,7 +2231,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                             .unitCode(unitCode)
                             .similarityScore(bestScore)
                             .matched(false)
-                            .message(bestMatch == null ? "No match" : String.format("Best score %.2f below threshold %.2f", bestScore, threshold))
+                            .message(bestCandidate == null ? "No match" : String.format("Best score %.2f below threshold %.2f", bestScore, threshold))
+                            .matches(matchesWithScore)
                             .build());
                 }
             }

@@ -5,9 +5,12 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * Single matched item from DESCRIPTION column fuzzy match.
  * Contains STOCK_POID with quantity and unit for JSON response.
+ * Includes all candidate matches with scores in {@link #matches}.
  */
 @Data
 @NoArgsConstructor
@@ -36,4 +39,6 @@ public class DescriptionMatchItemDto {
     private boolean matched;
     /** Error or no-match reason when matched is false */
     private String message;
+    /** All candidate matches with scores, sorted by score descending (best first) */
+    private List<DescriptionMatchCandidateDto> matches;
 }
