@@ -17,4 +17,5 @@ public class StockCategoryTreeDto {
     private Integer seqno;
     private String deleted;
     private Boolean hasChildren;
+    private Boolean isExpanded;
 }
