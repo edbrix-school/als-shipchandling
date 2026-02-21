@@ -63,8 +63,7 @@ public class StockUnitServiceImpl implements StockUnitService {
         StockUnitMasterDto stockUnitMasterDto = new StockUnitMasterDto();
 
         StockUnitMaster stockUnitMaster = stockUnitRepository.findByStockUnitPoid(stockUnitPoid);
-        BeanUtils.copyProperties(stockUnitMaster, stockUnitMasterDto);
-        return stockUnitMasterDto;
+        return entityToDtoWithAuditDates(stockUnitMaster);
     }
 
     @Override
@@ -87,6 +86,12 @@ public class StockUnitServiceImpl implements StockUnitService {
             StockUnitMaster responseEntity = stockUnitRepository.save(entity);
             Long stockUnitPoid = responseEntity.getStockUnitPoid();
             BeanUtils.copyProperties(responseEntity, responseDto);
+            responseDto.setCreatedDate(responseEntity.getCreatedDate() != null
+                    ? responseEntity.getCreatedDate().atOffset(java.time.ZoneOffset.UTC)
+                    : null);
+            responseDto.setLastModifiedDate(responseEntity.getLastModifiedDate() != null
+                    ? responseEntity.getLastModifiedDate().atOffset(java.time.ZoneOffset.UTC)
+                    : null);
             String key = stockUnitPoid.toString();
             String documentId = UserContext.getDocumentId();
             loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
@@ -306,11 +311,7 @@ public Page<StockUnitMasterDto> listStockUnitsUsingParams(
 
     Page<StockUnitMaster> page = stockUnitRepository.findAll(spec, pageable);
 
-    List<StockUnitMasterDto> dtoList = page.getContent().stream().map(entity -> {
-        StockUnitMasterDto dto = new StockUnitMasterDto();
-        BeanUtils.copyProperties(entity, dto);
-        return dto;
-    }).toList();
+    List<StockUnitMasterDto> dtoList = page.getContent().stream().map(this::entityToDtoWithAuditDates).toList();
 
     return new PageImpl<>(dtoList, pageable, page.getTotalElements());
 }
@@ -426,6 +427,22 @@ public Page<StockUnitMasterDto> listStockUnitsUsingParams(
         return dto;
     }
 
+    /**
+     * Maps entity to DTO and sets audit date fields. Entity uses LocalDateTime while DTO uses
+     * OffsetDateTime; BeanUtils skips incompatible types, so dates are set explicitly.
+     */
+    private StockUnitMasterDto entityToDtoWithAuditDates(StockUnitMaster entity) {
+        StockUnitMasterDto dto = new StockUnitMasterDto();
+        BeanUtils.copyProperties(entity, dto);
+        dto.setCreatedDate(entity.getCreatedDate() != null
+                ? entity.getCreatedDate().atOffset(java.time.ZoneOffset.UTC)
+                : null);
+        dto.setLastModifiedDate(entity.getLastModifiedDate() != null
+                ? entity.getLastModifiedDate().atOffset(java.time.ZoneOffset.UTC)
+                : null);
+        return dto;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Map<String, Object> listStockUnits(String docId, FilterRequestDto request, Pageable pageable) {
@@ -509,11 +526,7 @@ public Page<StockUnitMasterDto> listStockUnitsUsingParams(
         List<StockUnitMaster> units = stockUnitRepository.findByStockUnitCodeContains(codePattern);
 
         List<StockUnitMasterDto> dtoList = units.stream()
-                .map(entity -> {
-                    StockUnitMasterDto dto = new StockUnitMasterDto();
-                    BeanUtils.copyProperties(entity, dto);
-                    return dto;
-                })
+                .map(this::entityToDtoWithAuditDates)
                 .collect(Collectors.toList());
 
         log.info("getStockUnitsByCode completed for stockUnitCode={}, found {} units", stockUnitCode, dtoList.size());
