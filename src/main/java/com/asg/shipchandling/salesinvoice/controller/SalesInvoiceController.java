@@ -394,11 +394,12 @@ public class SalesInvoiceController {
         @PostMapping("/{transactionPoid}/unload-quotation")
         @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> unloadQuotation(
-                        @PathVariable Long transactionPoid) {
+                        @PathVariable Long transactionPoid,
+                        @RequestParam Long qtnPoid) {
                 log.info("Unloading quotation from sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 UnloadQuotationResponse response = invoiceService.unloadQuotation(
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                transactionPoid, qtnPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 log.info("Quotation unloaded from sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 return success(response.getMessage(), response);

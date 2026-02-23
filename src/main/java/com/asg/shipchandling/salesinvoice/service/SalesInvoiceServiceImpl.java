@@ -1579,7 +1579,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional
-    public UnloadQuotationResponse unloadQuotation(Long transactionPoid,
+    public UnloadQuotationResponse unloadQuotation(Long transactionPoid, Long qtnPoid,
             Long groupPoid, Long companyPoid, String userId) {
         // Validate invoice exists
         SalesInvoiceHdr invoice = invoiceHdrRepository
@@ -1587,16 +1587,24 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
 
         if ("Y".equals(invoice.getDeleted())) {
-            throw new CustomException("Cannot load quotation. Invoice is deleted");
+            throw new CustomException("Cannot unload quotation. Invoice is deleted");
         }
 
         if ("Y".equals(invoice.getVerified())) {
-            throw new CustomException("Cannot load quotation. Invoice isn't in EDIT mode");
+            throw new CustomException("Cannot unload quotation. Invoice is already verified");
         }
 
         // Call stored procedure to load quotation
         UnloadQuotationResponse response = salesInvoiceStoredProcRepository.callUnloadQuotationProc(transactionPoid,
-                invoice.getQtnPoid());
+                qtnPoid);
+
+        // Refresh invoice header after load/unload actions
+        invoiceHdrRepository.flush();
+        SalesInvoiceHdr refreshedInvoice = invoiceHdrRepository.findByTransactionPoid(transactionPoid)
+                .orElse(invoice);
+
+        response.setInvoice(convertToDtoWithLov(refreshedInvoice, true));
+
         return response;
     }
 
@@ -1883,6 +1891,13 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // Call stored procedure
         LoadQuotationSummaryResponse result = salesInvoiceStoredProcRepository
                 .callLoadQuotationSummaryProc(transactionPoid, qtnPoid);
+
+        // Refresh invoice header after load/unload actions
+        invoiceHdrRepository.flush();
+        SalesInvoiceHdr refreshedInvoice = invoiceHdrRepository.findByTransactionPoid(transactionPoid)
+                .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
+
+        result.setInvoice(convertToDtoWithLov(refreshedInvoice, true));
 
         return result;
     }
