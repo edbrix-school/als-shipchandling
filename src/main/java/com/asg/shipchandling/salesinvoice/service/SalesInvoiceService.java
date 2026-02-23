@@ -82,7 +82,7 @@ public interface SalesInvoiceService {
         LoadDeliveryNoteResponse loadDeliveryNote(Long transactionPoid, Long groupPoid,
                         Long companyPoid, String userId);
 
-        UnloadQuotationResponse unloadQuotation(Long transactionPoid, Long groupPoid,
+        UnloadQuotationResponse unloadQuotation(Long transactionPoid, Long qtnPoid, Long groupPoid,
                         Long companyPoid, String userId);
 
         VerifyInvoiceResponse verifyInvoice(Long transactionPoid,
