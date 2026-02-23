@@ -1996,6 +1996,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 if (row == null) {
                     continue; // Skip empty rows
                 }
+                if (isExcelRowEmpty(row)) {
+                    continue; // Skip rows with no data (empty cells)
+                }
 
                 try {
                     SalesQuotationSchItemDtl itemDtl = parseExcelRowToItemDtl(row, transactionPoid, nextDetRowId++,
@@ -2008,6 +2011,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                         continue;
                     }
 
+                    itemDtl.setItemType("BILLABLE");
                     // Save item detail
                     itemDtlRepository.save(itemDtl);
                     successfulRows++;
@@ -2065,8 +2069,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     /**
      * Parse Excel row to SalesQuotationSchItemDtl entity
      * Expected columns (0-based index):
-     * Column 5 (F): Stock Code (required)
-     * Column 6 (G): Stock Remarks (optional)
+     * Column 1 (B): STOCK_POID (optional - if provided, used directly; else lookup by Stock Code)
+     * Column 4 (E): Stock Code (optional - used to lookup STOCK_POID if column B is empty)
+     * Column 5 (F): Stock Remarks (optional)
      * Column 8 (I): Quantity (required)
      */
     private SalesQuotationSchItemDtl parseExcelRowToItemDtl(Row row, Long transactionPoid, Long detRowId, String userId,
@@ -2076,31 +2081,50 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         itemDtl.setDetRowId(detRowId);
         itemDtl.setCreatedBy(userId);
         itemDtl.setLastmodifiedBy(userId);
+        itemDtl.setItemType("BILLABLE"); // default for Excel import
 
-        // Stock Code (required) - Column 4 (F)
-        Cell stockCodeCell = row.getCell(4);
-        if (stockCodeCell != null) {
-            String stockCode = getStringValueFromCell(stockCodeCell);
-            if (stockCode != null && !stockCode.trim().isEmpty()) {
+        // STOCK_POID (optional) - Column 1 (B) - if provided, use it directly
+        Cell stockPoidCell = row.getCell(1);
+        if (stockPoidCell != null) {
+            Long stockPoid = getLongValueFromCell(stockPoidCell);
+            if (stockPoid != null && stockPoid > 0) {
                 try {
-                    StockDetailsResponse stockDetails = stockMasterService.getStockDetailsByCode(stockCode.trim(),
-                            companyPoid);
-                    // Check if stock was found (stockPoid is not null)
+                    StockDetailsResponse stockDetails = stockMasterService.getStockDetails(stockPoid, companyPoid);
                     if (stockDetails != null && stockDetails.getStockPoid() != null) {
                         BeanUtils.copyProperties(stockDetails, itemDtl);
                     } else {
-                        // Stock not found - return empty itemDtl
-                        log.warn("Stock not found for stockCode={}, returning empty itemDtl", stockCode);
-                        return itemDtl; // Return empty itemDtl with only basic fields set
+                        log.warn("Stock not found for stockPoid={}, will try Stock Code", stockPoid);
                     }
                 } catch (ResourceNotFoundException e) {
-                    // Stock not found - return empty itemDtl instead of throwing exception
-                    log.warn("Stock not found for stockCode={}, returning empty itemDtl: {}", stockCode,
-                            e.getMessage());
-                    return itemDtl; // Return empty itemDtl with only basic fields set
+                    log.warn("Stock not found for stockPoid={}: {}", stockPoid, e.getMessage());
                 } catch (Exception e) {
-                    log.warn("Error fetching stock details for stockCode=" + stockCode + ": " + e.getMessage());
-                    return itemDtl; // Return empty itemDtl with only basic fields set
+                    log.warn("Error fetching stock details for stockPoid={}: {}", stockPoid, e.getMessage());
+                }
+            }
+        }
+
+        // If STOCK_POID still not set, try Stock Code lookup - Column 4 (E)
+        if (itemDtl.getStockPoid() == null) {
+            Cell stockCodeCell = row.getCell(4);
+            if (stockCodeCell != null) {
+                String stockCode = getStringValueFromCell(stockCodeCell);
+                if (stockCode != null && !stockCode.trim().isEmpty()) {
+                    try {
+                        StockDetailsResponse stockDetails = stockMasterService.getStockDetailsByCode(stockCode.trim(),
+                                companyPoid);
+                        if (stockDetails != null && stockDetails.getStockPoid() != null) {
+                            BeanUtils.copyProperties(stockDetails, itemDtl);
+                        } else {
+                            log.warn("Stock not found for stockCode={}, returning empty itemDtl", stockCode);
+                            return itemDtl;
+                        }
+                    } catch (ResourceNotFoundException e) {
+                        log.warn("Stock not found for stockCode={}: {}", stockCode, e.getMessage());
+                        return itemDtl;
+                    } catch (Exception e) {
+                        log.warn("Error fetching stock details for stockCode={}: {}", stockCode, e.getMessage());
+                        return itemDtl;
+                    }
                 }
             }
         }
@@ -2124,6 +2148,39 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         }
 
         return itemDtl;
+    }
+
+    /**
+     * Returns true if every cell from index 0 to 8 in the row is empty or null (skip the row during Excel import).
+     */
+    private boolean isExcelRowEmpty(Row row) {
+        if (row == null) {
+            return true;
+        }
+        for (int i = 0; i <= 8; i++) {
+            if (excelCellHasContent(row.getCell(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Returns true if the cell has any non-empty value (string or numeric).
+     */
+    private boolean excelCellHasContent(Cell cell) {
+        if (cell == null) {
+            return false;
+        }
+        String s = getStringValueFromCell(cell);
+        if (s != null && !s.trim().isEmpty()) {
+            return true;
+        }
+        Long n = getLongValueFromCell(cell);
+        if (n != null) {
+            return true;
+        }
+        return false;
     }
 
     /**
