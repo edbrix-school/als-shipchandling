@@ -272,6 +272,11 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         SalesInvoiceHdrDto dto = new SalesInvoiceHdrDto();
         BeanUtils.copyProperties(invoice, dto);
 
+        // Convert LocalDate to Timestamp for transactionDate
+        if (invoice.getTransactionDate() != null) {
+            dto.setTransactionDate(Timestamp.valueOf(invoice.getTransactionDate().atStartOfDay()));
+        }
+
         if (includeDetails) {
             // Use native query to avoid Hibernate type mapping issues with PRICE column
             List<SalesInvoiceDtl> details = invoiceDtlRepositoryImpl
@@ -327,6 +332,11 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         
         SalesInvoiceHdrDto dto = new SalesInvoiceHdrDto();
         BeanUtils.copyProperties(invoice, dto);
+
+        // Convert LocalDate to Timestamp for transactionDate
+        if (invoice.getTransactionDate() != null) {
+            dto.setTransactionDate(Timestamp.valueOf(invoice.getTransactionDate().atStartOfDay()));
+        }
         
         // Populate header LOV details from query result
         if (!queryResults.isEmpty()) {
