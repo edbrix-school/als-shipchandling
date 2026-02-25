@@ -141,64 +141,11 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         }
 
         if (validCustomer) {
-            // Save detail tables
+            // Invoice details are not processed during creation
+            // Invoice details should always be empty or null during create call
+            // They are populated later from quotation or other sources
             if (request.getInvoiceDetails() != null && !request.getInvoiceDetails().isEmpty()) {
-                for (CreateSalesInvoiceDtlRequest createSalesInvoiceDtlRequest : request.getInvoiceDetails()) {
-                    // Skip if actionType is "isDeleted" or "delRowId" (should not create deleted items)
-                    String actionType = createSalesInvoiceDtlRequest.getActionType();
-                    if ("isDeleted".equalsIgnoreCase(actionType) || "delRowId".equalsIgnoreCase(actionType)) {
-                        log.debug("Skipping invoice detail with actionType: {}", actionType);
-                        continue;
-                    }
-                    
-                    // Create invoice detail (actionType is "isCreated" or null/empty)
-                    // Get next DetRowId
-                    Long maxDetRowId = invoiceDtlRepository
-                            .findMaxDetRowIdByTransactionPoid(savedInvoice.getTransactionPoid());
-                    Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
-                    // Create invoice detail
-                    SalesInvoiceDtl dtl = new SalesInvoiceDtl();
-                    dtl.setTransactionPoid(savedInvoice.getTransactionPoid());
-                    dtl.setDetRowId(detRowId);
-                    dtl.setStockPoid(createSalesInvoiceDtlRequest.getStockPoid());
-                    dtl.setStockUnitPoid(createSalesInvoiceDtlRequest.getStockUnitPoid());
-                    dtl.setQuantity(createSalesInvoiceDtlRequest.getQuantity());
-                    dtl.setPrice(createSalesInvoiceDtlRequest.getPrice());
-                    dtl.setDiscount(createSalesInvoiceDtlRequest.getDiscount());
-                    dtl.setBaseAmt(createSalesInvoiceDtlRequest.getBaseAmt());
-                    dtl.setTaxPoid(createSalesInvoiceDtlRequest.getTaxPoid());
-                    dtl.setCostPoid(createSalesInvoiceDtlRequest.getCostCenterPoid());
-                    dtl.setRemarks(createSalesInvoiceDtlRequest.getRemarks());
-                    dtl.setCreatedBy(userId);
-                    dtl.setLastmodifiedBy(userId);
-
-                    // Calculate amount
-                    if (dtl.getQuantity() != null && dtl.getPrice() != null) {
-                        BigDecimal quantity = BigDecimal.valueOf(dtl.getQuantity());
-                        BigDecimal amount = quantity.multiply(dtl.getPrice());
-                        if (dtl.getDiscount() != null) {
-                            amount = amount.subtract(BigDecimal.valueOf(dtl.getDiscount()));
-                        }
-                        dtl.setAmount(amount.longValue());
-                    }
-
-                    // Get tax percentage if tax is selected
-                    if (createSalesInvoiceDtlRequest.getTaxPoid() != null) {
-                        // Calculate tax amount: taxAmount = baseAmt * taxPercentage / 100
-                    }
-
-                    SalesInvoiceDtl savedDtl = invoiceDtlRepository.save(dtl);
-                    String logDetail = String.format(
-                            "Row Created on Sales Invoice Detail with detRowId: %s",
-                            savedDtl.getDetRowId()
-                    );
-
-                    loggingService.createLogSummaryEntry(
-                            UserContext.getDocumentId(),
-                            savedInvoice.getTransactionPoid().toString(),
-                            logDetail
-                    );
-                }
+                log.debug("Invoice details provided during creation, but will be ignored. Invoice details should be empty or null during create.");
             }
 
             if (request.getDeliveryNoteDetails() != null && !request.getDeliveryNoteDetails().isEmpty()) {
@@ -836,75 +783,22 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         }
 
         // Update detail tables
+        // In edit mode: Only updates to remarks and costPoid are allowed
+        // Creation and deletion are not permitted
         if (request.getInvoiceDetails() != null && !request.getInvoiceDetails().isEmpty()) {
             for (UpdateSalesInvoiceDtlRequest invDetail : request.getInvoiceDetails()) {
                 String actionType = invDetail.getActionType();
                 
-                // Handle deletion
+                // Reject deletion - not allowed in edit mode
                 if ("isDeleted".equalsIgnoreCase(actionType) || "delRowId".equalsIgnoreCase(actionType)) {
-                    // Delete the invoice detail
-                    if (invDetail.getDetRowId() != null) {
-                        try {
-                            invoiceDtlRepository.deleteById(new SalesInvoiceDtlId(transactionPoid, invDetail.getDetRowId()));
-                            log.debug("Deleted invoice detail with detRowId: {}", invDetail.getDetRowId());
-                        } catch (Exception e) {
-                            log.warn("Failed to delete invoice detail with detRowId: {}", invDetail.getDetRowId(), e);
-                        }
-                    }
-                    loggingService.logDelete(
-                            invDetail,
-                            UserContext.getDocumentId(),
-                            transactionPoid.toString()
-                    );
-                    continue;
+                    log.warn("Deletion of invoice details is not allowed in edit mode. detRowId: {}", invDetail.getDetRowId());
+                    throw new CustomException("Deletion of invoice details is not allowed. Invoice details are read-only except for Remarks and Cost Center.");
                 }
                 
-                // Handle creation of new record
+                // Reject creation - not allowed in edit mode
                 if ("isCreated".equalsIgnoreCase(actionType)) {
-                    // Get next DetRowId
-                    Long maxDetRowId = invoiceDtlRepository
-                            .findMaxDetRowIdByTransactionPoid(transactionPoid);
-                    Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
-                    
-                    // Create new invoice detail
-                    SalesInvoiceDtl newDtl = new SalesInvoiceDtl();
-                    newDtl.setTransactionPoid(transactionPoid);
-                    newDtl.setDetRowId(detRowId);
-                    newDtl.setStockPoid(invDetail.getStockPoid());
-                    newDtl.setStockUnitPoid(invDetail.getStockUnitPoid());
-                    newDtl.setQuantity(invDetail.getQuantity());
-                    newDtl.setPrice(invDetail.getPrice());
-                    newDtl.setDiscount(invDetail.getDiscount());
-                    newDtl.setBaseAmt(invDetail.getBaseAmt());
-                    newDtl.setTaxPoid(invDetail.getTaxPoid());
-                    newDtl.setCostPoid(invDetail.getCostCenterPoid());
-                    newDtl.setRemarks(invDetail.getRemarks());
-                    newDtl.setCreatedBy(userId);
-                    newDtl.setLastmodifiedBy(userId);
-                    
-                    // Calculate amount
-                    if (newDtl.getQuantity() != null && newDtl.getPrice() != null) {
-                        BigDecimal quantity = BigDecimal.valueOf(newDtl.getQuantity());
-                        BigDecimal amount = quantity.multiply(newDtl.getPrice());
-                        if (newDtl.getDiscount() != null) {
-                            amount = amount.subtract(BigDecimal.valueOf(newDtl.getDiscount()));
-                        }
-                        newDtl.setAmount(amount.longValue());
-                    }
-                    
-                    invoiceDtlRepository.save(newDtl);
-                    log.debug("Created new invoice detail with detRowId: {}", detRowId);
-                    String logDetail = String.format(
-                            "Row Created on Sales Invoice Detail with detRowId: %s",
-                            detRowId
-                    );
-
-                    loggingService.createLogSummaryEntry(
-                            UserContext.getDocumentId(),
-                            transactionPoid.toString(),
-                            logDetail
-                    );
-                    continue;
+                    log.warn("Creation of new invoice details is not allowed in edit mode");
+                    throw new CustomException("Creation of new invoice details is not allowed. Invoice details are read-only except for Remarks and Cost Center.");
                 }
                 
                 // Handle no changes - skip processing
@@ -913,71 +807,51 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     continue;
                 }
                 
-                // Handle update of existing record (actionType = "isUpdated" or null/empty)
-                if (invDetail.getDetRowId() == null) {
-                    log.warn("Skipping invoice detail update - detRowId is null and actionType is not 'isCreated'");
+                // Handle update of existing record - only if actionType is "isUpdated"
+                if ("isUpdated".equalsIgnoreCase(actionType)) {
+                    // Validate detRowId - must not be null or 0
+                    if (invDetail.getDetRowId() == null || invDetail.getDetRowId() == 0) {
+                        log.error("Invalid detRowId for invoice detail update - detRowId is null or 0");
+                        throw new CustomException("Invalid invoice detail: detRowId is required and must be greater than 0 for updates.");
+                    }
+                    
+                    // Find existing invoice detail
+                    SalesInvoiceDtl dtl = invoiceDtlRepository
+                            .findById(new SalesInvoiceDtlId(transactionPoid, invDetail.getDetRowId()))
+                            .orElseThrow(
+                                    () -> new ResourceNotFoundException("Invoice Detail", "detRowId", invDetail.getDetRowId()));
+                    SalesInvoiceDtl oldDtl = new SalesInvoiceDtl();
+                    BeanUtils.copyProperties(dtl, oldDtl);
+
+                    // Update only editable fields: Remarks and CostPoid
+                    // All other fields are read-only (populated from quotation)
+                    dtl.setCostPoid(invDetail.getCostCenterPoid());
+                    dtl.setRemarks(invDetail.getRemarks());
+                    dtl.setLastmodifiedBy(userId);
+
+                    invoiceDtlRepository.save(dtl);
+
+                    String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", dtl.getTransactionPoid(),dtl.getDetRowId());
+
+                    // Log the changes
+                    loggingService.createLog(oldDtl, dtl, SalesInvoiceDtl.class,
+                            UserContext.getDocumentId(),transactionPoid.toString(),
+                            logDetail);
+                    
+                    log.debug("Updated invoice detail with detRowId: {}", invDetail.getDetRowId());
+
+                    loggingService.logChanges(
+                            oldDtl,
+                            dtl,
+                            SalesInvoiceDtl.class,
+                            UserContext.getDocumentId(),
+                            transactionPoid.toString(),
+                            LogDetailsEnum.MODIFIED,
+                            "KeyId = TRANSACTION_POID: " + transactionPoid +
+                                    " DET_ROW_ID: " + invDetail.getDetRowId()
+                    );
                     continue;
                 }
-                
-                // Find existing invoice detail
-                SalesInvoiceDtl dtl = invoiceDtlRepository
-                        .findById(new SalesInvoiceDtlId(transactionPoid, invDetail.getDetRowId()))
-                        .orElseThrow(
-                                () -> new ResourceNotFoundException("Invoice Detail", "detRowId", invDetail.getDetRowId()));
-                SalesInvoiceDtl oldDtl = new SalesInvoiceDtl();
-                BeanUtils.copyProperties(dtl, oldDtl);
-
-                // Create a copy of the existing detail for logging
-
-
-                // Update fields (only editable fields)
-                dtl.setStockPoid(invDetail.getStockPoid());
-                dtl.setStockUnitPoid(invDetail.getStockUnitPoid());
-                dtl.setQuantity(invDetail.getQuantity());
-                dtl.setPrice(invDetail.getPrice());
-                dtl.setDiscount(invDetail.getDiscount());
-                dtl.setBaseAmt(invDetail.getBaseAmt());
-                dtl.setTaxPoid(invDetail.getTaxPoid());
-                dtl.setCostPoid(invDetail.getCostCenterPoid());
-                dtl.setRemarks(invDetail.getRemarks());
-                dtl.setLastmodifiedBy(userId);
-
-                // Recalculate amount
-                if (dtl.getQuantity() != null && dtl.getPrice() != null) {
-                    BigDecimal quantity = BigDecimal.valueOf(dtl.getQuantity());
-                    BigDecimal amount = quantity.multiply(dtl.getPrice());
-                    if (dtl.getDiscount() != null) {
-                        amount = amount.subtract(BigDecimal.valueOf(dtl.getDiscount()));
-                    }
-                    dtl.setAmount(amount.longValue());
-                }
-
-                // Recalculate tax if tax is selected
-                // if (invDetail.getTaxPoid() != null) {
-
-                // }
-
-                invoiceDtlRepository.save(dtl);
-
-                String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", dtl.getTransactionPoid(),dtl.getDetRowId());
-
-                // Log the changes
-                loggingService.createLog(oldDtl, dtl, SalesInvoiceDtl.class,
-                        UserContext.getDocumentId(),transactionPoid.toString(),
-                        logDetail);
-                
-                log.debug("Updated invoice detail with detRowId: {}", invDetail.getDetRowId());
-
-                loggingService.logChanges(
-                        oldDtl,
-                        dtl,
-                        SalesInvoiceDtl.class,
-                        UserContext.getDocumentId(),
-                        transactionPoid.toString(),
-                        LogDetailsEnum.MODIFIED,
-                        "KeyId = TRANSACTION_POID: " + transactionPoid +
-                                " DET_ROW_ID: " + invDetail.getDetRowId()
-                );
             }
         }
 

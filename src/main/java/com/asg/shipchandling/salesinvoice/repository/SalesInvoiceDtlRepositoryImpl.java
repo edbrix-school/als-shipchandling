@@ -49,7 +49,7 @@ public class SalesInvoiceDtlRepositoryImpl {
     public List<Object[]> findByTransactionPoidWithTaxDetails(Long transactionPoid) {
         String sql = "SELECT " +
                 "dtl.TRANSACTION_POID, dtl.DET_ROW_ID, dtl.DN_POID_LINK_FK, dtl.DET_ROW_ID_CHRG_FK, " +
-                "dtl.STOCK_POID, dtl.QUANTITY, dtl.PRICE, dtl.DISCOUNT, dtl.AMOUNT, dtl.REMARKS, dtl.STOCK_UNIT_POID, " +
+                "dtl.STOCK_POID, dtl.QUANTITY, dtl.PRICE, dtl.NET_DISCOUNT, dtl.AMOUNT, dtl.REMARKS, dtl.STOCK_UNIT_POID, " +
                 "dtl.CREATED_BY, dtl.CREATED_DATE, dtl.LASTMODIFIED_BY, dtl.LASTMODIFIED_DATE, " +
                 "dtl.QUOTATION_POID, dtl.COST_AMT, dtl.QTN_DET_ROW_ID, dtl.PURCHASE_PRICE, dtl.PURCHASE_QTY, " +
                 "dtl.NET_SALES, dtl.NET_DISCOUNT, dtl.ITEM_GP, dtl.ITEM_GP_PER, dtl.ITEM_TYPE, " +
