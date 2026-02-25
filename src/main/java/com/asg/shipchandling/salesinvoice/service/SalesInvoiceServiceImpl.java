@@ -143,7 +143,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         if (validCustomer) {
             // Invoice details are not processed during creation
             // Invoice details should always be empty or null during create call
-            // They are populated later from quotation or other sources
+            // They are populated later from quotation through stored procedure
             if (request.getInvoiceDetails() != null && !request.getInvoiceDetails().isEmpty()) {
                 log.debug("Invoice details provided during creation, but will be ignored. Invoice details should be empty or null during create.");
             }
