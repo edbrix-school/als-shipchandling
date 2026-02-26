@@ -27,12 +27,6 @@ public class SalesInvoiceDtlDto {
     private Long netSales;
     private Long netDiscount;
     private Long incentive;
-    private Long incentivePercent;
-    private Long incentiveAmt;
-    private Long incentivePercent2;
-    private Long incentiveAmt2;
-    private Long incentivePercent3;
-    private Long incentiveAmt3;
     private Long itemGp;
     private Long itemGpPer;
     private Long costAmt;

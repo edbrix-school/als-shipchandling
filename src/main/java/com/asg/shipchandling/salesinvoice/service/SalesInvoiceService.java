@@ -13,7 +13,6 @@ import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesDnDtlRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceDtlRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceRequest;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDiscountCommissionResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateDueDateResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadDeliveryNoteResponse;
@@ -26,7 +25,6 @@ import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.VerifyInvoiceResponse;
 import org.springframework.data.domain.Pageable;
 
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -95,11 +93,10 @@ public interface SalesInvoiceService {
 
         List<SalesInvCostbkdDtlDto> getCostBookedDetails(Long transactionPoid, Long groupPoid, Long companyPoid);
 
-        CreditDetailsResponse loadCreditDetails(Long customerPoid, Long groupPoid,
-                        Long companyPoid,      CreditDetailsRequest request);
+        CreditDetailsResponse loadCreditDetails(Long groupPoid,
+                        Long companyPoid, String docId, CreditDetailsRequest request);
 
-        CalculateDueDateResponse calculateDueDate(Long transactionPoid, Timestamp transactionDate, Long creditDays,
-                        Long groupPoid, Long companyPoid);
+        CreditDetailsResponse calculateDueDate(Long customerPoid, LocalDate docDate, Long creditDays);
 
         SalesInvoiceDependenciesDto checkSalesInvoiceDependencies(Long transactionPoid,
                                                                   Long groupPoid, Long companyPoid);

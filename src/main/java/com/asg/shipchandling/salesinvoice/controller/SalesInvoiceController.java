@@ -15,7 +15,6 @@ import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesDnDtlRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceDtlRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceRequest;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDiscountCommissionResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateDueDateResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadCostBookingsResponse;
@@ -39,14 +38,13 @@ import com.asg.common.lib.annotation.AllowedAction;
 import com.asg.common.lib.enums.UserRolesRightsEnum;
 
 import org.springdoc.core.annotations.ParameterObject;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -310,19 +308,20 @@ public class SalesInvoiceController {
                 return success(response.getMessage(), response);
         }
 
+        //not used anymore
         @Operation(summary = "Calculate Due Date", description = "Calculates due date from transaction date and credit days. Calls PROC_CALC_DUEDAYS.")
-        @GetMapping("/{transactionPoid}/calculate-due-date")
+        @GetMapping("/{customerPoid}/calculate-due-date")
         @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> calculateDueDate(
-                        @PathVariable Long transactionPoid,
-                        @RequestParam Timestamp transactionDate,
+                        @PathVariable Long customerPoid,
+                        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate docDate,
                         @RequestParam Long creditDays) {
-                log.info("Calculating due date for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
-                CalculateDueDateResponse response = invoiceService.calculateDueDate(transactionPoid,
-                                transactionDate, creditDays, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
-                log.info("Due date calculated for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
+                log.info("Calculating due date for sales invoice with customerPoid: {} groupId: {} companyId: {}",
+                        customerPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
+                CreditDetailsResponse response = invoiceService.calculateDueDate(customerPoid,
+                        docDate, creditDays);
+                log.info("Due date calculated for sales invoice with customerPoid: {} groupId: {} companyId: {}",
+                        customerPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 return success("Due date calculated successfully", response);
         }
 
@@ -451,13 +450,12 @@ public class SalesInvoiceController {
         @PostMapping("/load-credit-details")
         @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> loadCreditDetails(
-                        @RequestParam Long customerPoid,
                         @RequestBody CreditDetailsRequest request) {
-                log.info("Loading credit details for customerPoid: {} groupId: {} companyId: {}", customerPoid,
+                log.info("Loading credit details for partyPoid: {} groupId: {} companyId: {}", request.getPartyPoid(),
                                 UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 CreditDetailsResponse response = invoiceService.loadCreditDetails(
-                                customerPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), request);
-                log.info("Credit details loaded for customerPoid: {} groupId: {} companyId: {}", customerPoid,
+                                UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getDocumentId(), request);
+                log.info("Credit details loaded for partyPoid: {} groupId: {} companyId: {}", request.getPartyPoid(),
                                 UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 return success(response.getMessage(), response);
         }

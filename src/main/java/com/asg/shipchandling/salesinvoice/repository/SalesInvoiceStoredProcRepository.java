@@ -6,13 +6,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import com.asg.shipchandling.exceptions.CustomException;
-import com.asg.shipchandling.salesinvoice.dto.CreditDetailsDto;
 import com.asg.shipchandling.salesinvoice.dto.QuotationSummaryDto;
 import com.asg.shipchandling.salesinvoice.dto.QuotationItemDto;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.LoadQuotationItemsRequest;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDiscountCommissionResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateDueDateResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationSummaryResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationItemsResponse;
@@ -22,6 +20,7 @@ import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 
 import java.sql.CallableStatement;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
@@ -332,15 +331,14 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public CalculateDueDateResponse callCalculateDueDateProc(Long groupPoid, Long companyPoid,
-            java.sql.Timestamp transactionDate,
-            java.sql.Timestamp dueDate, Long creditDays, String calculationType, Long customerPoid) {
+    public CreditDetailsResponse callCalculateDueDateProc(Date docDate,
+            Long creditDays, String calculationType, Long customerPoid) {
         String proc = "{call PROC_CALC_DUEDAYS(?, ?, ?, ? ,?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
-                cs.setTimestamp(1, transactionDate);
-                cs.setTimestamp(2, dueDate);
+                cs.setDate(1, docDate);
+                cs.setNull(2, Types.VARCHAR);
                 cs.setLong(3, creditDays);
                 cs.setString(4, calculationType);
                 cs.setLong(5, customerPoid);
@@ -350,19 +348,19 @@ public class SalesInvoiceStoredProcRepository {
 
                 cs.execute();
 
-                java.sql.Timestamp resultDueDate = cs.getTimestamp(6);
+                Date resultDueDate = cs.getDate(6);
                 Long dueDays = cs.getLong(7);
                 String procResult = cs.getString(8);
 
                 if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
-                    throw new CustomException("PROC_AR_SCH_GP_CALC failed: " + procResult);
+                    throw new CustomException("PROC_CALC_DUEDAYS failed: " + procResult);
                 }
 
-                CalculateDueDateResponse response = new CalculateDueDateResponse();
+                CreditDetailsResponse response = new CreditDetailsResponse();
                 response.setMessage(procResult);
-                response.setSuccess(procResult.contains("True"));
-                response.setDueDate(resultDueDate);
-                response.setDueDays(dueDays);
+                response.setSuccess(procResult != null && procResult.contains("True"));
+                response.setDueDate(resultDueDate != null ? resultDueDate.toLocalDate() : null);
+                response.setCreditDays(dueDays);
 
                 return response;
             } catch (SQLException ex) {
@@ -518,18 +516,18 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public CreditDetailsResponse callLoadCreditDetailsProc(Long groupPoid, Long companyPoid, Long customerPoid,
-            String docId, Long docKeyPoid, java.sql.Timestamp docDate, String partyType, Long partyPoid) {
-        String proc = "{call PROC_LOAD_CREDIT_DETAILS(?, ?)}";
+    public CreditDetailsResponse callLoadCreditDetailsProc(Long groupPoid, Long companyPoid,
+            String docId, Date docDate, String partyType, Long partyPoid) {
+        String proc = "{call PROC_LOAD_CREDIT_DETAILS(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
                 cs.setLong(1, groupPoid);
                 cs.setLong(2, companyPoid);
-                cs.setLong(3, customerPoid);
+                cs.setNull(3, Types.NUMERIC);
                 cs.setString(4, docId);
-                cs.setLong(5, docKeyPoid);
-                cs.setTimestamp(6, docDate);
+                cs.setNull(5, Types.NUMERIC);
+                cs.setDate(6, docDate);
                 cs.setString(7, partyType);
                 cs.setLong(8, partyPoid);
                 cs.registerOutParameter(9, Types.VARCHAR);
@@ -543,23 +541,17 @@ public class SalesInvoiceStoredProcRepository {
                         throw new CustomException("PROC_LOAD_CREDIT_DETAILS failed: " + procResult);
                     }
 
-                    List<CreditDetailsDto> items = new ArrayList<>();
-                    if (rs != null) {
-                        while (rs.next()) {
-                            CreditDetailsDto dto = new CreditDetailsDto();
-
-                            Long creditPeriod = rs.getLong("CREDIT_PERIOD");
-                            dto.setCreditPeriod(creditPeriod);
-
-                            java.sql.Timestamp dueDate = rs.getTimestamp("DISCOUNT_AMT");
-                            dto.setDueDate(dueDate);
-
-                            items.add(dto);
-                        }
-                    }
                     CreditDetailsResponse response = new CreditDetailsResponse();
-                    response.setMessage("Quotation items loaded successfully");
-                    response.setCreditDetails(items);
+                    if (rs != null && rs.next()) {
+                        Long creditDays = rs.getLong("CREDIT_PERIOD");
+                        Date dueDate = rs.getDate("DUE_DATE");
+                        
+                        response.setCreditDays(creditDays);
+                        response.setDueDate(dueDate != null ? dueDate.toLocalDate() : null);
+                    }
+                    
+                    response.setMessage("Credit Details loaded successfully");
+                    response.setSuccess(true);
                    
                     return response;
                 }

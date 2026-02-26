@@ -1,6 +1,6 @@
 package com.asg.shipchandling.salesinvoice.dto.request;
 
-import java.sql.Timestamp;
+import java.time.LocalDate;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -10,9 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreditDetailsRequest {
-    private String docId;
-    private Long docKeyPoid;
-    private Timestamp docDate;
-    private String partyType;
+    private LocalDate docDate;
+    private String partyType; //customerPoid/principalPoid
     private Long partyPoid;
 }
