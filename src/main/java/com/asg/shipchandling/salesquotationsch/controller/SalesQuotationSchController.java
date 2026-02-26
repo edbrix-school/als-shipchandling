@@ -73,7 +73,7 @@ public class SalesQuotationSchController {
                 SalesQuotationSchHdrDto dto = quotationSchService.createSalesQuotationSch(
                                 request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid(), UserContext.getUserId());
                 log.info("createSalesQuotationSch completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                return success("Sales quotation sch created successfully", dto);
+                return success("Sales quotation created successfully", dto);
         }
 
         @Operation(summary = "Get Sales Quotation SCH by ID", description = "Retrieves a sales quotation sch by transaction POID. Optionally includes item details.", responses = {
@@ -93,7 +93,7 @@ public class SalesQuotationSchController {
                 log.info("getSalesQuotationSchByPoid completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(),
                                 UserContext.getGroupPoid());
             loggingService.createLogSummaryEntry(LogDetailsEnum.VIEWED, UserContext.getDocumentId(), transactionPoid.toString());
-                return success("Sales quotation sch fetched successfully", dto);
+                return success("Sales quotation fetched successfully", dto);
         }
 
         @Operation(summary = "Update Sales Quotation SCH", description = "Updates an existing sales quotation sch.", responses = {
@@ -112,7 +112,7 @@ public class SalesQuotationSchController {
                 SalesQuotationSchHdrDto dto = quotationSchService.updateSalesQuotationSch(
                                 UserContext.getGroupPoid(), transactionPoid, request, UserContext.getCompanyPoid(), UserContext.getUserPoid(), UserContext.getUserId());
                 log.info("updateSalesQuotationSch completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                return success("Sales quotation sch updated successfully", dto);
+                return success("Sales quotation updated successfully", dto);
         }
 
         @Operation(summary = "Delete Sales Quotation SCH", description = "Deletes a sales quotation sch (soft delete).", responses = {
@@ -130,7 +130,7 @@ public class SalesQuotationSchController {
                 log.info("deleteSalesQuotationSch started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
                 quotationSchService.deleteSalesQuotationSch(UserContext.getGroupPoid(), transactionPoid, UserContext.getCompanyPoid(),deleteReasonDto);
                 log.info("deleteSalesQuotationSch completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                return success("Sales quotation sch deleted successfully", null);
+                return success("Sales quotation deleted successfully", null);
         }
 
         // @Operation(summary = "Get All Sales Quotation SCH", description = "Retrieves all sales quotation sch with optional filtering. Supports pagination.", responses = {
