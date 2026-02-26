@@ -22,7 +22,6 @@ import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesDnDtlRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceDtlRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceRequest;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDiscountCommissionResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateDueDateResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadDeliveryNoteResponse;
@@ -55,9 +54,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
+import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -1596,19 +1600,21 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional(readOnly = true)
-    public CalculateDueDateResponse calculateDueDate(Long transactionPoid, Timestamp transactionDate, Long creditDays,
-            Long groupPoid, Long companyPoid) {
-        if (transactionDate == null || creditDays == null) {
+    public CreditDetailsResponse calculateDueDate(Long customerPoid, java.time.LocalDate docDate, Long creditDays) {
+
+        if (customerPoid == null) {
+            throw new CustomException("Customer POID is required");
+        }
+
+        if (docDate == null || creditDays == null) {
             throw new CustomException("Transaction date and credit days are required");
         }
-        SalesInvoiceHdr invoice = invoiceHdrRepository
-                .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
+
+        // Convert LocalDate to java.sql.Date for Oracle DATE type
+        java.sql.Date sqlDocDate = Date.valueOf(docDate);
 
         // Call stored procedure
-        CalculateDueDateResponse response = salesInvoiceStoredProcRepository.callCalculateDueDateProc(groupPoid,
-                companyPoid, transactionDate,
-                invoice.getDueDate(), creditDays, "DAYS", invoice.getCustomerPoid());
+        CreditDetailsResponse response = salesInvoiceStoredProcRepository.callCalculateDueDateProc(sqlDocDate, creditDays, "DAYS", customerPoid);
 
         return response;
     }
@@ -1737,20 +1743,19 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional(readOnly = true)
-    public CreditDetailsResponse loadCreditDetails(Long customerPoid, Long groupPoid, Long companyPoid,
-            CreditDetailsRequest request) {
-        if (customerPoid == null) {
-            throw new CustomException("Customer POID is required");
+    public CreditDetailsResponse loadCreditDetails(Long groupPoid, Long companyPoid,
+            String docId, CreditDetailsRequest request) {
+        if (request.getPartyPoid() == null) {
+            throw new CustomException("Party POID is required");
         }
+
+        // Convert LocalDate to java.sql.Date for Oracle DATE type
+        java.sql.Date sqlDocDate = request.getDocDate() != null ? Date.valueOf(request.getDocDate()) : null;
 
         // Call stored procedure
         CreditDetailsResponse response = salesInvoiceStoredProcRepository.callLoadCreditDetailsProc(groupPoid,
-                companyPoid, customerPoid, request.getDocId(), request.getDocKeyPoid(), request.getDocDate(),
+                companyPoid, docId, sqlDocDate,
                 request.getPartyType(), request.getPartyPoid());
-
-        if (response.getMessage() != null && response.getMessage().contains("ERROR")) {
-            throw new CustomException("Error loading credit details: " + response.getMessage());
-        }
 
         return response;
     }
