@@ -806,8 +806,8 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 }
                 
                 // Handle no changes - skip processing
-                if ("noChanges".equalsIgnoreCase(actionType)) {
-                    log.debug("Skipping invoice detail with actionType 'noChanges' for detRowId: {}", invDetail.getDetRowId());
+                if ("noChange".equalsIgnoreCase(actionType)) {
+                    log.debug("Skipping invoice detail with actionType 'noChange' for detRowId: {}", invDetail.getDetRowId());
                     continue;
                 }
                 
@@ -854,7 +854,6 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                             "KeyId = TRANSACTION_POID: " + transactionPoid +
                                     " DET_ROW_ID: " + invDetail.getDetRowId()
                     );
-                    continue;
                 }
             }
         }

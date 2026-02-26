@@ -34,7 +34,7 @@ public class SalesQuotationSchItemDtl {
     private Long stockPoid;
 
     @Column(name = "QUANTITY")
-    private Long quantity;
+    private BigDecimal quantity;
 
     @Column(name = "PRICE", precision = 18, scale = 6)
     private BigDecimal price;

@@ -18,7 +18,7 @@ public class SalesQuotationSchItemDtlDto {
     private Long stockPoid;
     private LovItem stockPoidDetails;
     private StockDetailsResponse.CategoryDetailDto categoryDetails;
-    private Long quantity;
+    private BigDecimal quantity;
     private BigDecimal price;
     private Long discount;
     private Long amount;

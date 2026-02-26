@@ -2141,8 +2141,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Quantity - Column 8 (I)
         Cell quantityCell = row.getCell(8);
         if (quantityCell != null) {
-            Long quantity = getLongValueFromCell(quantityCell);
-            if (quantity != null && quantity > 0) {
+            BigDecimal quantity = getBigDecimalValueFromCell(quantityCell);
+            if (quantity != null && quantity.compareTo(BigDecimal.ZERO) > 0) {
                 itemDtl.setQuantity(quantity);
             }
         }
@@ -2212,6 +2212,41 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             case FORMULA:
                 try {
                     return (long) cell.getNumericCellValue();
+                } catch (Exception e) {
+                    return null;
+                }
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Extract BigDecimal value from Excel cell
+     */
+    private BigDecimal getBigDecimalValueFromCell(Cell cell) {
+        if (cell == null) {
+            return null;
+        }
+
+        switch (cell.getCellType()) {
+            case NUMERIC:
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return null; // Date cells are not converted to BigDecimal
+                }
+                return BigDecimal.valueOf(cell.getNumericCellValue());
+            case STRING:
+                String stringValue = cell.getStringCellValue().trim();
+                if (stringValue.isEmpty()) {
+                    return null;
+                }
+                try {
+                    return new BigDecimal(stringValue);
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            case FORMULA:
+                try {
+                    return BigDecimal.valueOf(cell.getNumericCellValue());
                 } catch (Exception e) {
                     return null;
                 }
