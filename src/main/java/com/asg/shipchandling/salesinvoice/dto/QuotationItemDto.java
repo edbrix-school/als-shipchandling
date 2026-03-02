@@ -17,15 +17,15 @@ public class QuotationItemDto {
     private Long discount;
     private Long baseAmt;
     private Long taxPoid;
-    private Long incentiveAmt;
-    private Long incentivePercent;
-    private Long incentiveAmt2;
-    private Long incentivePercent2;
-    private Long incentiveAmt3;
-    private Long incentivePercent3;
-    private Long discountAmt;
-    private Long discountPercent;
-    private Long totalGpAmt;
-    private Long totalGpPercent;
-    private Long invAmount;
+    private BigDecimal incentiveAmt;
+    private BigDecimal incentivePercent;
+    private BigDecimal incentiveAmt2;
+    private BigDecimal incentivePercent2;
+    private BigDecimal incentiveAmt3;
+    private BigDecimal incentivePercent3;
+    private BigDecimal discountAmt;
+    private BigDecimal discountPercent;
+    private BigDecimal totalGpAmt;
+    private BigDecimal totalGpPercent;
+    private BigDecimal invAmount;
 }
