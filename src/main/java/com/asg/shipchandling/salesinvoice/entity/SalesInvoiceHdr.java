@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 
@@ -66,7 +67,7 @@ public class SalesInvoiceHdr {
 
     @Column(name = "INV_AMOUNT")
     @AuditIgnore
-    private Long invAmount;
+    private BigDecimal invAmount;
 
     @Column(name = "CREDIT_DAYS")
     private Long creditDays;
@@ -86,23 +87,23 @@ public class SalesInvoiceHdr {
 
     @Column(name = "DISCOUNT_PERCENT")
     @AuditIgnore
-    private Long discountPercent;
+    private BigDecimal discountPercent;
 
     @Column(name = "DISCOUNT_AMT")
     @AuditIgnore
-    private Long discountAmt;
+    private BigDecimal discountAmt;
 
     @Column(name = "INV_DISCOUNT")
     @AuditIgnore
-    private Long invDiscount;
+    private BigDecimal invDiscount;
 
     @Column(name = "INCENTIVE_PERCENT")
     @AuditIgnore
-    private Long incentivePercent;
+    private BigDecimal incentivePercent;
 
     @Column(name = "INCENTIVE_AMT")
     @AuditIgnore
-    private Long incentiveAmt;
+    private BigDecimal incentiveAmt;
 
     @Column(name = "INCENTIVE_TO", length = 30)
     @AuditIgnore
@@ -110,11 +111,11 @@ public class SalesInvoiceHdr {
 
     @Column(name = "INCENTIVE_PERCENT2")
     @AuditIgnore
-    private Long incentivePercent2;
+    private BigDecimal incentivePercent2;
 
     @Column(name = "INCENTIVE_AMT2")
     @AuditIgnore
-    private Long incentiveAmt2;
+    private BigDecimal incentiveAmt2;
 
     @Column(name = "INCENTIVE_TO2", length = 30)
     @AuditIgnore
@@ -122,11 +123,11 @@ public class SalesInvoiceHdr {
 
     @Column(name = "INCENTIVE_PERCENT3")
     @AuditIgnore
-    private Long incentivePercent3;
+    private BigDecimal incentivePercent3;
 
     @Column(name = "INCENTIVE_AMT3")
     @AuditIgnore
-    private Long incentiveAmt3;
+    private BigDecimal incentiveAmt3;
 
     @Column(name = "INCENTIVE_TO3", length = 30)
     @AuditIgnore
@@ -134,11 +135,11 @@ public class SalesInvoiceHdr {
 
     @Column(name = "TOTAL_GP_AMT")
     @AuditIgnore
-    private Long totalGpAmt;
+    private BigDecimal totalGpAmt;
 
     @Column(name = "TOTAL_GP_PERCENT")
     @AuditIgnore
-    private Long totalGpPercent;
+    private BigDecimal totalGpPercent;
 
     @Column(name = "TOTAL_COST")
     @AuditIgnore

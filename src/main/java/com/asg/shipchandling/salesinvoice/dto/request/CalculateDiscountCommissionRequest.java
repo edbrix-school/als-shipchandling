@@ -5,19 +5,19 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-
+import java.math.BigDecimal;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class CalculateDiscountCommissionRequest {
-    private Long invDiscount;
-    private Long incentiveAmt;
-    private Long incentiveAmt2;
-    private Long incentiveAmt3;
+    private BigDecimal invDiscount;
+    private BigDecimal incentiveAmt;
+    private BigDecimal incentiveAmt2;
+    private BigDecimal incentiveAmt3;
     private String type;
-    private Long incentivePercent;
-    private Long incentivePercent2;
-    private Long incentivePercent3;
+    private BigDecimal incentivePercent;
+    private BigDecimal incentivePercent2;
+    private BigDecimal incentivePercent3;
     private Long baseAmt; // Required for item level calculation
 }

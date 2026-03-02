@@ -7,7 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.util.List;
 
@@ -44,14 +44,14 @@ public class CreateSalesInvoiceRequest {
     private String fdaRef;
     private Long printDivisionPoid;
     private String dnPoid;
-    private Long incentivePercent;
-    private Long incentiveAmt;
+    private BigDecimal incentivePercent;
+    private BigDecimal incentiveAmt;
     private String incentiveTo;
-    private Long incentivePercent2;
-    private Long incentiveAmt2;
+    private BigDecimal incentivePercent2;
+    private BigDecimal incentiveAmt2;
     private String incentiveTo2;
-    private Long incentivePercent3;
-    private Long incentiveAmt3;
+    private BigDecimal incentivePercent3;
+    private BigDecimal incentiveAmt3;
     private String incentiveTo3;
     private String authorizedId;
     private String verified;

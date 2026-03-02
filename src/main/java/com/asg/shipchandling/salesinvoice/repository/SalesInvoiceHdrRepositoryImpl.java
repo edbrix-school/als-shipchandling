@@ -11,6 +11,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -456,26 +457,26 @@ public class SalesInvoiceHdrRepositoryImpl {
         entity.setCustomerAddrPoid(row[8] != null ? ((Number) row[8]).longValue() : null);
         entity.setCurrencyCode(toStringSafe(row[9]));
         entity.setCurrencyRate(row[10] != null ? ((Number) row[10]).longValue() : null);
-        entity.setInvAmount(row[11] != null ? ((Number) row[11]).longValue() : null);
+        entity.setInvAmount(row[11] != null ? convertToBigDecimal(row[11]) : null);
         entity.setCreditDays(row[12] != null ? ((Number) row[12]).longValue() : null);
         entity.setDueDate(row[13] != null ? (java.sql.Timestamp) row[13] : null);
         entity.setQtnPoid(row[14] != null ? ((Number) row[14]).longValue() : null);
         entity.setStatus(toStringSafe(row[15]));
         entity.setInvStatus(toStringSafe(row[16]));
-        entity.setDiscountPercent(row[17] != null ? ((Number) row[17]).longValue() : null);
-        entity.setDiscountAmt(row[18] != null ? ((Number) row[18]).longValue() : null);
-        entity.setInvDiscount(row[19] != null ? ((Number) row[19]).longValue() : null);
-        entity.setIncentivePercent(row[20] != null ? ((Number) row[20]).longValue() : null);
-        entity.setIncentiveAmt(row[21] != null ? ((Number) row[21]).longValue() : null);
+        entity.setDiscountPercent(row[17] != null ? convertToBigDecimal(row[17]) : null);
+        entity.setDiscountAmt(row[18] != null ? convertToBigDecimal(row[18]) : null);
+        entity.setInvDiscount(row[19] != null ? convertToBigDecimal(row[19]) : null);
+        entity.setIncentivePercent(row[20] != null ? convertToBigDecimal(row[20]) : null);
+        entity.setIncentiveAmt(row[21] != null ? convertToBigDecimal(row[21]) : null);
         entity.setIncentiveTo(toStringSafe(row[22]));
-        entity.setIncentivePercent2(row[23] != null ? ((Number) row[23]).longValue() : null);
-        entity.setIncentiveAmt2(row[24] != null ? ((Number) row[24]).longValue() : null);
+        entity.setIncentivePercent2(row[23] != null ? convertToBigDecimal(row[23]) : null);
+        entity.setIncentiveAmt2(row[24] != null ? convertToBigDecimal(row[24]) : null);
         entity.setIncentiveTo2(toStringSafe(row[25]));
-        entity.setIncentivePercent3(row[26] != null ? ((Number) row[26]).longValue() : null);
-        entity.setIncentiveAmt3(row[27] != null ? ((Number) row[27]).longValue() : null);
+        entity.setIncentivePercent3(row[26] != null ? convertToBigDecimal(row[26]) : null);
+        entity.setIncentiveAmt3(row[27] != null ? convertToBigDecimal(row[27]) : null);
         entity.setIncentiveTo3(toStringSafe(row[28]));
-        entity.setTotalGpAmt(row[29] != null ? ((Number) row[29]).longValue() : null);
-        entity.setTotalGpPercent(row[30] != null ? ((Number) row[30]).longValue() : null);
+        entity.setTotalGpAmt(row[29] != null ? convertToBigDecimal(row[29]) : null);
+        entity.setTotalGpPercent(row[30] != null ? convertToBigDecimal(row[30]) : null);
         entity.setTotalCost(row[31] != null ? ((Number) row[31]).longValue() : null);
         entity.setPaymentMode(toStringSafe(row[32]));
         entity.setDataLoadType(toStringSafe(row[33]));
@@ -519,6 +520,37 @@ public class SalesInvoiceHdrRepositoryImpl {
             return String.valueOf((Character) value);
         }
         return value.toString();
+    }
+
+    /**
+     * Safely converts Object to BigDecimal, handling various numeric types
+     */
+    private BigDecimal convertToBigDecimal(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof BigDecimal) {
+            return (BigDecimal) value;
+        }
+        if (value instanceof Number) {
+            return BigDecimal.valueOf(((Number) value).doubleValue());
+        }
+        if (value instanceof String) {
+            String str = ((String) value).trim();
+            if (str.isEmpty()) {
+                return null;
+            }
+            try {
+                return new BigDecimal(str);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        try {
+            return new BigDecimal(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
 }

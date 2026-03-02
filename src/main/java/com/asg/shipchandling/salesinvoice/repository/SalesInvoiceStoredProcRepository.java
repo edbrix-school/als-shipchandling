@@ -18,6 +18,7 @@ import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 
+import java.math.BigDecimal;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.Date;
@@ -137,9 +138,9 @@ public class SalesInvoiceStoredProcRepository {
 
                 cs.setLong(1, transactionPoid);
                 cs.setLong(2, request.getQtnPoid() != null ? request.getQtnPoid() : null);
-                cs.setLong(3, request.getIncentiveAmt() != null ? request.getIncentiveAmt() : null);
-                cs.setLong(4, request.getIncentiveAmt2() != null ? request.getIncentiveAmt2() : null);
-                cs.setLong(5, request.getIncentiveAmt3() != null ? request.getIncentiveAmt3() : null);
+                cs.setBigDecimal(3, request.getIncentiveAmt());
+                cs.setBigDecimal(4, request.getIncentiveAmt2());
+                cs.setBigDecimal(5, request.getIncentiveAmt3());
                 cs.registerOutParameter(6, Types.VARCHAR);
                 cs.registerOutParameter(7, Types.REF_CURSOR);
 
@@ -160,40 +161,37 @@ public class SalesInvoiceStoredProcRepository {
                         while (rs.next()) {
                             QuotationItemDto dto = new QuotationItemDto();
 
-                            Object discountPercent = rs.getObject("DISCOUNT_PERCENT");
-                            dto.setDiscountPercent(
-                                    discountPercent != null ? ((Number) discountPercent).longValue() : null);
+                            BigDecimal discountPercent = rs.getBigDecimal("DISCOUNT_PERCENT");
+                            dto.setDiscountPercent(discountPercent);
 
-                            Long discountAmt = rs.getLong("DISCOUNT_AMT");
+                            BigDecimal discountAmt = rs.getBigDecimal("DISCOUNT_AMT");
                             dto.setDiscountAmt(discountAmt);
 
-                            Object incentivePercent = rs.getObject("INCENTIVE_PERCENT");
-                            dto.setIncentivePercent(
-                                    incentivePercent != null ? ((Number) incentivePercent).longValue() : null);
+                            BigDecimal incentivePercent = rs.getBigDecimal("INCENTIVE_PERCENT");
+                            dto.setIncentivePercent(incentivePercent);
 
-                            Long incentivePercent2 = rs.getLong("INCENTIVE_PERCENT2");
+                            BigDecimal incentivePercent2 = rs.getBigDecimal("INCENTIVE_PERCENT2");
                             dto.setIncentivePercent2(incentivePercent2);
 
-                            Long incentivePercent3 = rs.getLong("INCENTIVE_PERCENT3");
+                            BigDecimal incentivePercent3 = rs.getBigDecimal("INCENTIVE_PERCENT3");
                             dto.setIncentivePercent3(incentivePercent3);
 
-                            Long incentiveAmt = rs.getLong("INCENTIVE_AMT");
+                            BigDecimal incentiveAmt = rs.getBigDecimal("INCENTIVE_AMT");
                             dto.setIncentiveAmt(incentiveAmt);
 
-                            Long incentiveAmt2 = rs.getLong("INCENTIVE_AMT2");
+                            BigDecimal incentiveAmt2 = rs.getBigDecimal("INCENTIVE_AMT2");
                             dto.setIncentiveAmt2(incentiveAmt2);
 
-                            Long incentiveAmt3 = rs.getLong("INCENTIVE_AMT3");
+                            BigDecimal incentiveAmt3 = rs.getBigDecimal("INCENTIVE_AMT3");
                             dto.setIncentiveAmt3(incentiveAmt3);
 
-                            Long totalGpAmt = rs.getLong("TOTAL_GP_AMT");
+                            BigDecimal totalGpAmt = rs.getBigDecimal("TOTAL_GP_AMT");
                             dto.setTotalGpAmt(totalGpAmt);
 
-                            Object totalGpPercentObj = rs.getObject("TOTAL_GP_PERCENT");
-                            dto.setTotalGpPercent(
-                                    totalGpPercentObj != null ? ((Number) totalGpPercentObj).longValue() : null);
+                            BigDecimal totalGpPercent = rs.getBigDecimal("TOTAL_GP_PERCENT");
+                            dto.setTotalGpPercent(totalGpPercent);
 
-                            Long invAmount = rs.getLong("INV_AMOUNT");
+                            BigDecimal invAmount = rs.getBigDecimal("INV_AMOUNT");
                             dto.setInvAmount(invAmount);
 
                             items.add(dto);
@@ -251,17 +249,17 @@ public class SalesInvoiceStoredProcRepository {
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
                 String type = request != null && request.getType() != null ? request.getType().toUpperCase() : "AMOUNT";
-                cs.setObject(1, userPoid);
-                cs.setObject(2, transactionPoid);
-                cs.setObject(3, qtnPoid);
-                cs.setObject(4, request != null ? request.getInvDiscount() : null);
-                cs.setObject(5, request != null ? request.getIncentiveAmt() : null);
-                cs.setObject(6, request != null ? request.getIncentiveAmt2() : null);
-                cs.setObject(7, request != null ? request.getIncentiveAmt3() : null);
-                cs.setObject(8, type);
-                cs.setObject(9, request != null ? request.getIncentivePercent() : null);
-                cs.setObject(10, request != null ? request.getIncentivePercent2() : null);
-                cs.setObject(11, request != null ? request.getIncentivePercent3() : null);
+                cs.setLong(1, userPoid);
+                cs.setLong(2, transactionPoid);
+                cs.setLong(3, qtnPoid);
+                cs.setBigDecimal(4, request != null ? request.getInvDiscount() : null);
+                cs.setBigDecimal(5, request != null ? request.getIncentiveAmt() : null);
+                cs.setBigDecimal(6, request != null ? request.getIncentiveAmt2() : null);
+                cs.setBigDecimal(7, request != null ? request.getIncentiveAmt3() : null);
+                cs.setString(8, type);
+                cs.setBigDecimal(9, request != null ? request.getIncentivePercent() : null);
+                cs.setBigDecimal(10, request != null ? request.getIncentivePercent2() : null);
+                cs.setBigDecimal(11, request != null ? request.getIncentivePercent3() : null);
                 cs.registerOutParameter(12, Types.VARCHAR);
                 cs.registerOutParameter(13, Types.REF_CURSOR);
 
@@ -274,43 +272,26 @@ public class SalesInvoiceStoredProcRepository {
 
                 try (ResultSet rs = (ResultSet) cs.getObject(13)) {
                     if (rs != null && rs.next()) {
-                        Object discountPercent = rs.getObject("DISCOUNT_PERCENT");
-                        Long discountPercentValue =
-                                discountPercent != null ? ((Number) discountPercent).longValue() : null;
-
-                        Long discountAmt = rs.getLong("DISCOUNT_AMT");
-
-                        Object incentivePercentValue = rs.getObject("INCENTIVE_PERCENT");
-                        Long incentivePercentFromDb =
-                                incentivePercentValue != null ? ((Number) incentivePercentValue).longValue()
-                                        : null;
-
-                        Long incentivePercent2Value = rs.getLong("INCENTIVE_PERCENT2");
-
-                        Long incentivePercent3Value = rs.getLong("INCENTIVE_PERCENT3");
-
-                        Long incentiveAmount = rs.getLong("INCENTIVE_AMT");
-
-                        Long incentiveAmount2 = rs.getLong("INCENTIVE_AMT2");
-
-                        Long incentiveAmount3 = rs.getLong("INCENTIVE_AMT3");
-
-                        Long totalGpAmt = rs.getLong("TOTAL_GP_AMT");
-
-                        Object totalGpPercentObj = rs.getObject("TOTAL_GP_PERCENT");
-                        Long totalGpPercent =
-                                totalGpPercentObj != null ? ((Number) totalGpPercentObj).longValue() : null;
-
-                        Long invAmount = rs.getLong("INV_AMOUNT");
+                        BigDecimal discountPercent = rs.getBigDecimal("DISCOUNT_PERCENT");
+                        BigDecimal discountAmt = rs.getBigDecimal("DISCOUNT_AMT");
+                        BigDecimal incentivePercent = rs.getBigDecimal("INCENTIVE_PERCENT");
+                        BigDecimal incentivePercent2 = rs.getBigDecimal("INCENTIVE_PERCENT2");
+                        BigDecimal incentivePercent3 = rs.getBigDecimal("INCENTIVE_PERCENT3");
+                        BigDecimal incentiveAmount = rs.getBigDecimal("INCENTIVE_AMT");
+                        BigDecimal incentiveAmount2 = rs.getBigDecimal("INCENTIVE_AMT2");
+                        BigDecimal incentiveAmount3 = rs.getBigDecimal("INCENTIVE_AMT3");
+                        BigDecimal totalGpAmt = rs.getBigDecimal("TOTAL_GP_AMT");
+                        BigDecimal totalGpPercent = rs.getBigDecimal("TOTAL_GP_PERCENT");
+                        BigDecimal invAmount = rs.getBigDecimal("INV_AMOUNT");
                         
                         RefreshGpProcResponse response = new RefreshGpProcResponse();
                         response.setMessage(procResult != null ? procResult : "Discount/Commission calculated successfully");
                         response.setSuccess(procResult == null || !procResult.toUpperCase().contains("ERROR"));
-                        response.setDiscountPercent(discountPercentValue);
+                        response.setDiscountPercent(discountPercent);
                         response.setDiscountAmt(discountAmt);
-                        response.setIncentivePercent(incentivePercentFromDb);
-                        response.setIncentivePercent2(incentivePercent2Value);
-                        response.setIncentivePercent3(incentivePercent3Value);
+                        response.setIncentivePercent(incentivePercent);
+                        response.setIncentivePercent2(incentivePercent2);
+                        response.setIncentivePercent3(incentivePercent3);
                         response.setIncentiveAmt(incentiveAmount);
                         response.setIncentiveAmt2(incentiveAmount2);
                         response.setIncentiveAmt3(incentiveAmount3);
@@ -380,14 +361,14 @@ public class SalesInvoiceStoredProcRepository {
                 cs.setLong(1, userId);
                 cs.setLong(2, transactionPoid);
                 cs.setLong(3, qtnPoid);
-                cs.setLong(4, request.getInvDiscount() != null ? request.getInvDiscount() : null);
-                cs.setLong(5, request.getIncentiveAmt() != null ? request.getIncentiveAmt() : null);
-                cs.setLong(6, request.getIncentiveAmt2() != null ? request.getIncentiveAmt2() : null);
-                cs.setLong(7, request.getIncentiveAmt3() != null ? request.getIncentiveAmt3() : null);
+                cs.setBigDecimal(4, request.getInvDiscount());
+                cs.setBigDecimal(5, request.getIncentiveAmt());
+                cs.setBigDecimal(6, request.getIncentiveAmt2());
+                cs.setBigDecimal(7, request.getIncentiveAmt3());
                 cs.setString(8, request.getType() != null ? request.getType() : "Amount");
-                cs.setLong(9, request.getIncentivePercent() != null ? request.getIncentivePercent() : null);
-                cs.setLong(10, request.getIncentivePercent2() != null ? request.getIncentivePercent2() : null);
-                cs.setLong(11, request.getIncentivePercent3() != null ? request.getIncentivePercent3() : null);
+                cs.setBigDecimal(9, request.getIncentivePercent());
+                cs.setBigDecimal(10, request.getIncentivePercent2());
+                cs.setBigDecimal(11, request.getIncentivePercent3());
                 cs.registerOutParameter(12, Types.VARCHAR);
                 cs.registerOutParameter(13, Types.REF_CURSOR);
 
@@ -405,40 +386,37 @@ public class SalesInvoiceStoredProcRepository {
                         while (rs.next()) {
                             QuotationItemDto dto = new QuotationItemDto();
 
-                            Object discountPercent = rs.getObject("DISCOUNT_PERCENT");
-                            dto.setDiscountPercent(
-                                    discountPercent != null ? ((Number) discountPercent).longValue() : null);
+                            BigDecimal discountPercent = rs.getBigDecimal("DISCOUNT_PERCENT");
+                            dto.setDiscountPercent(discountPercent);
 
-                            Long discountAmt = rs.getLong("DISCOUNT_AMT");
+                            BigDecimal discountAmt = rs.getBigDecimal("DISCOUNT_AMT");
                             dto.setDiscountAmt(discountAmt);
 
-                            Object incentivePercent = rs.getObject("INCENTIVE_PERCENT");
-                            dto.setIncentivePercent(
-                                    incentivePercent != null ? ((Number) incentivePercent).longValue() : null);
+                            BigDecimal incentivePercent = rs.getBigDecimal("INCENTIVE_PERCENT");
+                            dto.setIncentivePercent(incentivePercent);
 
-                            Long incentivePercent2 = rs.getLong("INCENTIVE_PERCENT2");
+                            BigDecimal incentivePercent2 = rs.getBigDecimal("INCENTIVE_PERCENT2");
                             dto.setIncentivePercent2(incentivePercent2);
 
-                            Long incentivePercent3 = rs.getLong("INCENTIVE_PERCENT3");
+                            BigDecimal incentivePercent3 = rs.getBigDecimal("INCENTIVE_PERCENT3");
                             dto.setIncentivePercent3(incentivePercent3);
 
-                            Long incentiveAmt = rs.getLong("INCENTIVE_AMT");
+                            BigDecimal incentiveAmt = rs.getBigDecimal("INCENTIVE_AMT");
                             dto.setIncentiveAmt(incentiveAmt);
 
-                            Long incentiveAmt2 = rs.getLong("INCENTIVE_AMT2");
+                            BigDecimal incentiveAmt2 = rs.getBigDecimal("INCENTIVE_AMT2");
                             dto.setIncentiveAmt2(incentiveAmt2);
 
-                            Long incentiveAmt3 = rs.getLong("INCENTIVE_AMT3");
+                            BigDecimal incentiveAmt3 = rs.getBigDecimal("INCENTIVE_AMT3");
                             dto.setIncentiveAmt3(incentiveAmt3);
 
-                            Long totalGpAmt = rs.getLong("TOTAL_GP_AMT");
+                            BigDecimal totalGpAmt = rs.getBigDecimal("TOTAL_GP_AMT");
                             dto.setTotalGpAmt(totalGpAmt);
 
-                            Object totalGpPercentObj = rs.getObject("TOTAL_GP_PERCENT");
-                            dto.setTotalGpPercent(
-                                    totalGpPercentObj != null ? ((Number) totalGpPercentObj).longValue() : null);
+                            BigDecimal totalGpPercent = rs.getBigDecimal("TOTAL_GP_PERCENT");
+                            dto.setTotalGpPercent(totalGpPercent);
 
-                            Long invAmount = rs.getLong("INV_AMOUNT");
+                            BigDecimal invAmount = rs.getBigDecimal("INV_AMOUNT");
                             dto.setInvAmount(invAmount);
 
                             items.add(dto);
@@ -466,14 +444,14 @@ public class SalesInvoiceStoredProcRepository {
                 cs.setLong(1, userId);
                 cs.setLong(2, transactionPoid);
                 cs.setLong(3, qtnPoid);
-                cs.setLong(4, request.getInvDiscount() != null ? request.getInvDiscount() : null);
-                cs.setLong(5, request.getIncentiveAmt() != null ? request.getIncentiveAmt() : null);
-                cs.setLong(6, request.getIncentiveAmt2() != null ? request.getIncentiveAmt2() : null);
-                cs.setLong(7, request.getIncentiveAmt3() != null ? request.getIncentiveAmt3() : null);
+                cs.setBigDecimal(4, request.getInvDiscount());
+                cs.setBigDecimal(5, request.getIncentiveAmt());
+                cs.setBigDecimal(6, request.getIncentiveAmt2());
+                cs.setBigDecimal(7, request.getIncentiveAmt3());
                 cs.setString(8, request.getType() != null ? request.getType() : "Amount");
-                cs.setLong(9, request.getIncentivePercent() != null ? request.getIncentivePercent() : null);
-                cs.setLong(10, request.getIncentivePercent2() != null ? request.getIncentivePercent2() : null);
-                cs.setLong(11, request.getIncentivePercent3() != null ? request.getIncentivePercent3() : null);
+                cs.setBigDecimal(9, request.getIncentivePercent());
+                cs.setBigDecimal(10, request.getIncentivePercent2());
+                cs.setBigDecimal(11, request.getIncentivePercent3());
                 cs.registerOutParameter(12, Types.VARCHAR);
                 cs.registerOutParameter(13, Types.REF_CURSOR);
 
