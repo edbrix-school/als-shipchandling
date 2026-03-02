@@ -624,6 +624,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         }
         
         // Populate cost center details (from GL_COST_CENTER_MASTER.MIS_GROUP)
+        // LOV query: SELECT ROWNUM AS POID, MIS_GROUP AS CODE, '' AS DESCRIPTION
         if (dto.getCostCenterPoid() != null) {
             try {
                 String misGroup = getCostCenterMisGroup(dto.getCostCenterPoid());
@@ -1827,20 +1828,29 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
     /**
      * Helper method to get MIS_GROUP from GL_COST_CENTER_MASTER
      * Note: costCenterPoid is ROWNUM, so we need to query by position
+     * The LOV query: SELECT ROWNUM AS POID, MIS_GROUP AS CODE, '' AS DESCRIPTION
+     * FROM (SELECT MIS_GROUP FROM GL_COST_CENTER_MASTER GROUP BY MIS_GROUP)
      */
     private String getCostCenterMisGroup(Long costCenterPoid) {
-        // Since costCenterPoid is ROWNUM, we need to use a subquery
-        // The LOV query shows: SELECT ROWNUM AS POID, MIS_GROUP AS CODE, '' AS DESCRIPTION
-        // So we need to get MIS_GROUP by ROWNUM position
+        if (costCenterPoid == null) {
+            return null;
+        }
+        
         try {
-            // Use native query to get MIS_GROUP by ROWNUM
+            // Query to get MIS_GROUP by ROWNUM position
+            // This matches the LOV query structure where ROWNUM is used as POID
             String sql = "SELECT MIS_GROUP FROM (" +
                     "SELECT ROWNUM AS RN, MIS_GROUP " +
                     "FROM (SELECT MIS_GROUP FROM GL_COST_CENTER_MASTER GROUP BY MIS_GROUP)" +
-                    ") WHERE RN = ?";
-            // Note: This requires JdbcTemplate which we don't have injected
-            // For now, return null and log a warning
-            log.warn("Cost center MIS_GROUP lookup requires JdbcTemplate. costCenterPoid={}", costCenterPoid);
+                    ") WHERE RN = :costCenterPoid";
+            
+            Query query = entityManager.createNativeQuery(sql);
+            query.setParameter("costCenterPoid", costCenterPoid);
+            
+            Object result = query.getSingleResult();
+            if (result != null) {
+                return result.toString();
+            }
             return null;
         } catch (Exception e) {
             log.warn("Failed to get cost center MIS_GROUP for costCenterPoid={}: {}", costCenterPoid, e.getMessage());
