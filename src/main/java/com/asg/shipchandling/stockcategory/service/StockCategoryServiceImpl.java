@@ -540,12 +540,12 @@ public class StockCategoryServiceImpl implements StockCategoryService {
          }
          if (category.getSalesGlPoid() != null) {
              dto.setSalesGlPoidDetails(fetchPoidDetails(
-                     "SELECT GL_POID, GL_CODE, GL_DESCRIPTION FROM GL_MASTER WHERE GL_POID = :poid",
+                     "SELECT GL_POID, GL_CODE, TRIM(GL_DESCRIPTION) || ' (' || GL_AC_TYPE || ')' AS DESCRIPTION FROM GL_MASTER WHERE GL_POID = :poid",
                      category.getSalesGlPoid()));
          }
          if (category.getCostOfSalesGlPoid() != null) {
              dto.setCostOfSalesGlPoidDetails(fetchPoidDetails(
-                     "SELECT GL_POID, GL_CODE, GL_DESCRIPTION FROM GL_MASTER WHERE GL_POID = :poid",
+                     "SELECT GL_POID, GL_CODE, TRIM(GL_DESCRIPTION) || ' (' || GL_AC_TYPE || ')' AS DESCRIPTION FROM GL_MASTER WHERE GL_POID = :poid",
                      category.getCostOfSalesGlPoid()));
          }
         if (category.getOutputTaxPoid() != null) {
