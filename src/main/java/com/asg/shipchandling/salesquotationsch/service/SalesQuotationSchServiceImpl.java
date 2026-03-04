@@ -66,6 +66,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -125,7 +126,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         SalesQuotationSchHdr quotationSch = new SalesQuotationSchHdr();
         BeanUtils.copyProperties(request, quotationSch, "transactionDate");
         // Always set transactionDate to current timestamp (don't use value from request)
-        quotationSch.setTransactionDate(LocalDate.now());
+        quotationSch.setTransactionDate(Timestamp.from(Instant.now()));
         quotationSch.setCompanyPoid(companyPoid);
         quotationSch.setCreatedBy(userId);
         quotationSch.setLastmodifiedBy(userId);
@@ -501,7 +502,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 "SALES_QUOTATION_HDR",
                 "TRANSACTION_POID",
                 deleteReasonDto,
-                quotationSch.getTransactionDate()
+                LocalDate.now()
         );
 
         // Delete item details
@@ -1058,9 +1059,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         SalesQuotationSchHdrDto dto = new SalesQuotationSchHdrDto();
         BeanUtils.copyProperties(quotationSch, dto);
 
-        // Convert LocalDate to Timestamp for transactionDate
         if (quotationSch.getTransactionDate() != null) {
-            dto.setTransactionDate(Timestamp.valueOf(quotationSch.getTransactionDate().atStartOfDay()));
+            dto.setTransactionDate(quotationSch.getTransactionDate());
         }
 
         if (includeDetails) {

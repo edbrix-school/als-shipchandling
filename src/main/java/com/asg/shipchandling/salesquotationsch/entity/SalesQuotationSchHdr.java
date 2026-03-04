@@ -12,7 +12,6 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
-import java.time.LocalDate;
 
 @Entity
 @Table(name = "SALES_QUOTATION_HDR")
@@ -29,7 +28,7 @@ public class SalesQuotationSchHdr {
 
     @Column(name = "TRANSACTION_DATE")
     @AuditIgnore
-    private LocalDate transactionDate;
+    private Timestamp transactionDate;
 
     @Column(name = "COMPANY_POID")
     @AuditIgnore
