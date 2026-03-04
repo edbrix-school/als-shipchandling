@@ -535,7 +535,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         }
          if (category.getStockGlPoid() != null) {
              dto.setStockGlPoidDetails(fetchPoidDetails(
-                     "SELECT GL_POID, GL_CODE, GL_DESCRIPTION FROM GL_MASTER WHERE GL_POID = :poid",
+                     "SELECT GL_POID, GL_CODE, TRIM(GL_DESCRIPTION) || ' (' || GL_AC_TYPE || ')' AS DESCRIPTION FROM GL_MASTER WHERE GL_POID = :poid",
                      category.getStockGlPoid()));
          }
          if (category.getSalesGlPoid() != null) {
