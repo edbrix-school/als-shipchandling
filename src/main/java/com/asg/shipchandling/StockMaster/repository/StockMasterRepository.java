@@ -87,11 +87,11 @@ public interface StockMasterRepository
                         // Input Tax Details
                         "tax2.TAX_POID as tax2Poid, tax2.TAX_CODE as tax2Code, tax2.TAX_NAME as tax2Name, " +
                         // Stock GL Details
-                        "gl1.GL_POID as gl1Poid, gl1.GL_CODE as gl1Code, gl1.GL_DESCRIPTION as gl1Description, " +
+                        "gl1.GL_POID as gl1Poid, gl1.GL_CODE as gl1Code, TRIM(gl1.GL_DESCRIPTION) || ' (' || gl1.GL_AC_TYPE || ')' as gl1Description, " +
                         // Sales GL Details
-                        "gl2.GL_POID as gl2Poid, gl2.GL_CODE as gl2Code, gl2.GL_DESCRIPTION as gl2Description, " +
+                        "gl2.GL_POID as gl2Poid, gl2.GL_CODE as gl2Code, TRIM(gl2.GL_DESCRIPTION) || ' (' || gl2.GL_AC_TYPE || ')' as gl2Description, " +
                         // Cost of Sales GL Details
-                        "gl3.GL_POID as gl3Poid, gl3.GL_CODE as gl3Code, gl3.GL_DESCRIPTION as gl3Description " +
+                        "gl3.GL_POID as gl3Poid, gl3.GL_CODE as gl3Code, TRIM(gl3.GL_DESCRIPTION) || ' (' || gl3.GL_AC_TYPE || ')' as gl3Description " +
                         "FROM STOCK_MASTER sm " +
                         "LEFT JOIN STOCK_UNIT_MASTER su1 ON sm.STOCK_UNIT_POID = su1.STOCK_UNIT_POID " +
                         "LEFT JOIN STOCK_UNIT_MASTER su2 ON sm.PURCHASE_STOCK_UNIT_POID = su2.STOCK_UNIT_POID " +
