@@ -1552,8 +1552,14 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             throw new CustomException("Error calculating GP: " + response.getMessage());
         }
 
+        // Refresh invoice header
+        invoiceHdrRepository.flush();
+        SalesInvoiceHdr refreshedInvoice = invoiceHdrRepository.findByTransactionPoid(transactionPoid)
+                .orElse(invoice);
+
         response.setSuccess(true);
         response.setMessage(response.getMessage() != null ? response.getMessage() : "GP calculated successfully");
+        response.setInvoice(convertToDtoWithLov(refreshedInvoice, true));
         return response;
     }
 
