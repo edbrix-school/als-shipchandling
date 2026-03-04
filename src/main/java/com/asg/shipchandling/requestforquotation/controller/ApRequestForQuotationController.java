@@ -397,10 +397,10 @@ public class ApRequestForQuotationController {
             @Parameter(description = "Transaction POID", example = "281")
             @PathVariable Long transactionPoid) {
         try {
-            byte[] pdf = rfqService.print(transactionPoid);
+            byte[] pdf = rfqService.printConfirmedSupplier(transactionPoid);
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=imco-deposit-refund-" + transactionPoid + ".pdf")
+                            "attachment; filename=request-for-quotation-confirmed-supplier-" + transactionPoid + ".pdf")
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdf);
         } catch (Exception e) {
@@ -428,7 +428,7 @@ public class ApRequestForQuotationController {
             byte[] pdf = rfqService.print(transactionPoid);
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=imco-deposit-refund-" + transactionPoid + ".pdf")
+                            "attachment; filename=request-for-quotation-" + transactionPoid + ".pdf")
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdf);
         } catch (Exception e) {
