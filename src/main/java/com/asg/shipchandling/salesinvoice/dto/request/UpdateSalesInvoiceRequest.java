@@ -15,7 +15,6 @@ import java.util.List;
 @AllArgsConstructor
 public class UpdateSalesInvoiceRequest {
    
-    @NotNull(message = "Transaction date is required")
     private Timestamp transactionDate;
 
     @NotNull(message = "Party type is required")
