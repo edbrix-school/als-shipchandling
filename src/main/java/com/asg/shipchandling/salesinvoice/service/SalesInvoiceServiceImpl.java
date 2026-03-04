@@ -758,7 +758,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
         // Update fields (verified can be set via update; normalised to Y/N)
         BeanUtils.copyProperties(request, invoice, "transactionPoid", "docRef", "createdBy",
-                "createdDate", "invStatus", "invAmount", "totalGpAmt", "totalGpPercent",
+                "createdDate", "transactionDate", "invStatus", "invAmount", "totalGpAmt", "totalGpPercent",
                 "totalCost", "discountAmt", "discountPercent", "invDiscount", "paymentMode");
 
         if (request.getVerified() != null) {

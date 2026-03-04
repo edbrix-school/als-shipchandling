@@ -196,7 +196,7 @@ public class SalesQuotationSchController {
                                                        @RequestBody(required = false) FilterRequestDto filters,
                                                        @RequestParam(required = false) LocalDate startDate,
                                                        @RequestParam(required = false) LocalDate endDate) {
-                return success("Delivery notes fetched successfully", quotationSchService.listSalesQuotationSch(UserContext.getDocumentId(), filters, startDate, endDate, pageable));
+                return success("Sales Quotation fetched successfully", quotationSchService.listSalesQuotationSch(UserContext.getDocumentId(), filters, startDate, endDate, pageable));
         }
 
         // ==================== VALIDATION APIs ====================
