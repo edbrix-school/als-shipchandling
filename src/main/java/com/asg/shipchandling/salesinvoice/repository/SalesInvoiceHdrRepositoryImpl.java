@@ -448,7 +448,7 @@ public class SalesInvoiceHdrRepositoryImpl {
         SalesInvoiceHdr entity = new SalesInvoiceHdr();
         entity.setTransactionPoid(((Number) row[0]).longValue());
         entity.setDocRef(toStringSafe(row[1]));
-        entity.setTransactionDate((java.time.LocalDate) row[2]);
+        entity.setTransactionDate((java.sql.Timestamp) row[2]);
         entity.setGroupPoid(((Number) row[3]).longValue());
         entity.setCompanyPoid(((Number) row[4]).longValue());
         entity.setPartyType(toStringSafe(row[5]));

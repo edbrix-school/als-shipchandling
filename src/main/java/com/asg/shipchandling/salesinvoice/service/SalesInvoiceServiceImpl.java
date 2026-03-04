@@ -56,6 +56,7 @@ import javax.sql.DataSource;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -123,7 +124,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         SalesInvoiceHdr invoice = new SalesInvoiceHdr();
         BeanUtils.copyProperties(request, invoice, "transactionDate");
         // Always set transactionDate to current timestamp (don't use value from request)
-        invoice.setTransactionDate(LocalDate.now());
+        invoice.setTransactionDate(Timestamp.from(Instant.now()));
         invoice.setGroupPoid(groupPoid);
         invoice.setCompanyPoid(companyPoid);
         invoice.setCreatedBy(userId);
@@ -223,9 +224,8 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         SalesInvoiceHdrDto dto = new SalesInvoiceHdrDto();
         BeanUtils.copyProperties(invoice, dto);
 
-        // Convert LocalDate to Timestamp for transactionDate
         if (invoice.getTransactionDate() != null) {
-            dto.setTransactionDate(Timestamp.valueOf(invoice.getTransactionDate().atStartOfDay()));
+            dto.setTransactionDate(invoice.getTransactionDate());
         }
 
         if (includeDetails) {
@@ -284,9 +284,8 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         SalesInvoiceHdrDto dto = new SalesInvoiceHdrDto();
         BeanUtils.copyProperties(invoice, dto);
 
-        // Convert LocalDate to Timestamp for transactionDate
         if (invoice.getTransactionDate() != null) {
-            dto.setTransactionDate(Timestamp.valueOf(invoice.getTransactionDate().atStartOfDay()));
+            dto.setTransactionDate(invoice.getTransactionDate());
         }
         
         // Populate header LOV details from query result
@@ -994,7 +993,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 "AR_SCH_SALES_INVOICE_HDR",
                 "TRANSACTION_POID",
                 deleteReasonDto,
-                invoice.getTransactionDate()
+                LocalDate.now()
         );
 
         // Check dependencies
