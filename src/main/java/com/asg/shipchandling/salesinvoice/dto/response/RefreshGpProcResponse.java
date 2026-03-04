@@ -1,5 +1,6 @@
 package com.asg.shipchandling.salesinvoice.dto.response;
 
+import com.asg.shipchandling.salesinvoice.dto.SalesInvoiceHdrDto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -23,4 +24,5 @@ public class RefreshGpProcResponse {
     private BigDecimal totalGpAmt;
     private BigDecimal totalGpPercent;
     private BigDecimal invAmount;
+    private SalesInvoiceHdrDto invoice;
 }
