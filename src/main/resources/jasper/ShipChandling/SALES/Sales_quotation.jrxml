@@ -159,7 +159,7 @@ WHERE TO_CHAR(C.TRANSACTION_POID)= $P{DOC_KEY_POID}]]>
 			<subreport>
 				<reportElement x="0" y="0" width="555" height="62" uuid="11dd97b8-4c92-45fe-85bb-3b9358474446"/>
 				<subreportParameter name="LOGIN_DIV_POID">
-					<subreportParameterExpression><![CDATA[2]]></subreportParameterExpression>
+					<subreportParameterExpression><![CDATA[$P{LOGIN_DIV_POID}]]></subreportParameterExpression>
 				</subreportParameter>
 				<subreportParameter name="LOGIN_COMP_POID">
 					<subreportParameterExpression><![CDATA[$F{COMPANY_POID}]]></subreportParameterExpression>
