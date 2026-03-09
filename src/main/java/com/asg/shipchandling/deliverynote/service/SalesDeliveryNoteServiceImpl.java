@@ -1196,8 +1196,12 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     private LocalDateTime getLocalDateTimeValue(Object obj) {
         if (obj == null) return null;
 
-        if (obj instanceof LocalDateTime) {
-            return (LocalDateTime) obj;
+        if (obj instanceof LocalDateTime ldt) {
+            return ldt;
+        }
+
+        if (obj instanceof java.sql.Timestamp ts) {
+            return ts.toLocalDateTime();
         }
 
         return null;

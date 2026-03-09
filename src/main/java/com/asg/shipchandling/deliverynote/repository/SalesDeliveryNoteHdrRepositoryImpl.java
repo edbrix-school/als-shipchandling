@@ -113,7 +113,9 @@ public class SalesDeliveryNoteHdrRepositoryImpl {
         SalesDeliveryNoteHdr entity = new SalesDeliveryNoteHdr();
         entity.setTransactionPoid(((Number) row[0]).longValue());
         entity.setDocRef(toStringSafe(row[1]));
-        entity.setTransactionDate((LocalDateTime) row[2]);
+        entity.setTransactionDate(
+                row[2] != null ? ((Timestamp) row[2]).toLocalDateTime() : null
+        );
         entity.setCompanyPoid(((Number) row[3]).longValue());
         entity.setCustomerPoid(((Number) row[4]).longValue());
         entity.setCurrencyCode(toStringSafe(row[5]));
