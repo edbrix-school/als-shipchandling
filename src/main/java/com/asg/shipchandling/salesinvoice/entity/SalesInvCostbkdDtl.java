@@ -1,6 +1,7 @@
 package com.asg.shipchandling.salesinvoice.entity;
 
 import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -8,8 +9,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.sql.Timestamp;
-
+import java.time.LocalDateTime;
 
 
 @Entity
@@ -18,7 +18,7 @@ import java.sql.Timestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 @IdClass(SalesInvCostbkdDtlId.class)
-public class SalesInvCostbkdDtl {
+public class SalesInvCostbkdDtl extends BaseEntity {
 
     @Id
     @Column(name = "TRANSACTION_POID", nullable = false)
@@ -48,29 +48,11 @@ public class SalesInvCostbkdDtl {
     @Column(name = "REMARKS", length = 200)
     private String remarks;
 
-    @Column(name = "CREATED_BY", length = 20)
-    @AuditIgnore
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    @AuditIgnore
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    @AuditIgnore
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    @AuditIgnore
-    private Timestamp lastmodifiedDate;
-
     @Column(name = "SUPPLIER_NAME", length = 200)
     private String supplierName;
 
     @Column(name = "BOOKED_DATE")
-    private Timestamp bookedDate;
+    private LocalDateTime bookedDate;
 
     @Column(name = "BOOK_TYPE", length = 50)
     private String bookType;

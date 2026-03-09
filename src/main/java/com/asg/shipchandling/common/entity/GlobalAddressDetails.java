@@ -1,5 +1,6 @@
 package com.asg.shipchandling.common.entity;
 
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -7,14 +8,14 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "GLOBAL_ADDRESS_DETAILS")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class GlobalAddressDetails {
+public class GlobalAddressDetails extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -78,20 +79,6 @@ public class GlobalAddressDetails {
     @Column(name = "LAND_MARK", length = 200)
     private String landMark;
 
-    @Column(name = "CREATED_BY", length = 50)
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 50)
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    private Timestamp lastmodifiedDate;
-
     @Column(name = "OLD_ACCNO_REF", length = 50)
     private String oldAccnoRef;
 
@@ -108,7 +95,7 @@ public class GlobalAddressDetails {
     private String verifiedBy;
 
     @Column(name = "VERIFIED_DATE")
-    private Timestamp verifiedDate;
+    private LocalDateTime verifiedDate;
 
     @Column(name = "CITY", length = 100)
     private String city;

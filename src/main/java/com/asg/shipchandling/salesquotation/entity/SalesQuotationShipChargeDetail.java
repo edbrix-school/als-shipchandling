@@ -1,5 +1,6 @@
 package com.asg.shipchandling.salesquotation.entity;
 
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -7,7 +8,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "SALES_QUOTATION_SHIP_CHARG_DTL")
-public class SalesQuotationShipChargeDetail {
+public class SalesQuotationShipChargeDetail extends BaseEntity {
 
     @EmbeddedId
     private SalesQuotationShipChargeDetailId id;
@@ -79,18 +80,6 @@ public class SalesQuotationShipChargeDetail {
 
     @Column(name = "TAX_AMOUNT_LOCAL")
     private BigDecimal taxAmountLocal;
-
-    @Column(name = "CREATED_BY", length = 20)
-    private String createdBy;
-
-    @Column(name = "CREATED_DATE")
-    private LocalDateTime createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    private String lastModifiedBy;
-
-    @Column(name = "LASTMODIFIED_DATE")
-    private LocalDateTime lastModifiedDate;
 
     public SalesQuotationShipChargeDetailId getId() {
         return id;
@@ -276,35 +265,4 @@ public class SalesQuotationShipChargeDetail {
         this.taxAmountLocal = taxAmountLocal;
     }
 
-    public String getCreatedBy() {
-        return createdBy;
-    }
-
-    public void setCreatedBy(String createdBy) {
-        this.createdBy = createdBy;
-    }
-
-    public LocalDateTime getCreatedDate() {
-        return createdDate;
-    }
-
-    public void setCreatedDate(LocalDateTime createdDate) {
-        this.createdDate = createdDate;
-    }
-
-    public String getLastModifiedBy() {
-        return lastModifiedBy;
-    }
-
-    public void setLastModifiedBy(String lastModifiedBy) {
-        this.lastModifiedBy = lastModifiedBy;
-    }
-
-    public LocalDateTime getLastModifiedDate() {
-        return lastModifiedDate;
-    }
-
-    public void setLastModifiedDate(LocalDateTime lastModifiedDate) {
-        this.lastModifiedDate = lastModifiedDate;
-    }
 }

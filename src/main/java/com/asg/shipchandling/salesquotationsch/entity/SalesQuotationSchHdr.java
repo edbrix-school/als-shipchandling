@@ -1,6 +1,7 @@
 package com.asg.shipchandling.salesquotationsch.entity;
 
 import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -11,14 +12,14 @@ import org.hibernate.annotations.GenerationTime;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "SALES_QUOTATION_HDR")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class SalesQuotationSchHdr {
+public class SalesQuotationSchHdr extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,7 +29,7 @@ public class SalesQuotationSchHdr {
 
     @Column(name = "TRANSACTION_DATE")
     @AuditIgnore
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
 
     @Column(name = "COMPANY_POID")
     @AuditIgnore
@@ -58,10 +59,10 @@ public class SalesQuotationSchHdr {
     private Long salesmanPoid;
 
     @Column(name = "VALIDITY_FROM_DATE")
-    private Timestamp validityFromDate;
+    private LocalDateTime validityFromDate;
 
     @Column(name = "VALIDITY_TO_DATE")
-    private Timestamp validityToDate;
+    private LocalDateTime validityToDate;
 
     @Column(name = "PAYMENT_MODE", length = 20)
     private String paymentMode;
@@ -96,7 +97,7 @@ public class SalesQuotationSchHdr {
 
     @Column(name = "ACTION_DUE_DATE")
     @AuditIgnore
-    private Timestamp actionDueDate;
+    private LocalDateTime actionDueDate;
 
     @Column(name = "ENQUIRY_REF_NUMBER")
     @AuditIgnore
@@ -105,24 +106,6 @@ public class SalesQuotationSchHdr {
     @Column(name = "DELETED", length = 1)
     @AuditIgnore
     private String deleted;
-
-    @Column(name = "CREATED_BY", length = 20)
-    @AuditIgnore
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    @AuditIgnore
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    @AuditIgnore
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    @AuditIgnore
-    private Timestamp lastmodifiedDate;
 
     @Column(name = "LOST_REASON", length = 20)
     @AuditIgnore
@@ -141,7 +124,7 @@ public class SalesQuotationSchHdr {
 
     @Column(name = "EXPEACTED_DELIVERY_DATE")
     @AuditIgnore
-    private Timestamp expectedDeliveryDate;
+    private LocalDateTime expectedDeliveryDate;
 
     @Column(name = "VESSEL_AGENT", length = 50)
     private String vesselAgent;

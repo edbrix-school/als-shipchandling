@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.util.Date;
+import java.time.LocalDate;
 
 @Data
 @NoArgsConstructor
@@ -16,6 +16,6 @@ public class CurrencyRateResponse {
     private String currencyName;
     private BigDecimal buyRate;
     private BigDecimal sellRate;
-    private Date rateDate;
+    private LocalDate rateDate;
 }
 

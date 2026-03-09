@@ -1,12 +1,13 @@
 package com.asg.shipchandling.requestforquotation.entity;
 
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+
 
 @Entity
 @Table(name = "AP_REQUEST_FOR_QTN_CHARGE_DTL")
@@ -19,7 +20,7 @@ import java.sql.Timestamp;
         sequenceName = "AP_REQ_QTN_CHARGE_DTL_SEQ",
         allocationSize = 1
 )*/
-public class ApRequestForQtnChargeDtl {
+public class ApRequestForQtnChargeDtl extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,18 +43,4 @@ public class ApRequestForQtnChargeDtl {
     @Column(name = "REMARKS", length = 100)
     private String remarks;
 
-    // Audit
-    @Column(name = "CREATED_BY", length = 20)
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    private Timestamp lastmodifiedDate;
 }

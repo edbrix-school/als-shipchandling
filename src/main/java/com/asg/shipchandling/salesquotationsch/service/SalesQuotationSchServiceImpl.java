@@ -65,9 +65,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -126,10 +125,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         SalesQuotationSchHdr quotationSch = new SalesQuotationSchHdr();
         BeanUtils.copyProperties(request, quotationSch, "transactionDate");
         // Always set transactionDate to current timestamp (don't use value from request)
-        quotationSch.setTransactionDate(Timestamp.from(Instant.now()));
+        quotationSch.setTransactionDate(LocalDateTime.now());
         quotationSch.setCompanyPoid(companyPoid);
-        quotationSch.setCreatedBy(userId);
-        quotationSch.setLastmodifiedBy(userId);
         quotationSch.setDeleted("N");
         // Keep existing behavior for addressPoid (not part of legacy temp address implementation)
         if (request.getAddressPoid() != null) {
@@ -195,7 +192,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
                 // Per agreed REST contract: store returned temp id into customerPoid (ADF binding-style)
                 savedQuotationSch.setCustomerPoid(BigDecimal.valueOf(tempAddrResp.getNewAddressPoid()));
-                savedQuotationSch.setLastmodifiedBy(userId);
                 savedQuotationSch = quotationSchHdrRepository.save(savedQuotationSch);
                 quotationSchHdrRepository.flush();
                 log.info("createSalesQuotationSch updated customerPoid to temp newAddressPoid={} for transactionPoid={}",
@@ -454,7 +450,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Update fields (excluding read-only fields)
         BeanUtils.copyProperties(request, quotationSch, "transactionPoid", "docRef", "createdBy",
                 "createdDate", "transactionDate");
-        quotationSch.setLastmodifiedBy(userId);
 
         // Per agreed REST contract: store returned temp id into customerPoid (ADF binding-style)
         if (tempAddrResp != null && tempAddrResp.getNewAddressPoid() != null) {
@@ -690,8 +685,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         itemDtl.setTaxAmount(request.getTaxAmount());
         itemDtl.setTaxPercentage(request.getTaxPercentage());
         itemDtl.setVatModified(request.getVatModified());
-        itemDtl.setCreatedBy(userId);
-        itemDtl.setLastmodifiedBy(userId);
 
         SalesQuotationSchItemDtl savedItemDtl = itemDtlRepository.save(itemDtl);
 
@@ -751,7 +744,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         itemDtl.setTaxAmount(request.getTaxAmount());
         itemDtl.setTaxPercentage(request.getTaxPercentage());
         itemDtl.setVatModified(request.getVatModified());
-        itemDtl.setLastmodifiedBy(userId);
 
         SalesQuotationSchItemDtl savedItemDtl = itemDtlRepository.save(itemDtl);
 
@@ -866,8 +858,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             itemDtl.setTaxAmount(detail.getTaxAmount());
             itemDtl.setTaxPercentage(detail.getTaxPercentage());
             itemDtl.setVatModified(detail.getVatModified());
-            itemDtl.setCreatedBy(userId);
-            itemDtl.setLastmodifiedBy(userId);
             SalesQuotationSchItemDtl savedItem= itemDtlRepository.save(itemDtl);
             String logDetail = String.format(
                     "Row Created on Sales Quotation Schedule Item Detail with DetRowId: %s",
@@ -966,7 +956,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 existingItem.setTaxAmount(item.getTaxAmount());
                 existingItem.setTaxPercentage(item.getTaxPercentage());
                 existingItem.setVatModified(item.getVatModified());
-                existingItem.setLastmodifiedBy(userId);
 
                 itemDtlRepository.save(existingItem);
 
@@ -1749,11 +1738,21 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         return response;
     }
 
-    private Timestamp getTimestampValue(Object obj) {
+  /*  private Timestamp getTimestampValue(Object obj) {
         if (obj == null)
             return null;
         if (obj instanceof Timestamp) {
             return (Timestamp) obj;
+        }
+        return null;
+    }*/
+
+    private LocalDateTime getTimestampValue(Object obj) {
+        if (obj == null) {
+            return null;
+        }
+        if (obj instanceof LocalDateTime) {
+            return (LocalDateTime) obj;
         }
         return null;
     }
@@ -2079,8 +2078,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         SalesQuotationSchItemDtl itemDtl = new SalesQuotationSchItemDtl();
         itemDtl.setTransactionPoid(transactionPoid);
         itemDtl.setDetRowId(detRowId);
-        itemDtl.setCreatedBy(userId);
-        itemDtl.setLastmodifiedBy(userId);
         itemDtl.setItemType("BILLABLE"); // default for Excel import
 
         // STOCK_POID (optional) - Column 1 (B) - if provided, use it directly

@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
-import java.util.Date;
+import java.time.LocalDate;
 import java.util.Objects;
 
 @Data
@@ -14,7 +14,7 @@ import java.util.Objects;
 public class GlobalCurrencyRatesId implements Serializable {
 
     private String currencyCode;
-    private Date rateDate;
+    private LocalDate rateDate;
 
     @Override
     public boolean equals(Object o) {

@@ -8,7 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -17,7 +17,7 @@ import java.util.List;
 public class CreateSalesInvoiceRequest {
     
     @NotNull(message = "Transaction date is required")
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
 
     @NotNull(message = "Party type is required")
     @Size(max = 100, message = "Party type must not exceed 100 characters")

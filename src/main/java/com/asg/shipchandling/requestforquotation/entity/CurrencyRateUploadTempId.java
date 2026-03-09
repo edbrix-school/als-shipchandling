@@ -6,7 +6,8 @@ import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
+
 
 @Data
 @NoArgsConstructor
@@ -16,5 +17,5 @@ public class CurrencyRateUploadTempId implements Serializable {
     private BigDecimal groupPoid;
     private BigDecimal companyPoid;
     private String currencyCode;
-    private Timestamp effectiveDate;
+    private LocalDateTime effectiveDate;
 }

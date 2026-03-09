@@ -1,6 +1,7 @@
 package com.asg.shipchandling.StockMaster.entity;
 
 import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -13,7 +14,6 @@ import lombok.NoArgsConstructor;
 
 import jakarta.persistence.*;
 
-import java.sql.Timestamp;
 
 @Entity
 @Table(name = "STOCK_MASTER_DTL")
@@ -21,7 +21,7 @@ import java.sql.Timestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 @IdClass(StockMasterDtlId.class)
-public class StockMasterDTLEntity {
+public class StockMasterDTLEntity extends BaseEntity {
     @Id
     @Column(name = "STOCK_POID", nullable = false)
     private Long stockPoid;
@@ -40,21 +40,4 @@ public class StockMasterDTLEntity {
     @Column(name = "REMARKS", length = 100)
     private String remarks;
 
-    @Column(name = "CREATED_BY", length = 20)
-    @AuditIgnore
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    @AuditIgnore
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    @AuditIgnore
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    @AuditIgnore
-    private Timestamp lastmodifiedDate;
 }

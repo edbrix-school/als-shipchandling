@@ -54,10 +54,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
-import java.sql.Date;
-import java.sql.Timestamp;
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -124,11 +122,9 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         SalesInvoiceHdr invoice = new SalesInvoiceHdr();
         BeanUtils.copyProperties(request, invoice, "transactionDate");
         // Always set transactionDate to current timestamp (don't use value from request)
-        invoice.setTransactionDate(Timestamp.from(Instant.now()));
+        invoice.setTransactionDate(LocalDateTime.now());
         invoice.setGroupPoid(groupPoid);
         invoice.setCompanyPoid(companyPoid);
-        invoice.setCreatedBy(userId);
-        invoice.setLastmodifiedBy(userId);
         invoice.setInvStatus("IN_PROGRESS");
         invoice.setVerified(normalizeVerified(request.getVerified()));
         invoice.setDeleted("N");
@@ -175,8 +171,6 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     dtl.setDnPoidFk(dnDtl.getDnPoidFk());
                     dtl.setQuotationPoidFk(dnDtl.getQuotationPoidFk());
                     dtl.setRemarks(dnDtl.getRemarks());
-                    dtl.setCreatedBy(userId);
-                    dtl.setLastmodifiedBy(userId);
 
                     log.debug("Creating delivery note detail with detRowId: {}, remarks: {}", detRowId, dnDtl.getRemarks());
                     SalesDnDtl savedDtl = dnDtlRepository.save(dtl);
@@ -569,9 +563,9 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dto.setRemarks(toStringSafe(row[9]));
         dto.setStockUnitPoid(row[10] != null ? ((Number) row[10]).longValue() : null);
         dto.setCreatedBy(toStringSafe(row[11]));
-        dto.setCreatedDate(row[12] != null ? (Timestamp) row[12] : null);
+        dto.setCreatedDate(getLocalDateTimeValue(row[12]));
         dto.setLastmodifiedBy(toStringSafe(row[13]));
-        dto.setLastmodifiedDate(row[14] != null ? (Timestamp) row[14] : null);
+        dto.setLastmodifiedDate(getLocalDateTimeValue(row[14]));
         dto.setQuotationPoid(row[15] != null ? ((Number) row[15]).longValue() : null);
         dto.setCostAmt(row[16] != null ? ((Number) row[16]).longValue() : null);
         dto.setQuotationDetRowId(row[17] != null ? ((Number) row[17]).longValue() : null);
@@ -764,7 +758,6 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         if (request.getVerified() != null) {
             invoice.setVerified(normalizeVerified(request.getVerified()));
         }
-        invoice.setLastmodifiedBy(userId);
 
         if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
             ValidationResponse validation = salesInvoiceStoredProcRepository.callCustomerValidateProc(
@@ -831,7 +824,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     // All other fields are read-only (populated from quotation)
                     dtl.setCostPoid(invDetail.getCostCenterPoid());
                     dtl.setRemarks(invDetail.getRemarks());
-                    dtl.setLastmodifiedBy(userId);
+
 
                     invoiceDtlRepository.save(dtl);
 
@@ -895,8 +888,6 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     newDtl.setDnPoidFk(dnDtlRequest.getDnPoidFk());
                     newDtl.setQuotationPoidFk(dnDtlRequest.getQuotationPoidFk());
                     newDtl.setRemarks(dnDtlRequest.getRemarks());
-                    newDtl.setCreatedBy(userId);
-                    newDtl.setLastmodifiedBy(userId);
                     
                     dnDtlRepository.save(newDtl);
                     log.debug("Successfully created new delivery note detail with detRowId: {}", detRowId);
@@ -938,7 +929,6 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 dtl.setDnPoidFk(dnDtlRequest.getDnPoidFk());
                 dtl.setQuotationPoidFk(dnDtlRequest.getQuotationPoidFk());
                 dtl.setRemarks(dnDtlRequest.getRemarks());
-                dtl.setLastmodifiedBy(userId);
 
                 dnDtlRepository.save(dtl);
 
@@ -1100,8 +1090,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dtl.setTaxPoid(request.getTaxPoid());
         dtl.setCostPoid(request.getCostCenterPoid());
         dtl.setRemarks(request.getRemarks());
-        dtl.setCreatedBy(userId);
-        dtl.setLastmodifiedBy(userId);
+
 
         // Calculate amount
         if (dtl.getQuantity() != null && dtl.getPrice() != null) {
@@ -1159,7 +1148,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dtl.setTaxPoid(request.getTaxPoid());
         dtl.setCostPoid(request.getCostCenterPoid());
         dtl.setRemarks(request.getRemarks());
-        dtl.setLastmodifiedBy(userId);
+
 
         // Recalculate amount
         if (dtl.getQuantity() != null && dtl.getPrice() != null) {
@@ -1250,8 +1239,6 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dtl.setDnPoidFk(request.getDnPoidFk());
         dtl.setQuotationPoidFk(request.getQuotationPoidFk());
         dtl.setRemarks(request.getRemarks());
-        dtl.setCreatedBy(userId);
-        dtl.setLastmodifiedBy(userId);
 
         log.debug("Creating delivery note detail with detRowId: {}, remarks: {}", detRowId, request.getRemarks());
         SalesDnDtl savedDtl = dnDtlRepository.save(dtl);
@@ -1294,7 +1281,6 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dtl.setDnPoidFk(request.getDnPoidFk());
         dtl.setQuotationPoidFk(request.getQuotationPoidFk());
         dtl.setRemarks(request.getRemarks());
-        dtl.setLastmodifiedBy(userId);
 
         SalesDnDtl savedDtl = dnDtlRepository.save(dtl);
         dnDtlRepository.flush();
@@ -1381,7 +1367,6 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         invoice.setIncentiveAmt(request.getIncentiveAmt());
         invoice.setIncentiveAmt2(request.getIncentiveAmt2());
         invoice.setIncentiveAmt3(request.getIncentiveAmt3());
-        invoice.setLastmodifiedBy(userId);
         invoiceHdrRepository.save(invoice);
 
         return response;
@@ -1510,7 +1495,6 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // Update verified status
         invoice.setVerified("Y");
         invoice.setAuthorizedId(invoice.getAuthorizedId());
-        invoice.setLastmodifiedBy(userId);
         invoiceHdrRepository.save(invoice);
 
         VerifyInvoiceResponse response = new VerifyInvoiceResponse();
@@ -1616,10 +1600,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         }
 
         // Convert LocalDate to java.sql.Date for Oracle DATE type
-        java.sql.Date sqlDocDate = Date.valueOf(docDate);
+        //java.sql.Date sqlDocDate = Date.valueOf(docDate);
 
         // Call stored procedure
-        CreditDetailsResponse response = salesInvoiceStoredProcRepository.callCalculateDueDateProc(sqlDocDate, creditDays, "DAYS", customerPoid);
+        CreditDetailsResponse response = salesInvoiceStoredProcRepository.callCalculateDueDateProc(docDate, creditDays, "DAYS", customerPoid);
 
         return response;
     }
@@ -1755,11 +1739,11 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         }
 
         // Convert LocalDate to java.sql.Date for Oracle DATE type
-        java.sql.Date sqlDocDate = request.getDocDate() != null ? Date.valueOf(request.getDocDate()) : null;
+        LocalDate docDate = request.getDocDate();
 
         // Call stored procedure
         CreditDetailsResponse response = salesInvoiceStoredProcRepository.callLoadCreditDetailsProc(groupPoid,
-                companyPoid, docId, sqlDocDate,
+                companyPoid, docId, docDate,
                 request.getPartyType(), request.getPartyPoid());
 
         return response;
@@ -1947,6 +1931,11 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         params.put("SUB_RFQ_DTL", printService.load("ShipChandling/AR/SCH_SALES_INV_ITEM_DTLsubreport1.jrxml"));
         JasperReport mainReport = printService.load("ShipChandling/AR/SCH_SALES_INV.jrxml");
         return printService.fillReportToPdf(mainReport, params, dataSource);
+    }
+
+    private LocalDateTime getLocalDateTimeValue(Object obj) {
+        if (obj == null) return null;
+        return ((java.sql.Timestamp) obj).toLocalDateTime();
     }
 
 }

@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -26,9 +26,9 @@ public class SalesQuotationSchItemDtlDto {
     private Long stockUnitPoid;
     private LovItem stockUnitDetails;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
     private Long adjQuantity;
     private BigDecimal cost;
     private Long lastRate1;

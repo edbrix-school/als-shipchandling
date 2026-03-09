@@ -1,6 +1,7 @@
 package com.asg.shipchandling.salesquotationsch.entity;
 
 import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import com.asg.shipchandling.salesquotationsch.dto.SalesQuotationSchItemDtlId;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -10,7 +11,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
 
 @Entity
 @Table(name = "SALES_QUOTATION_ITEM_DTL")
@@ -18,7 +18,7 @@ import java.sql.Timestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 @IdClass(SalesQuotationSchItemDtlId.class)
-public class SalesQuotationSchItemDtl {
+public class SalesQuotationSchItemDtl extends BaseEntity {
 
     @Id
     @Column(name = "TRANSACTION_POID", nullable = false)
@@ -51,24 +51,6 @@ public class SalesQuotationSchItemDtl {
 
     @Column(name = "STOCK_UNIT_POID")
     private Long stockUnitPoid;
-
-    @Column(name = "CREATED_BY", length = 20)
-    @AuditIgnore
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    @AuditIgnore
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    @AuditIgnore
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    @AuditIgnore
-    private Timestamp lastmodifiedDate;
 
     @Column(name = "ADJ_QUANTITY")
     @AuditIgnore

@@ -1,6 +1,7 @@
 package com.asg.shipchandling.salesinvoice.entity;
 
 import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -9,7 +10,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "AR_SCH_SALES_INVOICE_HDR")
@@ -18,7 +19,7 @@ import java.sql.Timestamp;
 @AllArgsConstructor
 // @SequenceGenerator(name = "sch_inv_trans_seq", sequenceName =
 // "TRANSACTION_POID_SEQ", allocationSize = 1)
-public class SalesInvoiceHdr {
+public class SalesInvoiceHdr extends BaseEntity {
 
     @Id
     // @GeneratedValue(strategy = GenerationType.SEQUENCE, generator =
@@ -34,7 +35,7 @@ public class SalesInvoiceHdr {
 
     @Column(name = "TRANSACTION_DATE")
     @AuditIgnore
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
 
     @Column(name = "GROUP_POID", nullable = false)
     @AuditIgnore
@@ -72,7 +73,7 @@ public class SalesInvoiceHdr {
     private Long creditDays;
 
     @Column(name = "DUE_DATE")
-    private Timestamp dueDate;
+    private LocalDateTime dueDate;
 
     @Column(name = "QTN_POID")
     private Long qtnPoid;
@@ -213,21 +214,4 @@ public class SalesInvoiceHdr {
     @AuditIgnore
     private String deleted = "N";
 
-    @Column(name = "CREATED_BY", length = 20)
-    @AuditIgnore
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    @AuditIgnore
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    @AuditIgnore
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    @AuditIgnore
-    private Timestamp lastmodifiedDate;
 }

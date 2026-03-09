@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
@@ -18,7 +18,7 @@ import com.asg.shipchandling.salesquotationsch.dto.request.CreateSalesQuotationS
 @AllArgsConstructor
 public class UpdateSalesQuotationSchRequest {
 
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
 
     private BigDecimal customerPoid;
 
@@ -36,9 +36,9 @@ public class UpdateSalesQuotationSchRequest {
 
     private Long salesmanPoid;
 
-    private Timestamp validityFromDate;
+    private LocalDateTime validityFromDate;
 
-    private Timestamp validityToDate;
+    private LocalDateTime validityToDate;
 
     @Size(max = 20, message = "Payment mode must not exceed 20 characters")
     private String paymentMode;
@@ -62,7 +62,7 @@ public class UpdateSalesQuotationSchRequest {
     @Size(max = 20, message = "Action status must not exceed 20 characters")
     private String actionStatus;
 
-    private Timestamp actionDueDate;
+    private LocalDateTime actionDueDate;
 
     private Long enquiryRefNumber;
 
@@ -76,7 +76,7 @@ public class UpdateSalesQuotationSchRequest {
     @Size(max = 100, message = "Details must not exceed 100 characters")
     private String details;
 
-    private Timestamp expectedDeliveryDate;
+    private LocalDateTime expectedDeliveryDate;
 
     @Size(max = 50, message = "Vessel agent must not exceed 50 characters")
     private String vesselAgent;

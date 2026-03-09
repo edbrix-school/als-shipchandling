@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -88,9 +89,9 @@ public class SalesInvoiceDtlRepositoryImpl {
         entity.setRemarks(toStringSafe(row[9]));
         entity.setStockUnitPoid(row[10] != null ? ((Number) row[10]).longValue() : null);
         entity.setCreatedBy(toStringSafe(row[11]));
-        entity.setCreatedDate(row[12] != null ? (Timestamp) row[12] : null);
-        entity.setLastmodifiedBy(toStringSafe(row[13]));
-        entity.setLastmodifiedDate(row[14] != null ? (Timestamp) row[14] : null);
+        entity.setCreatedDate(toLocalDateTime(row[12]));
+        entity.setLastModifiedBy(toStringSafe(row[13]));
+        entity.setLastModifiedDate(toLocalDateTime(row[14]));
         entity.setQuotationPoid(row[15] != null ? ((Number) row[15]).longValue() : null);
         entity.setCostAmt(row[16] != null ? ((Number) row[16]).longValue() : null);
         entity.setQuotationDetRowId(row[17] != null ? ((Number) row[17]).longValue() : null);
@@ -153,6 +154,13 @@ public class SalesInvoiceDtlRepositoryImpl {
             return String.valueOf((Character) value);
         }
         return value.toString();
+    }
+
+    private LocalDateTime toLocalDateTime(Object obj) {
+        if (obj == null) return null;
+        if (obj instanceof LocalDateTime) return (LocalDateTime) obj;
+        if (obj instanceof java.sql.Timestamp) return ((java.sql.Timestamp) obj).toLocalDateTime();
+        throw new IllegalArgumentException("Cannot convert object to LocalDateTime: " + obj);
     }
 }
 

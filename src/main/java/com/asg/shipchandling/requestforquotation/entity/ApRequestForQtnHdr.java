@@ -1,6 +1,7 @@
 package com.asg.shipchandling.requestforquotation.entity;
 
 import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -9,7 +10,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "AP_REQUEST_FOR_QTN_HDR")
@@ -17,7 +18,7 @@ import java.sql.Timestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 //@SequenceGenerator(name = "rfq_trans_seq", sequenceName = "TRANSACTION_POID_SEQ", allocationSize = 1)
-public class ApRequestForQtnHdr {
+public class ApRequestForQtnHdr extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,7 +32,7 @@ public class ApRequestForQtnHdr {
 
     @Column(name = "TRANSACTION_DATE", nullable = false)
     @AuditIgnore
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
 
     @Column(name = "GROUP_POID", nullable = false)
     @AuditIgnore
@@ -55,7 +56,7 @@ public class ApRequestForQtnHdr {
     private Long divisionPoid;
 
     @Column(name = "EXPECTED_DATE")
-    private Timestamp expectedDate;
+    private LocalDateTime expectedDate;
 
     @Column(name = "REMARKS", length = 500)
     private String remarks;
@@ -81,21 +82,4 @@ public class ApRequestForQtnHdr {
     @AuditIgnore
     private String deleted = "N";
 
-    @Column(name = "CREATED_BY", length = 20)
-    @AuditIgnore
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    @AuditIgnore
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    @AuditIgnore
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    @AuditIgnore
-    private Timestamp lastmodifiedDate;
 }

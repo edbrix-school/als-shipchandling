@@ -5,19 +5,20 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
+
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class SalesQuotationSchSummaryDto {
     private Long transactionPoid;
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
     private String docRef;
     private Long companyPoid;
     private BigDecimal customerPoid;
     private String quotationStatus;
-    private Timestamp validityToDate;
+    private LocalDateTime validityToDate;
     private Long totalAmount;
     private Long totalTax;
     private Long totalGpAmt;

@@ -1,6 +1,7 @@
 package com.asg.shipchandling.requestforquotation.entity;
 
 import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -8,15 +9,13 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.sql.Timestamp;
-
 @Entity
 @Table(name = "AP_REQUEST_FOR_QTN_SUP_DTL")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @IdClass(ApRequestForQtnSupDtlId.class)
-public class ApRequestForQtnSupDtl {
+public class ApRequestForQtnSupDtl extends BaseEntity {
 
     @Id
     @Column(name = "TRANSACTION_POID", nullable = false)
@@ -34,21 +33,4 @@ public class ApRequestForQtnSupDtl {
     @Column(name = "REMARKS", length = 100)
     private String remarks;
 
-    @Column(name = "CREATED_BY", length = 20)
-    @AuditIgnore
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    @AuditIgnore
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    @AuditIgnore
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    @AuditIgnore
-    private Timestamp lastmodifiedDate;
 }

@@ -54,9 +54,9 @@ import java.sql.ResultSet;
 import javax.sql.DataSource;
 import java.sql.SQLException;
 import java.math.BigDecimal;
-import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -102,11 +102,9 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         SalesDeliveryNoteHdr deliveryNote = new SalesDeliveryNoteHdr();
         BeanUtils.copyProperties(request, deliveryNote, "qtnRefNo");
         deliveryNote.setCompanyPoid(companyPoid);
-        deliveryNote.setCreatedBy(userId);
-        deliveryNote.setLastmodifiedBy(userId);
         deliveryNote.setDeleted("N");
         deliveryNote.setDescriptionPrintYn("Y"); // Default value
-        deliveryNote.setTransactionDate(new Timestamp(System.currentTimeMillis())); // Set current date
+        deliveryNote.setTransactionDate(LocalDateTime.now()); // Set current date
 
         // Handle partyType-based field requirements
         if (request.getPartyType() != null && "PRINCIPAL".equalsIgnoreCase(request.getPartyType())) {
@@ -221,14 +219,14 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
         // Update fields (excluding read-only fields)
         // Store original transactionDate before copying
-        Timestamp originalTransactionDate = deliveryNote.getTransactionDate();
+        LocalDateTime originalTransactionDate = deliveryNote.getTransactionDate();
         BeanUtils.copyProperties(request, deliveryNote, "transactionPoid", "docRef", "createdBy",
                 "createdDate", "qtnRefNo");
         // If transactionDate is not provided in request, preserve the original value
         if (request.getTransactionDate() == null) {
             deliveryNote.setTransactionDate(originalTransactionDate);
         }
-        deliveryNote.setLastmodifiedBy(userId);
+
 
         // Handle partyType-based field requirements
         if (request.getPartyType() != null && "PRINCIPAL".equalsIgnoreCase(request.getPartyType())) {
@@ -320,8 +318,8 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     @Override
     @Transactional(readOnly = true)
     public PaginatedResponse<SalesDeliveryNoteHdrDto> getAllDeliveryNotes(Long groupPoid, Long companyPoid,
-                                                                          String deliveryStatus, Long customerPoid, Long salesmanPoid, String qtnRefNo, Timestamp fromDate,
-                                                                          Timestamp toDate, String search, Integer page, Integer size) {
+                                                                          String deliveryStatus, Long customerPoid, Long salesmanPoid, String qtnRefNo, LocalDateTime fromDate,
+                                                                          LocalDateTime toDate, String search, Integer page, Integer size) {
         log.info("getAllDeliveryNotes service started for groupPoid={} companyPoid={} page={} size={}",
                 groupPoid, companyPoid, page, size);
 
@@ -445,8 +443,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         itemDtl.setQtnDetRowId(request.getQtnDetRowId());
         itemDtl.setTotCost(request.getTotCost());
         itemDtl.setItemType(request.getItemType());
-        itemDtl.setCreatedBy(userId);
-        itemDtl.setLastmodifiedBy(userId);
+
 
         SalesDeliveryNoteItemDtl savedItemDtl = itemDtlRepository.save(itemDtl);
 
@@ -518,7 +515,6 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         itemDtl.setCheckAll(request.getCheckAll() != null ? request.getCheckAll() : "Y");
         itemDtl.setTotCost(request.getTotCost());
         itemDtl.setItemType(request.getItemType());
-        itemDtl.setLastmodifiedBy(userId);
 
         SalesDeliveryNoteItemDtl savedItemDtl = itemDtlRepository.save(itemDtl);
 
@@ -648,8 +644,6 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
             itemDtl.setQtnDetRowId(detail.getQtnDetRowId());
             itemDtl.setTotCost(detail.getTotCost());
             itemDtl.setItemType(detail.getItemType());
-            itemDtl.setCreatedBy(userId);
-            itemDtl.setLastmodifiedBy(userId);
             SalesDeliveryNoteItemDtl savedItem = itemDtlRepository.save(itemDtl);
             String logDetail = String.format(
                     "Row Created on Sales Delivery Note Item with detRowId: %s",
@@ -761,7 +755,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
                             existingItem.setCheckAll(item.getCheckAll() != null ? item.getCheckAll() : "Y");
                             existingItem.setTotCost(item.getTotCost());
                             existingItem.setItemType(item.getItemType());
-                            existingItem.setLastmodifiedBy(userId);
+
 
                             itemDtlRepository.save(existingItem);
 
@@ -908,7 +902,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         int index = 0;
         dto.setTransactionPoid(getLongValue(row[index++]));
         dto.setDocRef(getStringValue(row[index++]));
-        dto.setTransactionDate(getTimestampValue(row[index++]));
+        dto.setTransactionDate(getLocalDateTimeValue(row[index++]));
         dto.setCompanyPoid(getLongValue(row[index++]));
         dto.setCustomerPoid(getLongValue(row[index++]));
         dto.setCurrencyCode(getStringValue(row[index++]));
@@ -936,9 +930,9 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         dto.setRemarks(getStringValue(row[index++]));
         dto.setDeleted(getStringValue(row[index++]));
         dto.setCreatedBy(getStringValue(row[index++]));
-        dto.setCreatedDate(getTimestampValue(row[index++]));
+        dto.setCreatedDate(getLocalDateTimeValue(row[index++]));
         dto.setLastmodifiedBy(getStringValue(row[index++]));
-        dto.setLastmodifiedDate(getTimestampValue(row[index++]));
+        dto.setLastmodifiedDate(getLocalDateTimeValue(row[index++]));
 
         // LOV Details start at index 28
         // Customer Details (cust: index 28-30)
@@ -1199,11 +1193,17 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         return obj.toString();
     }
 
-    private Timestamp getTimestampValue(Object obj) {
+    private LocalDateTime getLocalDateTimeValue(Object obj) {
         if (obj == null) return null;
-        if (obj instanceof Timestamp) {
-            return (Timestamp) obj;
+
+        if (obj instanceof LocalDateTime ldt) {
+            return ldt;
         }
+
+        if (obj instanceof java.sql.Timestamp ts) {
+            return ts.toLocalDateTime();
+        }
+
         return null;
     }
 
