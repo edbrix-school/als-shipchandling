@@ -5,12 +5,9 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "STOCK_MASTER_WAREHOUSE_DTL")
@@ -50,18 +47,4 @@ public class StockMasterWarehouseDtl extends BaseEntity {
 
     @Column(name = "REORDER_QTY")
     private BigDecimal reorderQty;
-
-    @Column(name = "CREATED_BY", length = 20)
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    private LocalDateTime createdDate;
-
-    @Column(name = "LAST_MODIFIED_BY", length = 20)
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LAST_MODIFIED_DATE")
-    private LocalDateTime lastmodifiedDate;
 }
