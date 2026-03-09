@@ -1,12 +1,14 @@
 package com.asg.shipchandling.requestforquotation.entity;
 
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
+
 
 @Entity
 @Table(name = "CURRENCY_RATE_UPLOAD_TEMP")
@@ -14,7 +16,7 @@ import java.sql.Timestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 @IdClass(CurrencyRateUploadTempId.class)
-public class CurrencyRateUploadTemp {
+public class CurrencyRateUploadTemp extends BaseEntity {
 
     @Id
     @Column(name = "GROUP_POID", nullable = false)
@@ -30,7 +32,7 @@ public class CurrencyRateUploadTemp {
 
     @Id
     @Column(name = "EFFECTIVE_DATE", nullable = false)
-    private Timestamp effectiveDate;
+    private LocalDateTime effectiveDate;
 
     @Column(name = "BASE_CURRENCY", length = 20)
     private String baseCurrency;
@@ -41,18 +43,5 @@ public class CurrencyRateUploadTemp {
     @Column(name = "REMARKS", length = 200)
     private String remarks;
 
-    @Column(name = "CREATED_BY", length = 20)
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    private Timestamp lastmodifiedDate;
 }
 

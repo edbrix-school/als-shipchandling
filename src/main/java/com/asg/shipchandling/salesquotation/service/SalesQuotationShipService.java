@@ -348,11 +348,7 @@ public class SalesQuotationShipService {
         if (auditUserId == null || auditUserId.isBlank()) {
             throw new IllegalArgumentException("userId or userPoid is required for audit fields");
         }
-        header.setCreatedBy(auditUserId);
-        header.setCreatedDate(now);
-        header.setLastModifiedBy(auditUserId);
-        header.setLastModifiedDate(now);
-        
+
         // Set Active default to "Y"
         header.setDeleted(command.getDeleted() != null ? command.getDeleted() : "N");
         
@@ -457,8 +453,7 @@ public class SalesQuotationShipService {
         
         // Restore read-only fields (DocRef, CreatedBy, CreatedDate)
         header.setDocRef(originalDocRef); // DocRef is read-only
-        header.setCreatedBy(originalCreatedBy); // CreatedBy should NOT be updated
-        header.setCreatedDate(originalCreatedDate); // CreatedDate should NOT be updated
+       // CreatedDate should NOT be updated
         
         // Handle customer validation
         if ("Y".equalsIgnoreCase(command.getNewCustomer())) {
@@ -489,8 +484,6 @@ public class SalesQuotationShipService {
         if (auditUserId == null || auditUserId.isBlank()) {
             throw new IllegalArgumentException("userId or userPoid is required for audit fields");
         }
-        header.setLastModifiedBy(auditUserId);
-        header.setLastModifiedDate(now);
         
         // Map charges and equipment (upsert pattern)
         mapCharges(header, command.getCharges());
@@ -656,8 +649,6 @@ public class SalesQuotationShipService {
 
         // Update audit fields
         LocalDateTime now = LocalDateTime.now();
-        header.setLastModifiedBy(userId);
-        header.setLastModifiedDate(now);
 
         
         // Save the soft-deleted quotation
@@ -1182,10 +1173,6 @@ public class SalesQuotationShipService {
 
         // Set audit fields
         LocalDateTime now = LocalDateTime.now();
-        chargeDetail.setCreatedBy(userId);
-        chargeDetail.setCreatedDate(now);
-        chargeDetail.setLastModifiedBy(userId);
-        chargeDetail.setLastModifiedDate(now);
 
         // Add charge detail to header collection (for bidirectional relationship)
         header.addCharge(chargeDetail);
@@ -1408,11 +1395,6 @@ public class SalesQuotationShipService {
         calculateChargeAmounts(chargeDetail, header.getQuotationType());
 
         // Update audit fields (preserve createdBy and createdDate)
-        chargeDetail.setCreatedBy(originalCreatedBy);
-        chargeDetail.setCreatedDate(originalCreatedDate);
-        LocalDateTime now = LocalDateTime.now();
-        chargeDetail.setLastModifiedBy(userId);
-        chargeDetail.setLastModifiedDate(now);
 
         // Save charge detail (it's already in the header's collection)
         chargeDetail = chargeDetailRepository.save(chargeDetail);
@@ -1585,11 +1567,6 @@ public class SalesQuotationShipService {
         equipmentDetail.setRemarks(request.getRemarks());
 
         // Set audit fields
-        LocalDateTime now = LocalDateTime.now();
-        equipmentDetail.setCreatedBy(userId);
-        equipmentDetail.setCreatedDate(now);
-        equipmentDetail.setLastModifiedBy(userId);
-        equipmentDetail.setLastModifiedDate(now);
 
         // Add equipment detail to header collection (for bidirectional relationship)
         header.addEquipment(equipmentDetail);
@@ -1672,11 +1649,7 @@ public class SalesQuotationShipService {
         equipmentDetail.setRemarks(request.getRemarks());
 
         // Update audit fields (preserve createdBy and createdDate)
-        equipmentDetail.setCreatedBy(originalCreatedBy);
-        equipmentDetail.setCreatedDate(originalCreatedDate);
-        LocalDateTime now = LocalDateTime.now();
-        equipmentDetail.setLastModifiedBy(userId);
-        equipmentDetail.setLastModifiedDate(now);
+
 
         // Save equipment detail (it's already in the header's collection)
         equipmentDetail = equipmentDetailRepository.save(equipmentDetail);

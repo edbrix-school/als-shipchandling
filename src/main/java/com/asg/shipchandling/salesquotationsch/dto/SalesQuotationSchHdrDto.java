@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -14,7 +14,7 @@ import java.util.List;
 @AllArgsConstructor
 public class SalesQuotationSchHdrDto {
     private Long transactionPoid;
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
     private Long companyPoid;
     private String docRef;
     private BigDecimal customerPoid;
@@ -27,8 +27,8 @@ public class SalesQuotationSchHdrDto {
     private BigDecimal currencyRate;
     private String quotationStatus;
     private Long salesmanPoid;
-    private Timestamp validityFromDate;
-    private Timestamp validityToDate;
+    private LocalDateTime validityFromDate;
+    private LocalDateTime validityToDate;
     private String paymentMode;
     private String deliveryTerms;
     private Long linePoid;
@@ -38,18 +38,18 @@ public class SalesQuotationSchHdrDto {
     private BigDecimal totalDiscount;
     private Long totalAmount;
     private String actionStatus;
-    private Timestamp actionDueDate;
+    private LocalDateTime actionDueDate;
     private Long enquiryRefNumber;
     private String deleted;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
     private String lostReason;
     private Long businessPromotionValue;
     private Long percentage;
     private String details;
-    private Timestamp expectedDeliveryDate;
+    private LocalDateTime expectedDeliveryDate;
     private String vesselAgent;
     private Long portPoid;
     private String quotedRate;

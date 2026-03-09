@@ -39,8 +39,8 @@ import javax.sql.DataSource;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.*;
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -86,17 +86,15 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
         String normalizedUserId = normalizeUserId(userId);
 
-        Timestamp resolvedTransactionDate = request.getTransactionDate() != null
+        LocalDateTime resolvedTransactionDate = request.getTransactionDate() != null
                 ? request.getTransactionDate()
-                : Timestamp.from(Instant.now());
+                : LocalDateTime.now();
 
         ApRequestForQtnHdr rfq = new ApRequestForQtnHdr();
         BeanUtils.copyProperties(request, rfq);
         rfq.setTransactionDate(resolvedTransactionDate);
         rfq.setGroupPoid(groupPoid);
         rfq.setCompanyPoid(companyPoid);
-        rfq.setCreatedBy(normalizedUserId);
-        rfq.setLastmodifiedBy(normalizedUserId);
         rfq.setStatus("IN PROGRESS");
         rfq.setDeleted("N");
 
@@ -253,9 +251,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             rfq.setCurrencyRate(null);
         }
 
-        // Audit fields update
-        rfq.setLastmodifiedBy(normalizedUserId);
-        rfq.setLastmodifiedDate(new Timestamp(System.currentTimeMillis()));
 
         // Save header first
         ApRequestForQtnHdr savedRfq = rfqHdrRepository.save(rfq);
@@ -428,8 +423,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             populateTaxDetails(itemDtl, detail.getTaxPoid(), detail.getQty(), detail.getPrice());
 
             itemDtl.setRemarks(detail.getRemarks());
-            itemDtl.setCreatedBy(userId);
-            itemDtl.setLastmodifiedBy(userId);
 
             rfqItemDtlRepository.save(itemDtl);
         }
@@ -446,8 +439,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             supDtl.setDetRowId(detRowId++);
             supDtl.setSupplierPoid(detail.getSupplierPoid());
             supDtl.setRemarks(detail.getRemarks());
-            supDtl.setCreatedBy(userId);
-            supDtl.setLastmodifiedBy(userId);
             rfqSupDtlRepository.save(supDtl);
         }
     }
@@ -700,8 +691,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
         populateTaxDetails(itemDtl, request.getTaxPoid(), request.getQty(), request.getPrice());
         itemDtl.setRemarks(request.getRemarks());
-        itemDtl.setCreatedBy(userId);
-        itemDtl.setLastmodifiedBy(userId);
 
         ApRequestForQtnItemDtl savedItem = rfqItemDtlRepository.save(itemDtl);
         // ✅ LOG CREATE (old entity = null)
@@ -782,8 +771,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         }
 
         populateTaxDetails(itemDtl, request.getTaxPoid(), itemDtl.getQty(), itemDtl.getPrice());
-        itemDtl.setLastmodifiedBy(userId);
-
         rfqItemDtlRepository.save(itemDtl);
 
 
@@ -829,8 +816,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         supDtl.setDetRowId(detRowId);
         supDtl.setSupplierPoid(request.getSupplierPoid());
         supDtl.setRemarks(hasText(request.getRemarks()) ? request.getRemarks().trim() : null);
-        supDtl.setCreatedBy(userId);
-        supDtl.setLastmodifiedBy(userId);
 
         ApRequestForQtnSupDtl savedSupDtl =rfqSupDtlRepository.save(supDtl);
         // ✅ LOG CREATE
@@ -863,8 +848,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         // Update fields
         supDtl.setSupplierPoid(request.getSupplierPoid());
         supDtl.setRemarks(hasText(request.getRemarks()) ? request.getRemarks().trim() : null);
-        supDtl.setLastmodifiedBy(userId);
-
         rfqSupDtlRepository.save(supDtl);
 
         String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", supDtl.getTransactionPoid(),supDtl.getDetRowId());
@@ -995,7 +978,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         rfqItemDtlRepository.deleteByTransactionPoid(transactionPoid);
         rfqSupDtlRepository.deleteByTransactionPoid(transactionPoid);
         rfq.setDeleted("Y");
-        rfq.setLastmodifiedDate(new Timestamp(System.currentTimeMillis()));
         rfqHdrRepository.save(rfq);
     }
 
@@ -1209,8 +1191,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         populateTaxDetails(itemDtl, request.getTaxPoid(), request.getQty(), request.getPrice());
 
         itemDtl.setRemarks(request.getRemarks());
-        itemDtl.setCreatedBy(normalizedUserId);
-        itemDtl.setLastmodifiedBy(normalizedUserId);
 
         ApRequestForQtnItemDtl savedItemDtl = rfqItemDtlRepository.save(itemDtl);
         return convertItemDtlToDto(savedItemDtl, groupPoid);
@@ -1288,7 +1268,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         Long normalizedSupplierPoid = normalizeSupplierPoid(request.getSupplierPoid());
         itemDtl.setSupplierPoid(normalizedSupplierPoid);
         itemDtl.setRemarks(request.getRemarks());
-        itemDtl.setLastmodifiedBy(normalizedUserId);
+
 
         // Update last price if stock, unit, and supplier are all set
         if (normalizedSupplierPoid != null) {
@@ -1300,7 +1280,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         }
 
         populateTaxDetails(itemDtl, request.getTaxPoid(), itemDtl.getQty(), itemDtl.getPrice());
-        itemDtl.setLastmodifiedBy(normalizedUserId);
+
 
         ApRequestForQtnItemDtl savedItemDtl = rfqItemDtlRepository.save(itemDtl);
         return convertItemDtlToDto(savedItemDtl, groupPoid);
@@ -1399,8 +1379,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         supDtl.setDetRowId(detRowId);
         supDtl.setSupplierPoid(request.getSupplierPoid());
         supDtl.setRemarks(hasText(request.getRemarks()) ? request.getRemarks().trim() : null);
-        supDtl.setCreatedBy(normalizedUserId);
-        supDtl.setLastmodifiedBy(normalizedUserId);
 
         ApRequestForQtnSupDtl savedSupDtl = rfqSupDtlRepository.save(supDtl);
         return convertSupDtlToDto(savedSupDtl);
@@ -1443,7 +1421,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         // Update fields
         supDtl.setSupplierPoid(request.getSupplierPoid());
         supDtl.setRemarks(hasText(request.getRemarks()) ? request.getRemarks().trim() : null);
-        supDtl.setLastmodifiedBy(normalizedUserId);
 
         ApRequestForQtnSupDtl savedSupDtl = rfqSupDtlRepository.save(supDtl);
         return convertSupDtlToDto(savedSupDtl);

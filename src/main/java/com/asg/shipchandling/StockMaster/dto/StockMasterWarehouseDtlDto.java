@@ -1,8 +1,8 @@
 package com.asg.shipchandling.StockMaster.dto;
 
 import java.math.BigDecimal;
-import java.sql.Date;
-import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 public class StockMasterWarehouseDtlDto {
       private Long stockPoid;
     private Long detRowId;
-    private Date transactionDate;
+    private LocalDate transactionDate;
     private Long locationPoid;
     private String aisleNo;
     private String bayNo;
@@ -23,8 +23,8 @@ public class StockMasterWarehouseDtlDto {
     private BigDecimal reorderLevel;
     private BigDecimal reorderQty;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
     private String actionType;
 }

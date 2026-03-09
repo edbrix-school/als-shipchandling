@@ -1,6 +1,7 @@
 package com.asg.shipchandling.StockMaster.entity;
 
 import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -9,7 +10,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
 
 
 @Entity
@@ -18,7 +18,7 @@ import java.sql.Timestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 // @SequenceGenerator(name = "stock_seq", sequenceName = "STOCK_POID_SEQ", allocationSize = 1)
-public class StockMasterEntity {
+public class StockMasterEntity extends BaseEntity {
     @Id
     // @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "stock_seq")
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -201,21 +201,4 @@ public class StockMasterEntity {
     @AuditIgnore
     private Long groupPoid;
 
-    @Column(name = "CREATED_BY", length = 20)
-    @AuditIgnore
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    @AuditIgnore
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    @AuditIgnore
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    @AuditIgnore
-    private Timestamp lastmodifiedDate;
 }

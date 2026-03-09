@@ -91,8 +91,6 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         BeanUtils.copyProperties(request, category);
         category.setCategoryCode(categoryCode);  // Set auto-generated code
         category.setGroupPoid(groupPoid);
-        category.setCreatedBy(userId);
-        category.setLastmodifiedBy(userId);
         category.setActive(request.getActive() != null ? request.getActive() : "Y");
         category.setDeleted("N");
         category.setCategoryType(request.getCategoryType() != null ? request.getCategoryType() : "GROUP");
@@ -226,7 +224,6 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         category.setCostCenterPoid(request.getCostCenterPoid());
         category.setSeqno(request.getSeqno());
         category.setActive(request.getActive() != null ? request.getActive() : category.getActive());
-        category.setLastmodifiedBy(userId);
 
         // Save the entity
         StockCategoryMaster savedCategory = stockCategoryRepository.save(category);

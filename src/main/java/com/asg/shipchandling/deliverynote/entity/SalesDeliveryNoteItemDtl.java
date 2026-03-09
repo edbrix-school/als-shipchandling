@@ -1,6 +1,7 @@
 package com.asg.shipchandling.deliverynote.entity;
 
 import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -11,7 +12,6 @@ import org.hibernate.annotations.UpdateTimestamp;
 import com.asg.shipchandling.deliverynote.dto.SalesDeliveryNoteItemDtlId;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
 
 @Entity
 @Table(name = "SALES_DELIVERY_NOTE_ITEM_DTL")
@@ -19,7 +19,7 @@ import java.sql.Timestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 @IdClass(SalesDeliveryNoteItemDtlId.class)
-public class SalesDeliveryNoteItemDtl {
+public class SalesDeliveryNoteItemDtl extends BaseEntity {
 
     @Id
     @Column(name = "TRANSACTION_POID", nullable = false)
@@ -55,24 +55,6 @@ public class SalesDeliveryNoteItemDtl {
     @Column(name = "STOCK_UNIT_POID")
     private Long stockUnitPoid;
 
-    @Column(name = "CREATED_BY", length = 20)
-    @AuditIgnore
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    @AuditIgnore
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    @AuditIgnore
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    @AuditIgnore
-    private Timestamp lastmodifiedDate;
-    
     @Column(name = "QTN_DET_ROW_ID")
     @AuditIgnore
     private Long qtnDetRowId; // Links to quotation detail if loaded from quotation

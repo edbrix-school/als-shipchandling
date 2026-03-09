@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -26,9 +26,9 @@ class SalesDeliveryNoteItemDtlDto {
     private Long totCost;
     private String itemType;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
     
     // LOV Details
     private LovDetailDto stockDetails;

@@ -25,6 +25,7 @@ import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -312,13 +313,13 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public CreditDetailsResponse callCalculateDueDateProc(Date docDate,
-            Long creditDays, String calculationType, Long customerPoid) {
+    public CreditDetailsResponse callCalculateDueDateProc(LocalDate docDate,
+                                                          Long creditDays, String calculationType, Long customerPoid) {
         String proc = "{call PROC_CALC_DUEDAYS(?, ?, ?, ? ,?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
-                cs.setDate(1, docDate);
+                cs.setDate(1, Date.valueOf(docDate));
                 cs.setNull(2, Types.VARCHAR);
                 cs.setLong(3, creditDays);
                 cs.setString(4, calculationType);
@@ -495,7 +496,7 @@ public class SalesInvoiceStoredProcRepository {
     }
 
     public CreditDetailsResponse callLoadCreditDetailsProc(Long groupPoid, Long companyPoid,
-            String docId, Date docDate, String partyType, Long partyPoid) {
+            String docId, LocalDate docDate, String partyType, Long partyPoid) {
         String proc = "{call PROC_LOAD_CREDIT_DETAILS(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
@@ -505,7 +506,7 @@ public class SalesInvoiceStoredProcRepository {
                 cs.setNull(3, Types.NUMERIC);
                 cs.setString(4, docId);
                 cs.setNull(5, Types.NUMERIC);
-                cs.setDate(6, docDate);
+                cs.setDate(6, Date.valueOf(docDate));
                 cs.setString(7, partyType);
                 cs.setLong(8, partyPoid);
                 cs.registerOutParameter(9, Types.VARCHAR);

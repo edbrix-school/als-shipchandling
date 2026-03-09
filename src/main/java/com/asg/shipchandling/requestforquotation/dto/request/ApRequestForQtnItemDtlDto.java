@@ -6,7 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
+
 
 // Item Details DTO
 @Data
@@ -34,7 +35,7 @@ public class ApRequestForQtnItemDtlDto {
     private String refPoid;
     private String remarks;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
 }

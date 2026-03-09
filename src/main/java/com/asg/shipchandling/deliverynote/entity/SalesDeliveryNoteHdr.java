@@ -1,6 +1,7 @@
 package com.asg.shipchandling.deliverynote.entity;
 
 import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -10,7 +11,8 @@ import org.hibernate.annotations.Generated;
 import org.hibernate.annotations.GenerationTime;
 import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
+
 
 @Entity
 @Table(name = "SALES_DELIVERY_NOTE_HDR")
@@ -20,7 +22,7 @@ import java.sql.Timestamp;
 // @SequenceGenerator(name = "dn_trans_seq", sequenceName =
 // "TRANSACTION_POID_SEQ", allocationSize = 1)
 
-public class SalesDeliveryNoteHdr {
+public class SalesDeliveryNoteHdr extends BaseEntity {
 
     @Id
     // @GeneratedValue(strategy = GenerationType.SEQUENCE, generator =
@@ -37,7 +39,7 @@ public class SalesDeliveryNoteHdr {
 
     @Column(name = "TRANSACTION_DATE")
     @AuditIgnore
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
 
     @Column(name = "COMPANY_POID")
     @AuditIgnore
@@ -124,21 +126,4 @@ public class SalesDeliveryNoteHdr {
     @AuditIgnore
     private String deleted = "N";
 
-    @Column(name = "CREATED_BY", length = 20)
-    @AuditIgnore
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    @AuditIgnore
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    @AuditIgnore
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    @AuditIgnore
-    private Timestamp lastmodifiedDate;
 }

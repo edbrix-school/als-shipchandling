@@ -120,8 +120,6 @@ public class StockUnitServiceImpl implements StockUnitService {
         entity.setStockUnitName(request.getStockUnitName());
         entity.setStockUnitName2(request.getStockUnitName2());
         entity.setGroupPoid(request.getGroupPoid());
-        entity.setCreatedBy(request.getCreatedBy());
-        entity.setCreatedDate(LocalDateTime.now());
         entity.setActive(request.getActive() != null ? request.getActive() : "Y");
         entity.setSeqNo(request.getSeqNo());
         entity.setDeleted("N");
@@ -238,8 +236,6 @@ public class StockUnitServiceImpl implements StockUnitService {
         );
         existingStockunit.setDeleted("Y");
         existingStockunit.setActive("N");
-        existingStockunit.setLastModifiedDate(LocalDateTime.now());
-        existingStockunit.setLastModifiedBy(existingStockunit.getLastModifiedBy());
         
         try {
             stockUnitRepository.save(existingStockunit);

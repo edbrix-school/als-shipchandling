@@ -178,8 +178,8 @@ public class StockMasterServiceImpl implements StockMasterService {
         response.setGroupPoid(entity.getGroupPoid());
         response.setCreatedBy(entity.getCreatedBy());
         response.setCreatedDate(entity.getCreatedDate());
-        response.setLastmodifiedBy(entity.getLastmodifiedBy());
-        response.setLastmodifiedDate(entity.getLastmodifiedDate());
+        response.setLastmodifiedBy(entity.getLastModifiedBy());
+        response.setLastmodifiedDate(entity.getLastModifiedDate());
 
         // Fetch and set category name
         if (entity.getCategoryPoid() != null) {
@@ -720,8 +720,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         BeanUtils.copyProperties(request, stock, "stockPoid", "stockCode", "createdBy", "createdDate");
         // stock.setStockPoid(request.getStockPoid());
         stock.setGroupPoid(groupPoid);
-        stock.setCreatedBy(userId);
-        stock.setLastmodifiedBy(userId);
         stock.setActive(request.getActive() != null ? request.getActive() : "Y");
         stock.setDeleted("N");
         stock.setServiceItem(request.getServiceItem() != null ? request.getServiceItem() : "N");
@@ -798,7 +796,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         }
 
         BeanUtils.copyProperties(request, stock, "stockPoid", "stockCode", "createdBy", "createdDate");
-        stock.setLastmodifiedBy(userId);
 
         // just call the function
         callBeforeSaveProcedure(groupPoid, companyPoid, userId, stockPoid, stock.getServiceItem());
@@ -992,8 +989,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         if (dto.getRemarks() != null) {
             entity.setRemarks(dto.getRemarks());
         }
-        entity.setLastmodifiedBy(userId);
-        entity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
         entitiesToSave.add(entity);
 
         String logDetail = String.format("KeyId = STOCK_POID %s: DET_ROW_ID %s", entity.getStockPoid(),entity.getDetRowId());
@@ -1028,10 +1023,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         newEntity.setSupplierPoid(dto.getSupplierPoid());
         newEntity.setSupplierStockCode(dto.getSupplierStockCode());
         newEntity.setRemarks(dto.getRemarks());
-        newEntity.setCreatedBy(userId);
-        newEntity.setCreatedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
-        newEntity.setLastmodifiedBy(userId);
-        newEntity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
         entitiesToSave.add(newEntity);
         
         // Log the creation
@@ -1105,8 +1096,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         entity.setBinNo(dto.getBinNo());
         entity.setReorderLevel(dto.getReorderLevel());
         entity.setReorderQty(dto.getReorderQty());
-        entity.setLastmodifiedBy(userId);
-        entity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
         entitiesToSave.add(entity);
 
         String logDetail = String.format("KeyId = STOCK_POID %s: DET_ROW_ID %s", entity.getStockPoid(), entity.getDetRowId());
@@ -1132,10 +1121,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         newEntity.setBinNo(dto.getBinNo());
         newEntity.setReorderLevel(dto.getReorderLevel());
         newEntity.setReorderQty(dto.getReorderQty());
-        newEntity.setCreatedBy(userId);
-        newEntity.setCreatedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
-        newEntity.setLastmodifiedBy(userId);
-        newEntity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
         entitiesToSave.add(newEntity);
     }
 
@@ -1173,8 +1158,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         dtl.setSupplierPoid(request.getSupplierPoid());
         dtl.setSupplierStockCode(request.getSupplierStockCode());
         dtl.setRemarks(request.getRemarks());
-        dtl.setCreatedBy(userId);
-        dtl.setLastmodifiedBy(userId);
 
         // Save entity
         StockMasterDTLEntity savedDtl = dtlRepository.save(dtl);
@@ -1204,7 +1187,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         dtl.setSupplierPoid(request.getSupplierPoid());
         dtl.setSupplierStockCode(request.getSupplierStockCode());
         dtl.setRemarks(request.getRemarks());
-        dtl.setLastmodifiedBy(userId);
 
         StockMasterDTLEntity savedDtl = dtlRepository.save(dtl);
         return convertDtlToDto(savedDtl);
@@ -1273,8 +1255,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         dtl.setBinNo(request.getBinNo());
         dtl.setReorderLevel(request.getReorderLevel());
         dtl.setReorderQty(request.getReorderQty());
-        dtl.setCreatedBy(userId);
-        dtl.setLastmodifiedBy(userId);
 
         StockMasterWarehouseDtl savedDtl = warehouseRepository.save(dtl);
         return convertWarehouseDtlToDto(savedDtl);
@@ -1308,7 +1288,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         dtl.setBinNo(request.getBinNo());
         dtl.setReorderLevel(request.getReorderLevel());
         dtl.setReorderQty(request.getReorderQty());
-        dtl.setLastmodifiedBy(userId);
 
         StockMasterWarehouseDtl savedDtl = warehouseRepository.save(dtl);
         return convertWarehouseDtlToDto(savedDtl);
@@ -1558,8 +1537,8 @@ public class StockMasterServiceImpl implements StockMasterService {
         item.put("groupPoid", stock.getGroupPoid());
         item.put("createdBy", stock.getCreatedBy());
         item.put("createdDate", stock.getCreatedDate());
-        item.put("lastmodifiedBy", stock.getLastmodifiedBy());
-        item.put("lastmodifiedDate", stock.getLastmodifiedDate());
+        item.put("lastmodifiedBy", stock.getLastModifiedBy());
+        item.put("lastmodifiedDate", stock.getLastModifiedDate());
         
         // Convert Y/N/null to boolean (Y=true, N/null=false)
         item.put("active", stock.getActive() != null && "Y".equalsIgnoreCase(stock.getActive()));

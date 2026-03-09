@@ -6,7 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -16,7 +16,7 @@ import java.util.List;
 public class SalesDeliveryNoteHdrDto {
     private Long transactionPoid;
     private String docRef;
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
     private Long companyPoid;
     private Long customerPoid;
     private String customerName; // From joined SALES_CUSTOMER_MASTER table
@@ -46,9 +46,9 @@ public class SalesDeliveryNoteHdrDto {
     private String remarks;
     private String deleted;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
 
     // Detail tables (optional, included when includeDetails = true)
     private List<SalesDeliveryNoteItemDtlDto> itemDetails;

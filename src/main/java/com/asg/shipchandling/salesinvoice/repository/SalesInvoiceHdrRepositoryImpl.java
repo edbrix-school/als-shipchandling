@@ -12,6 +12,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -448,7 +450,7 @@ public class SalesInvoiceHdrRepositoryImpl {
         SalesInvoiceHdr entity = new SalesInvoiceHdr();
         entity.setTransactionPoid(((Number) row[0]).longValue());
         entity.setDocRef(toStringSafe(row[1]));
-        entity.setTransactionDate((java.sql.Timestamp) row[2]);
+        entity.setTransactionDate(toLocalDateTime(row[2]));
         entity.setGroupPoid(((Number) row[3]).longValue());
         entity.setCompanyPoid(((Number) row[4]).longValue());
         entity.setPartyType(toStringSafe(row[5]));
@@ -459,7 +461,7 @@ public class SalesInvoiceHdrRepositoryImpl {
         entity.setCurrencyRate(row[10] != null ? ((Number) row[10]).longValue() : null);
         entity.setInvAmount(row[11] != null ? convertToBigDecimal(row[11]) : null);
         entity.setCreditDays(row[12] != null ? ((Number) row[12]).longValue() : null);
-        entity.setDueDate(row[13] != null ? (java.sql.Timestamp) row[13] : null);
+        entity.setDueDate(toLocalDateTime(row[13]));
         entity.setQtnPoid(row[14] != null ? ((Number) row[14]).longValue() : null);
         entity.setStatus(toStringSafe(row[15]));
         entity.setInvStatus(toStringSafe(row[16]));
@@ -499,9 +501,9 @@ public class SalesInvoiceHdrRepositoryImpl {
         entity.setAuthorizedId(toStringSafe(row[50]));
         entity.setDeleted(toStringSafe(row[51]));
         entity.setCreatedBy(toStringSafe(row[52]));
-        entity.setCreatedDate(row[53] != null ? (java.sql.Timestamp) row[53] : null);
-        entity.setLastmodifiedBy(toStringSafe(row[54]));
-        entity.setLastmodifiedDate(row[55] != null ? (java.sql.Timestamp) row[55] : null);
+        entity.setCreatedDate(toLocalDateTime(row[53]));
+        entity.setLastModifiedBy(toStringSafe(row[54]));
+        entity.setLastModifiedDate(toLocalDateTime(row[55]));
         // Note: row[56] is CUSTOMER_NAME, which is extracted separately
         return entity;
     }
@@ -551,6 +553,13 @@ public class SalesInvoiceHdrRepositoryImpl {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private LocalDateTime toLocalDateTime(Object obj) {
+        if (obj == null) return null;
+        if (obj instanceof LocalDateTime) return (LocalDateTime) obj;            // already LocalDateTime
+        if (obj instanceof java.sql.Timestamp) return ((java.sql.Timestamp) obj).toLocalDateTime(); // from JDBC
+        throw new IllegalArgumentException("Cannot convert object to LocalDateTime: " + obj);
     }
 
 }

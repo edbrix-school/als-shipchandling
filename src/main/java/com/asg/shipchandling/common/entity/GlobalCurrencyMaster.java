@@ -1,5 +1,6 @@
 package com.asg.shipchandling.common.entity;
 
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -8,14 +9,13 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
 
 @Entity
 @Table(name = "GLOBAL_CURRENCY_MASTER")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class GlobalCurrencyMaster {
+public class GlobalCurrencyMaster extends BaseEntity {
 
     @Id
     @Column(name = "CURRENCY_POID", nullable = false)
@@ -41,20 +41,6 @@ public class GlobalCurrencyMaster {
 
     @Column(name = "SEQNO")
     private Integer seqno;
-
-    @Column(name = "CREATED_BY", length = 20)
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    private Timestamp lastmodifiedDate;
 
     @Column(name = "DELETED", length = 1)
     private String deleted;

@@ -1,10 +1,12 @@
 package com.asg.shipchandling.salesinvoice.dto;
 
-import java.sql.Timestamp;
+
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
 
 // Delivery Note Details DTO
 @Data
@@ -17,9 +19,9 @@ public class SalesDnDtlDto {
     private Long quotationPoidFk;
     private String remarks;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
     
     // LOV Details
     private LovDetailDto dnDetails;

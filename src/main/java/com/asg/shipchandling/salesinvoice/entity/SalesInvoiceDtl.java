@@ -1,6 +1,7 @@
 package com.asg.shipchandling.salesinvoice.entity;
 
 import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -13,7 +14,7 @@ import org.hibernate.type.SqlTypes;
 import com.asg.shipchandling.salesinvoice.converter.BigDecimalConverter;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "AR_SCH_SALES_INVOICE_DTL")
@@ -21,7 +22,7 @@ import java.sql.Timestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 @IdClass(SalesInvoiceDtlId.class)
-public class SalesInvoiceDtl {
+public class SalesInvoiceDtl extends BaseEntity {
 
     @Id
     @Column(name = "TRANSACTION_POID", nullable = false)
@@ -63,24 +64,6 @@ public class SalesInvoiceDtl {
 
     @Column(name = "STOCK_UNIT_POID")
     private Long stockUnitPoid;
-
-    @Column(name = "CREATED_BY", length = 20)
-    @AuditIgnore
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    @AuditIgnore
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    @AuditIgnore
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    @AuditIgnore
-    private Timestamp lastmodifiedDate;
 
     @Column(name = "QUOTATION_POID")
     private Long quotationPoid;

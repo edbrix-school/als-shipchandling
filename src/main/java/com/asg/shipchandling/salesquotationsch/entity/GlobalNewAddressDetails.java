@@ -1,5 +1,6 @@
 package com.asg.shipchandling.salesquotationsch.entity;
 
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -16,7 +17,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class GlobalNewAddressDetails {
+public class GlobalNewAddressDetails extends BaseEntity {
 
     @Id
     @Column(name = "NEW_ADDRESS_POID", nullable = false)
@@ -81,18 +82,6 @@ public class GlobalNewAddressDetails {
 
     @Column(name = "LAND_MARK", length = 50)
     private String landMark;
-
-    @Column(name = "CREATED_BY", length = 20)
-    private String createdBy;
-
-    @Column(name = "CREATED_DATE")
-    private LocalDateTime createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    private String lastModifiedBy;
-
-    @Column(name = "LASTMODIFIED_DATE")
-    private LocalDateTime lastModifiedDate;
 
     @Column(name = "OLD_ACCNO_REF", length = 20)
     private String oldAccnoRef;

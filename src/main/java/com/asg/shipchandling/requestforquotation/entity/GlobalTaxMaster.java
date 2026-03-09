@@ -1,5 +1,6 @@
 package com.asg.shipchandling.requestforquotation.entity;
 
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -8,14 +9,14 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+
 
 @Entity
 @Table(name = "GLOBAL_TAX_MASTER")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class GlobalTaxMaster {
+public class GlobalTaxMaster extends BaseEntity {
 
     @Id
     @Column(name = "TAX_POID", nullable = false)
@@ -66,17 +67,4 @@ public class GlobalTaxMaster {
     @Column(name = "NBR_TAX_NAME", length = 200)
     private String nbrTaxName;
 
-    @Column(name = "CREATED_BY", length = 20)
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    private Timestamp lastmodifiedDate;
 }

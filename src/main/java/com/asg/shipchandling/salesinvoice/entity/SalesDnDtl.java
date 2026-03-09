@@ -1,6 +1,7 @@
 package com.asg.shipchandling.salesinvoice.entity;
 
 import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -16,7 +17,7 @@ import java.sql.Timestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 @IdClass(SalesDnDtlId.class)
-public class SalesDnDtl {
+public class SalesDnDtl extends BaseEntity {
 
     @Id
     @Column(name = "TRANSACTION_POID", nullable = false)
@@ -38,23 +39,6 @@ public class SalesDnDtl {
     @Column(name = "REMARKS", length = 200)
     private String remarks;
 
-    @Column(name = "CREATED_BY", length = 20)
-    @AuditIgnore
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    @AuditIgnore
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    @AuditIgnore
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    @AuditIgnore
-    private Timestamp lastmodifiedDate;
 }
 
 

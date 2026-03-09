@@ -1,5 +1,6 @@
 package com.asg.shipchandling.common.entity;
 
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -14,7 +15,7 @@ import java.sql.Timestamp;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class GlobalAddressMaster {
+public class GlobalAddressMaster extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -38,20 +39,6 @@ public class GlobalAddressMaster {
 
     @Column(name = "CR_NUMBER", length = 50)
     private String crNumber;
-
-    @Column(name = "CREATED_BY", length = 50)
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 50)
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    private Timestamp lastmodifiedDate;
 
     @Column(name = "DELETED", length = 1)
     private String deleted;

@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -15,7 +15,7 @@ import java.util.List;
 public class SalesInvoiceHdrDto {
     private Long transactionPoid;
     private String docRef;
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
     private Long groupPoid;
     private Long companyPoid;
     private String partyType;
@@ -27,7 +27,7 @@ public class SalesInvoiceHdrDto {
     private Long currencyRate;
     private BigDecimal invAmount;
     private Long creditDays;
-    private Timestamp dueDate;
+    private LocalDateTime dueDate;
     private Long qtnPoid;
     private String status;
     private String invStatus;
@@ -67,9 +67,9 @@ public class SalesInvoiceHdrDto {
     private String authorizedId;
     private String deleted;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
     
     // Detail tables
     private List<SalesInvoiceDtlDto> invoiceDetails;

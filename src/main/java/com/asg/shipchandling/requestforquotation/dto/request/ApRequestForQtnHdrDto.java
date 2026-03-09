@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -15,7 +15,7 @@ import java.util.List;
 public class ApRequestForQtnHdrDto {
     private Long transactionPoid;
     private String docRef;
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
     private Long groupPoid;
     private Long companyPoid;
     private String description;
@@ -23,7 +23,7 @@ public class ApRequestForQtnHdrDto {
     private String type;
     private Long divisionPoid;
     private LovItem divisionPoidDetail;
-    private Timestamp expectedDate;
+    private LocalDateTime expectedDate;
     private String remarks;
     private String descriptionPrintYn;
     private String currencyCode;
@@ -34,9 +34,9 @@ public class ApRequestForQtnHdrDto {
     private String salesInvDocRef;
     private String deleted;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
     
     // Detail tables
     private List<ApRequestForQtnItemDtlDto> itemDetails;
