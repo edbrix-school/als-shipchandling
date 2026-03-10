@@ -10,6 +10,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -56,7 +57,7 @@ public class ApRequestForQtnHdr extends BaseEntity {
     private Long divisionPoid;
 
     @Column(name = "EXPECTED_DATE")
-    private LocalDateTime expectedDate;
+    private LocalDate expectedDate;
 
     @Column(name = "REMARKS", length = 500)
     private String remarks;
