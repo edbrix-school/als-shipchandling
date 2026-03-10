@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.sql.Timestamp;
+import java.time.LocalDate;
 
 @Data
 @NoArgsConstructor
@@ -30,7 +31,7 @@ public class ApRequestForQtnListResponseDto {
     private String type;
 
     @JsonProperty("EXPECTED_DATE")
-    private Timestamp expectedDate;
+    private LocalDate expectedDate;
 
     @JsonProperty("REMARKS")
     private String remarks;

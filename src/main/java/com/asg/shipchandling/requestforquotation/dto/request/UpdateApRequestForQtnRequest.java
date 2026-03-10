@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -21,7 +22,7 @@ public class UpdateApRequestForQtnRequest {
     @Size(max = 500, message = "Description must not exceed 500 characters")
     private String description;
 
-    private LocalDateTime expectedDate;
+    private LocalDate expectedDate;
 
     @Size(max = 500, message = "Remarks must not exceed 500 characters")
     private String remarks;

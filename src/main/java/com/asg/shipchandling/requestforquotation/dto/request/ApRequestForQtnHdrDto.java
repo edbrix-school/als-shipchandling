@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -23,7 +24,7 @@ public class ApRequestForQtnHdrDto {
     private String type;
     private Long divisionPoid;
     private LovItem divisionPoidDetail;
-    private LocalDateTime expectedDate;
+    private LocalDate expectedDate;
     private String remarks;
     private String descriptionPrintYn;
     private String currencyCode;
