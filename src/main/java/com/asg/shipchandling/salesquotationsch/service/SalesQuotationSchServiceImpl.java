@@ -65,8 +65,11 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -1753,6 +1756,12 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         }
         if (obj instanceof LocalDateTime) {
             return (LocalDateTime) obj;
+        }
+        if (obj instanceof Timestamp) {
+            return ((Timestamp) obj).toLocalDateTime();
+        }
+        if (obj instanceof Date) {
+            return ((Date) obj).toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
         }
         return null;
     }
