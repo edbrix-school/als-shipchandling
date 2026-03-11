@@ -7,12 +7,15 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateSalesDeliveryNoteRequest {
-    
+
+    private LocalDateTime transactionDate;
+
     private Long customerPoid;
 
     @Size(max = 20, message = "Currency code must not exceed 20 characters")

@@ -121,8 +121,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // Create entity
         SalesInvoiceHdr invoice = new SalesInvoiceHdr();
         BeanUtils.copyProperties(request, invoice, "transactionDate");
-        // Always set transactionDate to current timestamp (don't use value from request)
-        invoice.setTransactionDate(LocalDateTime.now());
+        LocalDateTime resolvedTransactionDate = request.getTransactionDate() != null
+                ? request.getTransactionDate()
+                : LocalDateTime.now();
+        invoice.setTransactionDate(resolvedTransactionDate);
         invoice.setGroupPoid(groupPoid);
         invoice.setCompanyPoid(companyPoid);
         invoice.setInvStatus("IN_PROGRESS");
@@ -754,6 +756,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         BeanUtils.copyProperties(request, invoice, "transactionPoid", "docRef", "createdBy",
                 "createdDate", "transactionDate", "invStatus", "invAmount", "totalGpAmt", "totalGpPercent",
                 "totalCost", "discountAmt", "discountPercent", "invDiscount", "paymentMode");
+
+        if (request.getTransactionDate() != null) {
+            invoice.setTransactionDate(request.getTransactionDate());
+        }
 
         if (request.getVerified() != null) {
             invoice.setVerified(normalizeVerified(request.getVerified()));

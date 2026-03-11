@@ -127,8 +127,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Create entity
         SalesQuotationSchHdr quotationSch = new SalesQuotationSchHdr();
         BeanUtils.copyProperties(request, quotationSch, "transactionDate");
-        // Always set transactionDate to current timestamp (don't use value from request)
-        quotationSch.setTransactionDate(LocalDateTime.now());
+        LocalDateTime resolvedTransactionDate = request.getTransactionDate() != null
+                ? request.getTransactionDate()
+                : LocalDateTime.now();
+        quotationSch.setTransactionDate(resolvedTransactionDate);
         quotationSch.setCompanyPoid(companyPoid);
         quotationSch.setDeleted("N");
         // Keep existing behavior for addressPoid (not part of legacy temp address implementation)
@@ -453,6 +455,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Update fields (excluding read-only fields)
         BeanUtils.copyProperties(request, quotationSch, "transactionPoid", "docRef", "createdBy",
                 "createdDate", "transactionDate");
+
+        if (request.getTransactionDate() != null) {
+            quotationSch.setTransactionDate(request.getTransactionDate());
+        }
 
         // Per agreed REST contract: store returned temp id into customerPoid (ADF binding-style)
         if (tempAddrResp != null && tempAddrResp.getNewAddressPoid() != null) {
