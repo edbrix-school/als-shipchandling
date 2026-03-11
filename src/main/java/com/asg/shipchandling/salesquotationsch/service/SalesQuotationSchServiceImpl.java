@@ -1240,8 +1240,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setCurrencyRate(getBigDecimalValue(row[index++]));
         dto.setQuotationStatus(getStringValue(row[index++]));
         dto.setSalesmanPoid(getLongValue(row[index++]));
-        dto.setValidityFromDate(getTimestampValue(row[index++]));
-        dto.setValidityToDate(getTimestampValue(row[index++]));
+        dto.setValidityFromDate(getLocalDateValue(row[index++]));
+        dto.setValidityToDate(getLocalDateValue(row[index++]));
         dto.setPaymentMode(getStringValue(row[index++]));
         dto.setDeliveryTerms(getStringValue(row[index++]));
         dto.setLinePoid(getLongValue(row[index++]));
@@ -1254,13 +1254,13 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setTotalDiscount(getBigDecimalValue(row[index++]));
         dto.setTotalAmount(getLongValue(row[index++]));
         dto.setActionStatus(getStringValue(row[index++]));
-        dto.setActionDueDate(getTimestampValue(row[index++]));
+        dto.setActionDueDate(getLocalDateValue(row[index++]));
         dto.setEnquiryRefNumber(getLongValue(row[index++]));
         dto.setLostReason(getStringValue(row[index++]));
         dto.setBusinessPromotionValue(getLongValue(row[index++]));
         dto.setPercentage(getLongValue(row[index++]));
         dto.setDetails(getStringValue(row[index++]));
-        dto.setExpectedDeliveryDate(getTimestampValue(row[index++]));
+        dto.setExpectedDeliveryDate(getLocalDateValue(row[index++]));
         dto.setVesselAgent(getStringValue(row[index++]));
         dto.setQuotedRate(getStringValue(row[index++]));
         dto.setRfqRefNo(getStringValue(row[index++]));
@@ -1507,8 +1507,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setCurrencyRate(getBigDecimalValue(row[index++]));
         dto.setQuotationStatus(getStringValue(row[index++]));
         dto.setSalesmanPoid(getLongValue(row[index++]));
-        dto.setValidityFromDate(getTimestampValue(row[index++]));
-        dto.setValidityToDate(getTimestampValue(row[index++]));
+        dto.setValidityFromDate(getLocalDateValue(row[index++]));
+        dto.setValidityToDate(getLocalDateValue(row[index++]));
         dto.setPaymentMode(getStringValue(row[index++]));
         dto.setDeliveryTerms(getStringValue(row[index++]));
         dto.setLinePoid(getLongValue(row[index++]));
@@ -1521,13 +1521,13 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setTotalDiscount(getBigDecimalValue(row[index++]));
         dto.setTotalAmount(getLongValue(row[index++]));
         dto.setActionStatus(getStringValue(row[index++]));
-        dto.setActionDueDate(getTimestampValue(row[index++]));
+        dto.setActionDueDate(getLocalDateValue(row[index++]));
         dto.setEnquiryRefNumber(getLongValue(row[index++]));
         dto.setLostReason(getStringValue(row[index++]));
         dto.setBusinessPromotionValue(getLongValue(row[index++]));
         dto.setPercentage(getLongValue(row[index++]));
         dto.setDetails(getStringValue(row[index++]));
-        dto.setExpectedDeliveryDate(getTimestampValue(row[index++]));
+        dto.setExpectedDeliveryDate(getLocalDateValue(row[index++]));
         dto.setVesselAgent(getStringValue(row[index++]));
         dto.setQuotedRate(getStringValue(row[index++]));
         dto.setRfqRefNo(getStringValue(row[index++]));
@@ -1762,6 +1762,28 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         }
         if (obj instanceof Date) {
             return ((Date) obj).toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+        }
+        return null;
+    }
+
+    private LocalDate getLocalDateValue(Object obj) {
+        if (obj == null) {
+            return null;
+        }
+        if (obj instanceof LocalDate) {
+            return (LocalDate) obj;
+        }
+        if (obj instanceof java.sql.Date) {
+            return ((java.sql.Date) obj).toLocalDate();
+        }
+        if (obj instanceof Timestamp) {
+            return ((Timestamp) obj).toLocalDateTime().toLocalDate();
+        }
+        if (obj instanceof LocalDateTime) {
+            return ((LocalDateTime) obj).toLocalDate();
+        }
+        if (obj instanceof java.util.Date) {
+            return ((java.util.Date) obj).toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
         }
         return null;
     }
