@@ -104,7 +104,10 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         deliveryNote.setCompanyPoid(companyPoid);
         deliveryNote.setDeleted("N");
         deliveryNote.setDescriptionPrintYn("Y"); // Default value
-        deliveryNote.setTransactionDate(LocalDateTime.now()); // Set current date
+        LocalDateTime resolvedTransactionDate = request.getTransactionDate() != null
+                ? request.getTransactionDate()
+                : LocalDateTime.now();
+        deliveryNote.setTransactionDate(resolvedTransactionDate);
 
         // Handle partyType-based field requirements
         if (request.getPartyType() != null && "PRINCIPAL".equalsIgnoreCase(request.getPartyType())) {

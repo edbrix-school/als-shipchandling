@@ -127,8 +127,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Create entity
         SalesQuotationSchHdr quotationSch = new SalesQuotationSchHdr();
         BeanUtils.copyProperties(request, quotationSch, "transactionDate");
-        // Always set transactionDate to current timestamp (don't use value from request)
-        quotationSch.setTransactionDate(LocalDateTime.now());
+        LocalDateTime resolvedTransactionDate = request.getTransactionDate() != null
+                ? request.getTransactionDate()
+                : LocalDateTime.now();
+        quotationSch.setTransactionDate(resolvedTransactionDate);
         quotationSch.setCompanyPoid(companyPoid);
         quotationSch.setDeleted("N");
         // Keep existing behavior for addressPoid (not part of legacy temp address implementation)
