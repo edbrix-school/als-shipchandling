@@ -755,6 +755,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 "createdDate", "transactionDate", "invStatus", "invAmount", "totalGpAmt", "totalGpPercent",
                 "totalCost", "discountAmt", "discountPercent", "invDiscount", "paymentMode");
 
+        if (request.getTransactionDate() != null) {
+            invoice.setTransactionDate(request.getTransactionDate());
+        }
+
         if (request.getVerified() != null) {
             invoice.setVerified(normalizeVerified(request.getVerified()));
         }

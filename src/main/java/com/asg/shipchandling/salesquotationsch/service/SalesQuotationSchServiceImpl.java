@@ -454,6 +454,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         BeanUtils.copyProperties(request, quotationSch, "transactionPoid", "docRef", "createdBy",
                 "createdDate", "transactionDate");
 
+        if (request.getTransactionDate() != null) {
+            quotationSch.setTransactionDate(request.getTransactionDate());
+        }
+
         // Per agreed REST contract: store returned temp id into customerPoid (ADF binding-style)
         if (tempAddrResp != null && tempAddrResp.getNewAddressPoid() != null) {
             quotationSch.setCustomerPoid(BigDecimal.valueOf(tempAddrResp.getNewAddressPoid()));
