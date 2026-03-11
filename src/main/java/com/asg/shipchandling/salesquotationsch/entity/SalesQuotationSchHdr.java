@@ -12,7 +12,9 @@ import org.hibernate.annotations.GenerationTime;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+
 
 @Entity
 @Table(name = "SALES_QUOTATION_HDR")
@@ -59,10 +61,11 @@ public class SalesQuotationSchHdr extends BaseEntity {
     private Long salesmanPoid;
 
     @Column(name = "VALIDITY_FROM_DATE")
-    private LocalDateTime validityFromDate;
+    private LocalDate validityFromDate;
 
     @Column(name = "VALIDITY_TO_DATE")
-    private LocalDateTime validityToDate;
+    private LocalDate validityToDate;
+
 
     @Column(name = "PAYMENT_MODE", length = 20)
     private String paymentMode;
@@ -97,7 +100,8 @@ public class SalesQuotationSchHdr extends BaseEntity {
 
     @Column(name = "ACTION_DUE_DATE")
     @AuditIgnore
-    private LocalDateTime actionDueDate;
+    private LocalDate actionDueDate;
+
 
     @Column(name = "ENQUIRY_REF_NUMBER")
     @AuditIgnore
@@ -124,7 +128,8 @@ public class SalesQuotationSchHdr extends BaseEntity {
 
     @Column(name = "EXPEACTED_DELIVERY_DATE")
     @AuditIgnore
-    private LocalDateTime expectedDeliveryDate;
+    private LocalDate expectedDeliveryDate;
+
 
     @Column(name = "VESSEL_AGENT", length = 50)
     private String vesselAgent;

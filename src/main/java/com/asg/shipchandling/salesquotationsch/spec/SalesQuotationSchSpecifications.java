@@ -3,7 +3,9 @@ package com.asg.shipchandling.salesquotationsch.spec;
 import com.asg.shipchandling.salesquotationsch.entity.SalesQuotationSchHdr;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+
 
 
 public final class SalesQuotationSchSpecifications {
@@ -52,15 +54,17 @@ public final class SalesQuotationSchSpecifications {
         return toDate == null ? null : (root, query, cb) -> cb.lessThanOrEqualTo(root.get("transactionDate"), toDate);
     }
     
-    public static Specification<SalesQuotationSchHdr> validityFromDate(LocalDateTime validityFromDate) {
+    public static Specification<SalesQuotationSchHdr> validityFromDate(LocalDate validityFromDate) {
         return validityFromDate == null ? null : (root, query, cb) -> 
                 cb.greaterThanOrEqualTo(root.get("validityFromDate"), validityFromDate);
     }
+
     
-    public static Specification<SalesQuotationSchHdr> validityToDate(LocalDateTime validityToDate) {
+    public static Specification<SalesQuotationSchHdr> validityToDate(LocalDate validityToDate) {
         return validityToDate == null ? null : (root, query, cb) -> 
                 cb.lessThanOrEqualTo(root.get("validityToDate"), validityToDate);
     }
+
     
     /**
      * Search across multiple fields: DocRef, CustomerRef, Details

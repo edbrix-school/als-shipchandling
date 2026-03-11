@@ -4,7 +4,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+
 
 
 @Data
@@ -20,8 +22,9 @@ public class SalesQuotationSchFilter {
     private String search; // Search across DocRef, CustomerRef, Details
     private LocalDateTime fromDate;
     private LocalDateTime toDate;
-    private LocalDateTime validityFromDate;
-    private LocalDateTime validityToDate;
+    private LocalDate validityFromDate;
+    private LocalDate validityToDate;
+
     
     // Pagination
     private Integer page = 0;
