@@ -135,70 +135,60 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         SalesInvoiceHdr savedInvoice = invoiceHdrRepository.save(invoice);
         invoiceHdrRepository.flush();
 
-        boolean validCustomer = true;
-        if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
-            // Call stored procedure BEFORE SAVE for validation
-            validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
-                    savedInvoice.getTransactionPoid(),
-                    request.getCustomerPoid());
+        // Invoice details are not processed during creation
+        // Invoice details should always be empty or null during create call
+        // They are populated later from quotation through stored procedure
+        if (request.getInvoiceDetails() != null && !request.getInvoiceDetails().isEmpty()) {
+            log.debug("Invoice details provided during creation, but will be ignored. Invoice details should be empty or null during create.");
         }
 
-        if (validCustomer) {
-            // Invoice details are not processed during creation
-            // Invoice details should always be empty or null during create call
-            // They are populated later from quotation through stored procedure
-            if (request.getInvoiceDetails() != null && !request.getInvoiceDetails().isEmpty()) {
-                log.debug("Invoice details provided during creation, but will be ignored. Invoice details should be empty or null during create.");
-            }
-
-            if (request.getDeliveryNoteDetails() != null && !request.getDeliveryNoteDetails().isEmpty()) {
-                for (CreateSalesDnDtlRequest dnDtl : request.getDeliveryNoteDetails()) {
-                    // Skip if actionType is "isDeleted" or "delRowId" (should not create deleted items)
-                    String actionType = dnDtl.getActionType();
-                    if ("isDeleted".equalsIgnoreCase(actionType) || "delRowId".equalsIgnoreCase(actionType)) {
-                        log.debug("Skipping delivery note detail with actionType: {}", actionType);
-                        continue;
-                    }
-                    
-                    // Create delivery note detail (actionType is "isCreated" or null/empty)
-                    // Get next DetRowId
-                    Long maxDetRowId = dnDtlRepository
-                            .findMaxDetRowIdByTransactionPoid(savedInvoice.getTransactionPoid());
-                    Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
-
-                    // Create delivery note detail
-                    SalesDnDtl dtl = new SalesDnDtl();
-                    dtl.setTransactionPoid(savedInvoice.getTransactionPoid());
-                    dtl.setDetRowId(detRowId);
-                    dtl.setDnPoidFk(dnDtl.getDnPoidFk());
-                    dtl.setQuotationPoidFk(dnDtl.getQuotationPoidFk());
-                    dtl.setRemarks(dnDtl.getRemarks());
-
-                    log.debug("Creating delivery note detail with detRowId: {}, remarks: {}", detRowId, dnDtl.getRemarks());
-                    SalesDnDtl savedDtl = dnDtlRepository.save(dtl);
-
-                    String logDetail = String.format(
-                            "Row Created on Sales Delivery Note Detail with detRowId: %s",
-                            savedDtl.getDetRowId()
-                    );
-
-                    loggingService.createLogSummaryEntry(
-                            UserContext.getDocumentId(),
-                            savedInvoice.getTransactionPoid().toString(),
-                            logDetail
-                    );
+        if (request.getDeliveryNoteDetails() != null && !request.getDeliveryNoteDetails().isEmpty()) {
+            for (CreateSalesDnDtlRequest dnDtl : request.getDeliveryNoteDetails()) {
+                // Skip if actionType is "isDeleted" or "delRowId" (should not create deleted items)
+                String actionType = dnDtl.getActionType();
+                if ("isDeleted".equalsIgnoreCase(actionType) || "delRowId".equalsIgnoreCase(actionType)) {
+                    log.debug("Skipping delivery note detail with actionType: {}", actionType);
+                    continue;
                 }
-                // Flush to ensure all delivery note detail changes are persisted
-                dnDtlRepository.flush();
+
+                // Create delivery note detail (actionType is "isCreated" or null/empty)
+                // Get next DetRowId
+                Long maxDetRowId = dnDtlRepository
+                        .findMaxDetRowIdByTransactionPoid(savedInvoice.getTransactionPoid());
+                Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
+
+                // Create delivery note detail
+                SalesDnDtl dtl = new SalesDnDtl();
+                dtl.setTransactionPoid(savedInvoice.getTransactionPoid());
+                dtl.setDetRowId(detRowId);
+                dtl.setDnPoidFk(dnDtl.getDnPoidFk());
+                dtl.setQuotationPoidFk(dnDtl.getQuotationPoidFk());
+                dtl.setRemarks(dnDtl.getRemarks());
+
+                log.debug("Creating delivery note detail with detRowId: {}, remarks: {}", detRowId, dnDtl.getRemarks());
+                SalesDnDtl savedDtl = dnDtlRepository.save(dtl);
+
+                String logDetail = String.format(
+                        "Row Created on Sales Delivery Note Detail with detRowId: %s",
+                        savedDtl.getDetRowId()
+                );
+
+                loggingService.createLogSummaryEntry(
+                        UserContext.getDocumentId(),
+                        savedInvoice.getTransactionPoid().toString(),
+                        logDetail
+                );
             }
-
-            // Call stored procedure AFTER SAVE for authorization
-            salesInvoiceStoredProcRepository.callAuthorizationProc(savedInvoice.getTransactionPoid(),
-                    savedInvoice.getAuthorizedId(), userId);
-
-            // Refresh to get auto-generated DocRef
-            invoiceHdrRepository.flush();
+            // Flush to ensure all delivery note detail changes are persisted
+            dnDtlRepository.flush();
         }
+
+        // Call stored procedure AFTER SAVE for authorization
+        salesInvoiceStoredProcRepository.callAuthorizationProc(savedInvoice.getTransactionPoid(),
+                savedInvoice.getAuthorizedId(), userId);
+
+        // Refresh to get auto-generated DocRef
+        invoiceHdrRepository.flush();
         SalesInvoiceHdr refreshedInvoice = invoiceHdrRepository.findByTransactionPoid(
                 savedInvoice.getTransactionPoid()).orElse(savedInvoice);
 
@@ -778,11 +768,13 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         }
 
         // Call stored procedure BEFORE SAVE for validation
-        boolean validCustomer = true;
         if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
-            validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
+            boolean validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
                     invoice.getTransactionPoid(),
                     request.getCustomerPoid());
+            if (!validCustomer) {
+                throw new CustomException("You can't change the Customer,DN Data already selected ...");
+            }
         }
 
         // Update detail tables
