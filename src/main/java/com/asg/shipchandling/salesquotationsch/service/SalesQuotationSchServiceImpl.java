@@ -212,9 +212,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             }
         }
 
-        // Save item details
+        // Save item details (skip per-row creation logging on initial create)
         if (request.getItemDetails() != null && !request.getItemDetails().isEmpty()) {
-            saveItemDetails(savedQuotationSch.getTransactionPoid(), request.getItemDetails(), userId);
+            saveItemDetails(savedQuotationSch.getTransactionPoid(), request.getItemDetails(), userId, false);
         }
 
         // Calculate totals
@@ -831,7 +831,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     }
 
     private void saveItemDetails(Long transactionPoid, List<CreateSalesQuotationSchItemDtlRequest> details,
-            String userId) {
+            String userId, boolean logCreationDetails) {
         Long detRowId = 1L;
         Long maxDetRowId = itemDtlRepository.getMaxDetRowIdByTransactionPoid(transactionPoid);
         if (maxDetRowId != null && maxDetRowId > 0) {
@@ -868,16 +868,19 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             itemDtl.setTaxPercentage(detail.getTaxPercentage());
             itemDtl.setVatModified(detail.getVatModified());
             SalesQuotationSchItemDtl savedItem= itemDtlRepository.save(itemDtl);
-            String logDetail = String.format(
-                    "Row Created on Sales Quotation Schedule Item Detail with DetRowId: %s",
-                    savedItem.getDetRowId()
-            );
 
-            loggingService.createLogSummaryEntry(
-                    UserContext.getDocumentId(),
-                    transactionPoid.toString(),
-                    logDetail
-            );
+            if (logCreationDetails) {
+                String logDetail = String.format(
+                        "Row Created on Sales Quotation Schedule Item Detail with DetRowId: %s",
+                        savedItem.getDetRowId()
+                );
+
+                loggingService.createLogSummaryEntry(
+                        UserContext.getDocumentId(),
+                        transactionPoid.toString(),
+                        logDetail
+                );
+            }
         }
     }
 
@@ -992,7 +995,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         }
 
         if (!itemsToCreate.isEmpty()) {
-            saveItemDetails(transactionPoid, itemsToCreate, userId);
+            // For CREATE via actionType, enable per-row creation logging
+            saveItemDetails(transactionPoid, itemsToCreate, userId, true);
         }
     }
 
