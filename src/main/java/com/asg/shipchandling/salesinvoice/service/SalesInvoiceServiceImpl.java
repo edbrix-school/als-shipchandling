@@ -1413,8 +1413,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
         // Refresh invoice header after load/unload actions
         invoiceHdrRepository.flush();
-        SalesInvoiceHdr refreshedInvoice = invoiceHdrRepository.findByTransactionPoid(transactionPoid)
-                .orElse(invoice);
+        // Stored procedures may update header fields (e.g. vesselName) directly in the database.
+        // Refresh the managed entity to ensure we return the latest state in the same transaction.
+        entityManager.refresh(invoice);
+        SalesInvoiceHdr refreshedInvoice = invoice;
 
         LoadQuotationAndCostBookingsResponse response = new LoadQuotationAndCostBookingsResponse();
         response.setSuccess(true);
