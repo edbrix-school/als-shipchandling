@@ -1,45 +1,5 @@
 package com.asg.shipchandling.salesquotationsch.service;
 
-import java.io.InputStream;
-import java.math.BigDecimal;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Timestamp;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.stream.Collectors;
-
-import javax.sql.DataSource;
-
-import org.apache.poi.hssf.usermodel.HSSFWorkbook;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.DateUtil;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
-
 import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
@@ -51,44 +11,28 @@ import com.asg.common.lib.service.DocumentSearchService;
 import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.utility.PaginationUtil;
-import com.asg.shipchandling.StockMaster.dto.StockDetailsResponse;
-import com.asg.shipchandling.StockMaster.service.StockMasterService;
-import com.asg.shipchandling.common.entity.GlobalCurrencyMaster;
-import com.asg.shipchandling.common.entity.GlobalCurrencyRates;
+import com.asg.shipchandling.requestforquotation.entity.ApRequestForQtnHdr;
 import com.asg.shipchandling.common.repository.GlobalAddressDetailsRepository;
-import com.asg.shipchandling.common.repository.GlobalCurrencyMasterRepository;
-import com.asg.shipchandling.common.repository.GlobalCurrencyRatesRepository;
-import com.asg.shipchandling.commonlov.dto.LovItem;
-import com.asg.shipchandling.exceptions.CustomException;
-import com.asg.shipchandling.exceptions.ResourceNotFoundException;
-import com.asg.shipchandling.salesquotationsch.dto.SalesQuotationSchCustomerDetailsDto;
-import com.asg.shipchandling.salesquotationsch.dto.SalesQuotationSchFilter;
-import com.asg.shipchandling.salesquotationsch.dto.SalesQuotationSchHdrDto;
-import com.asg.shipchandling.salesquotationsch.dto.SalesQuotationSchItemDtlDto;
-import com.asg.shipchandling.salesquotationsch.dto.SalesQuotationSchItemDtlId;
-import com.asg.shipchandling.salesquotationsch.dto.SalesQuotationSchSummaryDto;
-import com.asg.shipchandling.salesquotationsch.dto.TempNewAddressRow;
-import com.asg.shipchandling.salesquotationsch.dto.request.CalculateRequest;
-import com.asg.shipchandling.salesquotationsch.dto.request.ClearItemsRequest;
-import com.asg.shipchandling.salesquotationsch.dto.request.CreateDeliveryNoteRequest;
-import com.asg.shipchandling.salesquotationsch.dto.request.CreateRfqRequest;
-import com.asg.shipchandling.salesquotationsch.dto.request.CreateSalesQuotationSchItemDtlRequest;
-import com.asg.shipchandling.salesquotationsch.dto.request.CreateSalesQuotationSchRequest;
-import com.asg.shipchandling.salesquotationsch.dto.request.ImportItemsRequest;
-import com.asg.shipchandling.salesquotationsch.dto.request.RefreshDetailRequest;
-import com.asg.shipchandling.salesquotationsch.dto.request.SelectAllRequest;
-import com.asg.shipchandling.salesquotationsch.dto.request.UpdateQuantityRequest;
-import com.asg.shipchandling.salesquotationsch.dto.request.UpdateSalesQuotationSchRequest;
-import com.asg.shipchandling.salesquotationsch.dto.request.ValidateCheckboxRequest;
-import com.asg.shipchandling.salesquotationsch.dto.request.ValidateCustomerRequest;
-import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
-import com.asg.shipchandling.salesquotationsch.dto.response.CurrencyRateResponse;
+import com.asg.shipchandling.salesquotationsch.dto.*;
+import com.asg.shipchandling.salesquotationsch.dto.request.*;
 import com.asg.shipchandling.salesquotationsch.dto.response.CustomerDetailsResponse;
-import com.asg.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.SalesQuotationSchListResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.StoredProcedureResponse;
-import com.asg.shipchandling.salesquotationsch.dto.response.TempAddressProcedureResponse;
 import com.asg.shipchandling.salesquotationsch.dto.response.ValidationResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.ExcelImportResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.CurrencyRateResponse;
+import com.asg.shipchandling.salesquotationsch.dto.response.TempAddressProcedureResponse;
+import com.asg.shipchandling.salesquotationsch.dto.TempNewAddressRow;
+import com.asg.shipchandling.StockMaster.service.StockMasterService;
+import com.asg.shipchandling.StockMaster.dto.StockDetailsResponse;
+import com.asg.shipchandling.common.repository.GlobalCurrencyMasterRepository;
+import com.asg.shipchandling.common.repository.GlobalCurrencyRatesRepository;
+import com.asg.shipchandling.common.entity.GlobalCurrencyMaster;
+import com.asg.shipchandling.common.entity.GlobalCurrencyRates;
+import com.asg.shipchandling.commonlov.dto.LovItem;
+import com.asg.shipchandling.exceptions.ResourceNotFoundException;
+import com.asg.shipchandling.exceptions.CustomException;
 import com.asg.shipchandling.salesquotationsch.entity.GlobalNewAddressDetails;
 import com.asg.shipchandling.salesquotationsch.entity.SalesQuotationSchHdr;
 import com.asg.shipchandling.salesquotationsch.entity.SalesQuotationSchItemDtl;
@@ -97,12 +41,45 @@ import com.asg.shipchandling.salesquotationsch.repository.SalesQuotationSchHdrRe
 import com.asg.shipchandling.salesquotationsch.repository.SalesQuotationSchItemDtlRepository;
 import com.asg.shipchandling.salesquotationsch.repository.SalesQuotationSchStoredProcRepository;
 import com.asg.shipchandling.salesquotationsch.spec.SalesQuotationSchSpecifications;
-
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import net.sf.jasperreports.engine.JasperReport;
+import org.springframework.beans.BeanUtils;
+import org.springframework.data.domain.*;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.InputStream;
+import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+
+import javax.sql.DataSource;
 
 @Service
 @RequiredArgsConstructor
@@ -235,9 +212,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             }
         }
 
-        // Save item details
+        // Save item details (skip per-row creation logging on initial create)
         if (request.getItemDetails() != null && !request.getItemDetails().isEmpty()) {
-            saveItemDetails(savedQuotationSch.getTransactionPoid(), request.getItemDetails(), userId);
+            saveItemDetails(savedQuotationSch.getTransactionPoid(), request.getItemDetails(), userId, false);
         }
 
         // Calculate totals
@@ -854,7 +831,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     }
 
     private void saveItemDetails(Long transactionPoid, List<CreateSalesQuotationSchItemDtlRequest> details,
-            String userId) {
+            String userId, boolean logCreationDetails) {
         Long detRowId = 1L;
         Long maxDetRowId = itemDtlRepository.getMaxDetRowIdByTransactionPoid(transactionPoid);
         if (maxDetRowId != null && maxDetRowId > 0) {
@@ -891,7 +868,19 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             itemDtl.setTaxPercentage(detail.getTaxPercentage());
             itemDtl.setVatModified(detail.getVatModified());
             SalesQuotationSchItemDtl savedItem= itemDtlRepository.save(itemDtl);
-           
+
+            if (logCreationDetails) {
+                String logDetail = String.format(
+                        "Row Created on Sales Quotation Schedule Item Detail with DetRowId: %s",
+                        savedItem.getDetRowId()
+                );
+
+                loggingService.createLogSummaryEntry(
+                        UserContext.getDocumentId(),
+                        transactionPoid.toString(),
+                        logDetail
+                );
+            }
         }
     }
 
@@ -1006,7 +995,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         }
 
         if (!itemsToCreate.isEmpty()) {
-            saveItemDetails(transactionPoid, itemsToCreate, userId);
+            // For CREATE via actionType, enable per-row creation logging
+            saveItemDetails(transactionPoid, itemsToCreate, userId, true);
         }
     }
 
