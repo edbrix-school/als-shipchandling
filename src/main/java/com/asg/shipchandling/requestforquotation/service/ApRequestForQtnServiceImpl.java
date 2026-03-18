@@ -1523,14 +1523,14 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                     logDetail);
         }
 
-        int suppliersAdded = suppliersAfter.size();
+        int suppliersAdded = newSuppliers.size();
 
         AddSuppliersResponse response = new AddSuppliersResponse();
         response.setSuccess(true);
         response.setMessage(result != null ? result : "Suppliers added successfully");
         response.setSuppliersAdded(suppliersAdded);
         response.setAddedSupplierPoidList(
-                suppliersAfter.stream()
+                newSuppliers.stream()
                         .map(ApRequestForQtnSupDtl::getSupplierPoid)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toList()));
