@@ -32,6 +32,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -1503,6 +1504,10 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
         if (result != null && result.contains("ERROR")) {
             throw new CustomException("Error adding suppliers: " + result);
+        }
+        if (result != null && result.trim().toUpperCase(Locale.ROOT).startsWith("WARNING")) {
+            // Treat stored-proc warnings as business failure (HTTP 422 via GlobalExceptionHandler)
+            throw new CustomException(result, HttpStatus.UNPROCESSABLE_ENTITY.value());
         }
 
         // Get suppliers after adding for logging
