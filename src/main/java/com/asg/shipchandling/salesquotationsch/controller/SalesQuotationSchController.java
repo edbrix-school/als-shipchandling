@@ -1,10 +1,16 @@
 package com.asg.shipchandling.salesquotationsch.controller;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.service.LoggingService;
+import com.asg.shipchandling.salesquotation.service.SalesQuotationShipService;
 import com.asg.shipchandling.salesquotationsch.dto.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.UpdateSalesQuotationSchRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
@@ -12,7 +18,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -31,10 +39,12 @@ import com.asg.common.lib.security.util.UserContext;
 import com.asg.common.lib.annotation.AllowedAction;
 import com.asg.common.lib.enums.UserRolesRightsEnum;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+import static com.asg.common.lib.dto.response.ApiResponse.error;
 import static com.asg.shipchandling.common.ApiResponse.success;
 import static com.asg.shipchandling.common.ApiResponse.badRequest;
 
@@ -46,6 +56,7 @@ public class SalesQuotationSchController {
 
         private final SalesQuotationSchService quotationSchService;
         private final StockMasterService stockMasterService;
+        private final LoggingService loggingService;
 
         // ==================== BASIC CRUD OPERATIONS ====================
 
@@ -62,7 +73,7 @@ public class SalesQuotationSchController {
                 SalesQuotationSchHdrDto dto = quotationSchService.createSalesQuotationSch(
                                 request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid(), UserContext.getUserId());
                 log.info("createSalesQuotationSch completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                return success("Sales quotation sch created successfully", dto);
+                return success("Sales quotation created successfully", dto);
         }
 
         @Operation(summary = "Get Sales Quotation SCH by ID", description = "Retrieves a sales quotation sch by transaction POID. Optionally includes item details.", responses = {
@@ -81,7 +92,8 @@ public class SalesQuotationSchController {
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid(), includeDetails);
                 log.info("getSalesQuotationSchByPoid completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(),
                                 UserContext.getGroupPoid());
-                return success("Sales quotation sch fetched successfully", dto);
+            loggingService.createLogSummaryEntry(LogDetailsEnum.VIEWED, UserContext.getDocumentId(), transactionPoid.toString());
+                return success("Sales quotation fetched successfully", dto);
         }
 
         @Operation(summary = "Update Sales Quotation SCH", description = "Updates an existing sales quotation sch.", responses = {
@@ -100,7 +112,7 @@ public class SalesQuotationSchController {
                 SalesQuotationSchHdrDto dto = quotationSchService.updateSalesQuotationSch(
                                 UserContext.getGroupPoid(), transactionPoid, request, UserContext.getCompanyPoid(), UserContext.getUserPoid(), UserContext.getUserId());
                 log.info("updateSalesQuotationSch completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                return success("Sales quotation sch updated successfully", dto);
+                return success("Sales quotation updated successfully", dto);
         }
 
         @Operation(summary = "Delete Sales Quotation SCH", description = "Deletes a sales quotation sch (soft delete).", responses = {
@@ -112,11 +124,13 @@ public class SalesQuotationSchController {
         @DeleteMapping("/{transactionPoid}")
         @AllowedAction(UserRolesRightsEnum.DELETE)
         public ResponseEntity<?> deleteSalesQuotationSch(
-                        @PathVariable Long transactionPoid) {
+                        @PathVariable Long transactionPoid,
+                        @Valid @RequestBody(required = false) DeleteReasonDto deleteReasonDto
+        ) {
                 log.info("deleteSalesQuotationSch started for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                quotationSchService.deleteSalesQuotationSch(UserContext.getGroupPoid(), transactionPoid, UserContext.getCompanyPoid());
+                quotationSchService.deleteSalesQuotationSch(UserContext.getGroupPoid(), transactionPoid, UserContext.getCompanyPoid(),deleteReasonDto);
                 log.info("deleteSalesQuotationSch completed for companyPoid={} groupPoid={}", UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                return success("Sales quotation sch deleted successfully", null);
+                return success("Sales quotation deleted successfully", null);
         }
 
         // @Operation(summary = "Get All Sales Quotation SCH", description = "Retrieves all sales quotation sch with optional filtering. Supports pagination.", responses = {
@@ -182,7 +196,7 @@ public class SalesQuotationSchController {
                                                        @RequestBody(required = false) FilterRequestDto filters,
                                                        @RequestParam(required = false) LocalDate startDate,
                                                        @RequestParam(required = false) LocalDate endDate) {
-                return success("Delivery notes fetched successfully", quotationSchService.listSalesQuotationSch(UserContext.getDocumentId(), filters, startDate, endDate, pageable));
+                return success("Sales Quotation fetched successfully", quotationSchService.listSalesQuotationSch(UserContext.getDocumentId(), filters, startDate, endDate, pageable));
         }
 
         // ==================== VALIDATION APIs ====================
@@ -293,6 +307,26 @@ public class SalesQuotationSchController {
                 log.info("getCustomerAddressDetails completed for customerPoid={} found {} address details", 
                                 customerPoid, addressDetails != null ? addressDetails.size() : 0);
                 return success("Customer address details fetched successfully", addressDetails);
+        }
+
+        @Operation(summary = "Get Address Details by Address POID", description = "Retrieves address details by addressPoid using direct database query. Returns only the specific address record for the given addressPoid. Supports decimal values.", responses = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved address details"),
+                        @ApiResponse(responseCode = "400", description = "Invalid input parameters"),
+                        @ApiResponse(responseCode = "404", description = "Address not found"),
+                        @ApiResponse(responseCode = "401", description = "Unauthorized")
+        }, security = @SecurityRequirement(name = "bearerAuth"))
+        @GetMapping("/address/{addressPoid}/details")
+        @AllowedAction(UserRolesRightsEnum.VIEW)
+        public ResponseEntity<?> getAddressDetailsByPoid(
+                        @PathVariable BigDecimal addressPoid) {
+                log.info("getAddressDetailsByPoid started for addressPoid={} companyPoid={}", 
+                                addressPoid, UserContext.getCompanyPoid());
+                
+                AddressDetailsResponse addressDetails = 
+                                quotationSchService.getAddressDetailsByPoid(addressPoid);
+                
+                log.info("getAddressDetailsByPoid completed for addressPoid={}", addressPoid);
+                return success("Address details fetched successfully", addressDetails);
         }
 
         // ==================== Stored Procedure Endpoints ====================
@@ -532,7 +566,7 @@ public class SalesQuotationSchController {
                 return success("Currency rate fetched successfully", response);
         }
 
-        @Operation(summary = "Get Stock Details", description = "Retrieves stock details including category, tax, and unit information for a given stock POID.", responses = {
+        @Operation(summary = "Get Stock Details", description = "Retrieves stock details including category, tax, and unit information for a given stock POID. Optionally retrieves last price if customerPoid and transactionPoid are provided.", responses = {
                         @ApiResponse(responseCode = "200", description = "Successfully retrieved stock details"),
                         @ApiResponse(responseCode = "404", description = "Stock not found"),
                         @ApiResponse(responseCode = "400", description = "Invalid input"),
@@ -541,12 +575,43 @@ public class SalesQuotationSchController {
         @GetMapping("/stock-details")
         @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> getStockDetails(
-                        @RequestParam Long stockPoid) {
-                log.info("getStockDetails started for stockPoid={} companyPoid={} groupPoid={}", 
-                                stockPoid, UserContext.getCompanyPoid(), UserContext.getGroupPoid());
-                StockDetailsResponse response = stockMasterService.getStockDetails(stockPoid, UserContext.getCompanyPoid());
+                        @RequestParam Long stockPoid,
+                        @RequestParam(required = false) Long customerPoid,
+                        @RequestParam(required = false) Long transactionPoid) {
+                log.info("getStockDetails started for stockPoid={} companyPoid={} groupPoid={} customerPoid={} transactionPoid={}", 
+                                stockPoid, UserContext.getCompanyPoid(), UserContext.getGroupPoid(), customerPoid, transactionPoid);
+                StockDetailsResponse response = stockMasterService.getStockDetails(
+                        stockPoid, UserContext.getCompanyPoid(), customerPoid, transactionPoid);
                 log.info("getStockDetails completed for stockPoid={}", stockPoid);
                 return success("Stock details fetched successfully", response);
         }
+
+    @AllowedAction(UserRolesRightsEnum.PRINT)
+    @Operation(
+            summary = "Generate PDF for Sales Quotation",
+            description = "Generate PDF report for a specific Sales Quotation",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "PDF generated successfully",
+                            content = @Content(mediaType = "application/pdf")),
+                    @ApiResponse(responseCode = "404", description = "Sales Quotation not found"),
+                    @ApiResponse(responseCode = "500", description = "Failed to generate PDF")
+            }
+    )
+    @GetMapping("/print/{transactionPoid}")
+    public ResponseEntity<?> print(
+            @Parameter(description = "Transaction POID", example = "281")
+            @PathVariable Long transactionPoid) {
+        try {
+            byte[] pdf = quotationSchService.print(transactionPoid);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=imco-deposit-refund-" + transactionPoid + ".pdf")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(pdf);
+        } catch (Exception e) {
+            log.error("Failed to generate PDF for Sales Quotation: {}", transactionPoid, e);
+            return error("Failed to generate PDF: " + e.getMessage(), 500);
+        }
+    }
 
 }

@@ -1,5 +1,7 @@
 package com.asg.shipchandling.stockunitmaster.entity;
 
+import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -12,7 +14,7 @@ import java.time.LocalDateTime;
 @Entity
 @NoArgsConstructor
 @Table(name = "STOCK_UNIT_MASTER")
-public class StockUnitMaster {
+public class StockUnitMaster extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "STOCK_UNIT_POID", nullable = false)
@@ -28,19 +30,8 @@ public class StockUnitMaster {
     private String stockUnitName2;
 
     @Column(name = "GROUP_POID", length = 22,nullable = false)
+    @AuditIgnore
     private Long groupPoid;
-
-    @Column(name = "CREATED_BY", length = 20)
-    private String createdBy;
-
-    @Column(name = "CREATED_DATE")
-    private LocalDateTime createdDate;
-
-    @Column(name = "LASTMODIFIED_BY")
-    private String lastModifiedBy;
-
-    @Column(name = "LASTMODIFIED_DATE")
-    private LocalDateTime lastModifiedDate;
 
     @Column(name = "ACTIVE", length = 1)
     private String active;
@@ -49,6 +40,7 @@ public class StockUnitMaster {
     private Integer seqNo;
 
     @Column(name = "DELETED")
+    @AuditIgnore
     private String deleted;
 
     @Column(name = "CLASSIFIED")

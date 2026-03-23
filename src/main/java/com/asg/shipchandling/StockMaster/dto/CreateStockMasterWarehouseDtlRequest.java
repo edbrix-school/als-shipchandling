@@ -1,17 +1,17 @@
 package com.asg.shipchandling.StockMaster.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.sql.Date;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateStockMasterWarehouseDtlRequest {
-     private Date transactionDate;
+     private LocalDate transactionDate;
     private Long locationPoid;
     private String aisleNo;
     private String bayNo;

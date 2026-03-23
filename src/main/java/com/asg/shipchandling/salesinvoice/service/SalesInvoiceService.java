@@ -1,5 +1,6 @@
 package com.asg.shipchandling.salesinvoice.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.salesinvoice.dto.*;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
@@ -12,19 +13,18 @@ import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesDnDtlRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceDtlRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceRequest;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDiscountCommissionResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateDueDateResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateGpResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadDeliveryNoteResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationCurrencyResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationAndCostBookingsResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationSummaryResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationItemsResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.VerifyInvoiceResponse;
 import org.springframework.data.domain.Pageable;
 
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +39,7 @@ public interface SalesInvoiceService {
         SalesInvoiceHdrDto updateSalesInvoice(Long transactionPoid, UpdateSalesInvoiceRequest request,
                         Long groupPoid, Long companyPoid, String userId);
 
-        void deleteSalesInvoice(Long transactionPoid, Long groupPoid, Long companyPoid);
+        void deleteSalesInvoice(Long transactionPoid, Long groupPoid, Long companyPoid, DeleteReasonDto deleteReasonDto);
 
         Map<String, Object> listSalesInvoices(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable);
 
@@ -74,32 +74,34 @@ public interface SalesInvoiceService {
         LoadQuotationItemsResponse loadQuotationItems(Long transactionPoid, LoadQuotationItemsRequest request,
                         Long groupPoid, Long companyPoid, String userId);
 
+        LoadQuotationAndCostBookingsResponse loadQuotationAndCostBookings(Long transactionPoid,
+                                                                          LoadQuotationItemsRequest request, Long groupPoid, Long companyPoid, String userId);
+
         LoadDeliveryNoteResponse loadDeliveryNote(Long transactionPoid, Long groupPoid,
                         Long companyPoid, String userId);
 
-        UnloadQuotationResponse unloadQuotation(Long transactionPoid, Long groupPoid,
+        UnloadQuotationResponse unloadQuotation(Long transactionPoid, Long qtnPoid, Long groupPoid,
                         Long companyPoid, String userId);
 
         VerifyInvoiceResponse verifyInvoice(Long transactionPoid,
                         Long groupPoid, Long companyPoid, String userId);
 
-        CalculateGpResponse calculateGp(Long transactionPoid, Long groupPoid, Long companyPoid, String userId);
+        RefreshGpProcResponse calculateGp(Long transactionPoid, CalculateDiscountCommissionRequest request, Long groupPoid, Long companyPoid, Long userPoid);
 
         LoadCostBookingsResponse loadCostBookings(Long transactionPoid, Long groupPoid,
                         Long companyPoid, String userId);
 
         List<SalesInvCostbkdDtlDto> getCostBookedDetails(Long transactionPoid, Long groupPoid, Long companyPoid);
 
-        CreditDetailsResponse loadCreditDetails(Long customerPoid, Long groupPoid,
-                        Long companyPoid,      CreditDetailsRequest request);
+        CreditDetailsResponse loadCreditDetails(Long groupPoid,
+                        Long companyPoid, String docId, CreditDetailsRequest request);
 
-        CalculateDueDateResponse calculateDueDate(Long transactionPoid, Timestamp transactionDate, Long creditDays,
-                        Long groupPoid, Long companyPoid);
+        CreditDetailsResponse calculateDueDate(Long customerPoid, LocalDate docDate, Long creditDays);
 
         SalesInvoiceDependenciesDto checkSalesInvoiceDependencies(Long transactionPoid,
                                                                   Long groupPoid, Long companyPoid);
 
-        LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, String qtnPoid);
+        LoadQuotationSummaryResponse loadQuotationSummary(Long transactionPoid, Long qtnPoid);
 
         ValidationResponse validateCustomer(Long customerPoid, Long groupPoid, Long companyPoid);
 
@@ -108,4 +110,6 @@ public interface SalesInvoiceService {
 
         CalculateDiscountCommissionResponse calculateHeaderDiscountCommission(Long transactionPoid, CalculateDiscountCommissionRequest request,
                         Long detRowId, Long groupPoid, Long companyPoid, Long userId);
+
+    byte[] print(Long transactionPoid) throws Exception;
 }

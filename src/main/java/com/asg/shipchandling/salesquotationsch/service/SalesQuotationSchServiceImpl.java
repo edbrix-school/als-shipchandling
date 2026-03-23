@@ -1,10 +1,18 @@
 package com.asg.shipchandling.salesquotationsch.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
+import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.utility.PaginationUtil;
+import com.asg.shipchandling.requestforquotation.entity.ApRequestForQtnHdr;
+import com.asg.shipchandling.common.repository.GlobalAddressDetailsRepository;
 import com.asg.shipchandling.salesquotationsch.dto.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.*;
 import com.asg.shipchandling.salesquotationsch.dto.response.CustomerDetailsResponse;
@@ -25,15 +33,20 @@ import com.asg.shipchandling.common.entity.GlobalCurrencyRates;
 import com.asg.shipchandling.commonlov.dto.LovItem;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
 import com.asg.shipchandling.exceptions.CustomException;
+import com.asg.shipchandling.salesquotationsch.entity.GlobalNewAddressDetails;
 import com.asg.shipchandling.salesquotationsch.entity.SalesQuotationSchHdr;
 import com.asg.shipchandling.salesquotationsch.entity.SalesQuotationSchItemDtl;
+import com.asg.shipchandling.salesquotationsch.repository.GlobalNewAddressDetailsRepository;
 import com.asg.shipchandling.salesquotationsch.repository.SalesQuotationSchHdrRepository;
 import com.asg.shipchandling.salesquotationsch.repository.SalesQuotationSchItemDtlRepository;
 import com.asg.shipchandling.salesquotationsch.repository.SalesQuotationSchStoredProcRepository;
 import com.asg.shipchandling.salesquotationsch.spec.SalesQuotationSchSpecifications;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import net.sf.jasperreports.engine.JasperReport;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
@@ -47,17 +60,23 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
@@ -85,33 +104,34 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private final GlobalCurrencyMasterRepository globalCurrencyMasterRepository;
     private final GlobalCurrencyRatesRepository globalCurrencyRatesRepository;
     private final DocumentSearchService documentService;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
+    private final PrintService printService;
+    private final GlobalAddressDetailsRepository globalAddressDetailsRepository;
+
+    private final GlobalNewAddressDetailsRepository globalNewAddressDetailsRepository;
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Autowired
     private DataSource dataSource;
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = {ResourceNotFoundException.class})
     public SalesQuotationSchHdrDto createSalesQuotationSch(CreateSalesQuotationSchRequest request, Long groupPoid,
                                                            Long companyPoid, Long userPoid, String userId) {
         log.info("createSalesQuotationSch service started for groupPoid={} userId={}", groupPoid, userId);
         // Validate required fields
         validateQuotationSchRequest(request);
 
-        // Set transactionDate to current date if not provided
-        if (request.getTransactionDate() == null) {
-            request.setTransactionDate(new Timestamp(System.currentTimeMillis()));
-            log.info("createSalesQuotationSch set transactionDate to current timestamp");
-        }
-
-        // Keep a copy of the incoming value for any lookups before we overwrite customerPoid (legacy temp address flow)
-        Long requestCustomerPoid = request.getCustomerPoid();
-
         // Create entity
         SalesQuotationSchHdr quotationSch = new SalesQuotationSchHdr();
-        BeanUtils.copyProperties(request, quotationSch);
+        BeanUtils.copyProperties(request, quotationSch, "transactionDate");
+        LocalDateTime resolvedTransactionDate = request.getTransactionDate() != null
+                ? request.getTransactionDate()
+                : LocalDateTime.now();
+        quotationSch.setTransactionDate(resolvedTransactionDate);
         quotationSch.setCompanyPoid(companyPoid);
-        quotationSch.setCreatedBy(userId);
-        quotationSch.setLastmodifiedBy(userId);
         quotationSch.setDeleted("N");
         // Keep existing behavior for addressPoid (not part of legacy temp address implementation)
         if (request.getAddressPoid() != null) {
@@ -126,64 +146,75 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
         // Legacy-compatible: create/update temp address in GLOBAL_NEW_ADDRESS_DETAILS, keyed by DocId+DocKeyPoid+DocFieldName
         if (request.isNewAddressYN() && request.getAddressDetails() != null) {
-            String addressName = getCustomerName(requestCustomerPoid);
-            if (addressName == null || addressName.isBlank()) {
-                addressName = "Customer Address";
+            try {
+
+                Long generatedNewAddressPoid = System.currentTimeMillis();
+                
+                log.info("Calling stored procedure PROC_NEW_ADDRESS_CREATE_UPDATE for transactionPoid={} generatedNewAddressPoid={}", 
+                        savedQuotationSch.getTransactionPoid(), generatedNewAddressPoid);
+
+                TempAddressProcedureResponse tempAddrResp = quotationSchStoredProcRepository.callNewTempAddressCreateUpdateProc(
+                        groupPoid,
+                        userPoid,
+                        LEGACY_DOC_ID_SALES_QUOTATION,
+                        savedQuotationSch.getTransactionPoid(),
+                        LEGACY_DOC_FIELD_NAME_CUSTOMER_POID,
+                        request.getAddressDetails().getAddressName(),
+                        generatedNewAddressPoid,
+                        request.getAddressDetails().getTelephone(),
+                        null,
+                        request.getAddressDetails().getContactPerson(),
+                        null,
+                        request.getAddressDetails().getMobile(),
+                        null,
+                        request.getAddressDetails().getEmail1(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "CREATE"
+                );
+
+                log.info("Stored procedure response for transactionPoid={}: success={}, newAddressPoid={}, errorMessage={}", 
+                        savedQuotationSch.getTransactionPoid(), 
+                        tempAddrResp.isSuccess(), 
+                        tempAddrResp.getNewAddressPoid(),
+                        tempAddrResp.getErrorMessage());
+
+                if (!tempAddrResp.isSuccess() || tempAddrResp.getNewAddressPoid() == null) {
+                    String errorMsg = tempAddrResp.getErrorMessage() != null ? tempAddrResp.getErrorMessage()
+                            : "Temp address save failed";
+                    log.error("Temp address creation failed for transactionPoid={}: {}", 
+                            savedQuotationSch.getTransactionPoid(), errorMsg);
+                    throw new CustomException(errorMsg);
+                }
+
+                // Per agreed REST contract: store returned temp id into customerPoid (ADF binding-style)
+                savedQuotationSch.setCustomerPoid(BigDecimal.valueOf(tempAddrResp.getNewAddressPoid()));
+                savedQuotationSch = quotationSchHdrRepository.save(savedQuotationSch);
+                quotationSchHdrRepository.flush();
+                log.info("createSalesQuotationSch updated customerPoid to temp newAddressPoid={} for transactionPoid={}",
+                        tempAddrResp.getNewAddressPoid(), savedQuotationSch.getTransactionPoid());
+            } catch (CustomException e) {
+                // Re-throw CustomException as-is
+                throw e;
+            } catch (Exception e) {
+                // Wrap any other exception to ensure proper transaction rollback
+                log.error("Unexpected error during temp address creation for transactionPoid={}: {}", 
+                        savedQuotationSch.getTransactionPoid(), e.getMessage(), e);
+                throw new CustomException("Failed to create temp address: " + e.getMessage(), e);
             }
-
-            // Legacy UI requires Tel; for REST we map best-effort.
-            String offTel1 = request.getAddressDetails().getContactPerson();
-            if (offTel1 == null || offTel1.isBlank()) {
-                offTel1 = request.getAddressDetails().getMobile();
-            }
-
-            Long generatedNewAddressPoid = System.currentTimeMillis();
-
-            TempAddressProcedureResponse tempAddrResp = quotationSchStoredProcRepository.callNewTempAddressCreateUpdateProc(
-                    groupPoid,
-                    userPoid,
-                    LEGACY_DOC_ID_SALES_QUOTATION,
-                    savedQuotationSch.getTransactionPoid(),
-                    LEGACY_DOC_FIELD_NAME_CUSTOMER_POID,
-                    addressName,
-                    generatedNewAddressPoid,
-                    offTel1,
-                    null,
-                    request.getAddressDetails().getContactPerson(),
-                    null,
-                    request.getAddressDetails().getMobile(),
-                    null,
-                    request.getAddressDetails().getEmail1(),
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    "CREATE"
-            );
-
-            if (!tempAddrResp.isSuccess() || tempAddrResp.getNewAddressPoid() == null) {
-                throw new CustomException(tempAddrResp.getErrorMessage() != null ? tempAddrResp.getErrorMessage()
-                        : "Temp address save failed");
-            }
-
-            // Per agreed REST contract: store returned temp id into customerPoid (ADF binding-style)
-            savedQuotationSch.setCustomerPoid(tempAddrResp.getNewAddressPoid());
-            savedQuotationSch.setLastmodifiedBy(userId);
-            savedQuotationSch = quotationSchHdrRepository.save(savedQuotationSch);
-            quotationSchHdrRepository.flush();
-            log.info("createSalesQuotationSch updated customerPoid to temp newAddressPoid={} for transactionPoid={}",
-                    tempAddrResp.getNewAddressPoid(), savedQuotationSch.getTransactionPoid());
         }
 
-        // Save item details
+        // Save item details (skip per-row creation logging on initial create)
         if (request.getItemDetails() != null && !request.getItemDetails().isEmpty()) {
-            saveItemDetails(savedQuotationSch.getTransactionPoid(), request.getItemDetails(), userId);
+            saveItemDetails(savedQuotationSch.getTransactionPoid(), request.getItemDetails(), userId, false);
         }
 
         // Calculate totals
@@ -194,10 +225,37 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         SalesQuotationSchHdr refreshedQuotationSch = quotationSchHdrRepository.findByTransactionPoid(
                 savedQuotationSch.getTransactionPoid()).orElse(savedQuotationSch);
 
-        // Convert to DTO
-        SalesQuotationSchHdrDto dto = convertToDto(refreshedQuotationSch, true);
+        // Convert to DTO - wrap in try-catch to prevent exceptions from stock lookups from rolling back transaction
+        SalesQuotationSchHdrDto dto;
+        try {
+            dto = convertToDto(refreshedQuotationSch, true);
+        } catch (Exception e) {
+            // If DTO conversion fails (e.g., due to missing stock details), create a basic DTO without details
+            log.warn("Error during DTO conversion for transactionPoid={}, creating basic DTO: {}", 
+                    refreshedQuotationSch.getTransactionPoid(), e.getMessage());
+            dto = convertToDto(refreshedQuotationSch, false); // Convert without item details to avoid stock lookups
+            // Manually set basic item details without stock category lookups
+            if (request.getItemDetails() != null && !request.getItemDetails().isEmpty()) {
+                List<SalesQuotationSchItemDtl> itemDetails = itemDtlRepository
+                        .findByTransactionPoid(refreshedQuotationSch.getTransactionPoid());
+                dto.setItemDetails(itemDetails.stream()
+                        .map(this::convertItemDtlToDto) // Use simple conversion without stock lookups
+                        .collect(Collectors.toList()));
+            }
+        }
         // reflect request flag in response
         dto.setNewAddressYN(request.isNewAddressYN());
+
+        String key = refreshedQuotationSch.getTransactionPoid().toString();
+        String documentId = UserContext.getDocumentId();
+        // Wrap logging in try-catch to prevent it from causing transaction rollback
+        try {
+            loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
+        } catch (Exception e) {
+            // Log the error but don't fail the transaction
+            log.warn("Failed to create log summary entry for transactionPoid={}: {}", key, e.getMessage());
+        }
+
         log.info("createSalesQuotationSch completed for transactionPoid={} docRef={}",
                 dto.getTransactionPoid(), dto.getDocRef());
         return dto;
@@ -224,14 +282,17 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             throw new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid);
         }
 
-        // Fetch quotation with all LOV details in a single query
-        List<Object[]> results = quotationSchHdrRepository.findSalesQuotationSchWithDetails(transactionPoid,
+        // Fetch quotation header data
+        List<Object[]> headerResults = quotationSchHdrRepository.findSalesQuotationSchHeader(transactionPoid,
                 companyPoid);
         SalesQuotationSchHdrDto dto;
 
-        if (!results.isEmpty()) {
-            Object[] row = results.get(0);
-            dto = populateQuotationSchFromQueryResult(row, includeDetails != null && includeDetails);
+        if (!headerResults.isEmpty()) {
+            Object[] headerRow = headerResults.get(0);
+            dto = populateQuotationSchHeaderFromRow(headerRow, includeDetails != null && includeDetails);
+            
+            // Fetch LOV details separately
+            populateLovDetails(dto);
         } else {
             // Fallback: use entity if query fails
             dto = convertToDto(quotationSch, includeDetails != null && includeDetails);
@@ -250,13 +311,21 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             );
 
             if (newTempAddresses != null) {
+                Long customerPoid = dto.getCustomerPoid() != null ? dto.getCustomerPoid().longValue() : null;
                 for (TempNewAddressRow row : newTempAddresses) {
                     if (row != null && row.getDocFieldName() != null &&
                             row.getDocFieldName().equalsIgnoreCase(LEGACY_DOC_FIELD_NAME_CUSTOMER_POID)) {
+                        // Only apply temp address when it matches the current customerPoid.
+                        // This prevents stale temp addresses from overwriting existing customer selections.
+                        if (customerPoid == null || !customerPoid.equals(row.getNewAddressPoid())) {
+                            continue;
+                        }
                         AddressDetailsResponse addr = new AddressDetailsResponse();
-                        addr.setAddressPoid(row.getNewAddressPoid());
+                        addr.setAddressPoid(BigDecimal.valueOf(row.getNewAddressPoid()));
+                        addr.setAddressName(row.getAddressName());
                         addr.setContactPerson(row.getContactPerson());
                         addr.setEmail1(row.getEmail1());
+                        addr.setTelephone(row.getOffTel1());
                         addr.setMobile(row.getMobile());
                         dto.setAddressDetails(addr);
                         tempNewAddressFound = true;
@@ -289,6 +358,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 .orElseThrow(
                         () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
 
+        SalesQuotationSchHdr oldDtl = new SalesQuotationSchHdr();
+        BeanUtils.copyProperties(quotationSch, oldDtl);
+
         if ("Y".equals(quotationSch.getDeleted())) {
             log.warn("updateSalesQuotationSch found companyPoid={} transactionPoid={} marked as deleted", companyPoid,
                     transactionPoid);
@@ -299,15 +371,23 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         validateQuotationSchRequest(request);
 
         TempAddressProcedureResponse tempAddrResp = null;
+
+        GlobalNewAddressDetails oldAddressEntity = null;
+        GlobalNewAddressDetails oldAddressCopy = null;
         if (request.isNewAddressYN() && request.getAddressDetails() != null) {
             // For update, assume request.customerPoid holds the temp id (legacy binding-style). If missing, create a new one.
-            Long existingOrNewTempId = request.getCustomerPoid() != null ? request.getCustomerPoid() : System.currentTimeMillis();
+            Long existingOrNewTempId = request.getCustomerPoid() != null ? request.getCustomerPoid().longValue() : System.currentTimeMillis();
             String action = request.getCustomerPoid() != null ? "UPDATE" : "CREATE";
 
-            String addressName = "Customer Address";
-            String offTel1 = request.getAddressDetails().getContactPerson();
-            if (offTel1 == null || offTel1.isBlank()) {
-                offTel1 = request.getAddressDetails().getMobile();
+            if (request.isNewAddressYN() && request.getCustomerPoid() != null) {
+                oldAddressEntity = globalNewAddressDetailsRepository
+                        .findById(request.getCustomerPoid().longValue())
+                        .orElse(null);
+
+                if (oldAddressEntity != null) {
+                    oldAddressCopy = new GlobalNewAddressDetails();
+                    BeanUtils.copyProperties(oldAddressEntity, oldAddressCopy);
+                }
             }
 
             tempAddrResp = quotationSchStoredProcRepository.callNewTempAddressCreateUpdateProc(
@@ -316,9 +396,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                     LEGACY_DOC_ID_SALES_QUOTATION,
                     transactionPoid,
                     LEGACY_DOC_FIELD_NAME_CUSTOMER_POID,
-                    addressName,
+                    request.getAddressDetails().getAddressName(),
                     existingOrNewTempId,
-                    offTel1,
+                    request.getAddressDetails().getTelephone(),
                     null,
                     request.getAddressDetails().getContactPerson(),
                     null,
@@ -344,14 +424,45 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             }
         }
 
+
+        GlobalNewAddressDetails newAddressEntity = null;
+
+        if (tempAddrResp != null && tempAddrResp.getNewAddressPoid() != null) {
+
+            // 🔥 VERY IMPORTANT: clear Hibernate cache after autonomous transaction
+            entityManager.clear();
+
+            newAddressEntity = globalNewAddressDetailsRepository
+                    .findById(tempAddrResp.getNewAddressPoid())
+                    .orElse(null);
+        }
+
+        if (oldAddressCopy != null && newAddressEntity != null) {
+
+            String addressKey = newAddressEntity.getNewAddressPoid().toString();
+
+            loggingService.logChanges(
+                    oldAddressCopy,
+                    newAddressEntity,
+                    GlobalNewAddressDetails.class,
+                    UserContext.getDocumentId(),   // same doc context
+                    transactionPoid.toString(),
+                    LogDetailsEnum.MODIFIED,
+                    "NEW_ADDRESS_POID"
+            );
+        }
+
         // Update fields (excluding read-only fields)
         BeanUtils.copyProperties(request, quotationSch, "transactionPoid", "docRef", "createdBy",
                 "createdDate", "transactionDate");
-        quotationSch.setLastmodifiedBy(userId);
+
+        if (request.getTransactionDate() != null) {
+            quotationSch.setTransactionDate(request.getTransactionDate());
+        }
 
         // Per agreed REST contract: store returned temp id into customerPoid (ADF binding-style)
         if (tempAddrResp != null && tempAddrResp.getNewAddressPoid() != null) {
-            quotationSch.setCustomerPoid(tempAddrResp.getNewAddressPoid());
+            quotationSch.setCustomerPoid(BigDecimal.valueOf(tempAddrResp.getNewAddressPoid()));
         }
 
         // Process item details based on actionType (UPDATE, DELETE, or CREATE)
@@ -365,6 +476,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Calculate totals
         calculateTotals(transactionPoid);
 
+        String key = savedQuotationSch.getTransactionPoid().toString();
+        loggingService.logChanges(oldDtl, savedQuotationSch, SalesQuotationSchHdr.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
+
         SalesQuotationSchHdrDto dto = convertToDto(savedQuotationSch, true);
         // reflect request flag in response
         dto.setNewAddressYN(request.isNewAddressYN());
@@ -375,17 +490,24 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
     @Override
     @Transactional
-    public void deleteSalesQuotationSch(Long groupPoid, Long transactionPoid, Long companyPoid) {
+    public void deleteSalesQuotationSch(Long groupPoid, Long transactionPoid, Long companyPoid, DeleteReasonDto deleteReasonDto) {
         SalesQuotationSchHdr quotationSch = quotationSchHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
                 .orElseThrow(
                         () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
 
-        if ("Y".equals(quotationSch.getDeleted())) {
+       /* if ("Y".equals(quotationSch.getDeleted())) {
             log.warn("deleteSalesQuotationSch found companyPoid={} transactionPoid={} already deleted", companyPoid,
                     transactionPoid);
             throw new CustomException("Cannot delete sales quotation sch. It is already deleted.");
-        }
+        }*/
+        documentDeleteService.deleteDocument(
+                transactionPoid,
+                "SALES_QUOTATION_HDR",
+                "TRANSACTION_POID",
+                deleteReasonDto,
+                LocalDate.now()
+        );
 
         // Delete item details
         itemDtlRepository.deleteByTransactionPoid(transactionPoid);
@@ -572,8 +694,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         itemDtl.setTaxAmount(request.getTaxAmount());
         itemDtl.setTaxPercentage(request.getTaxPercentage());
         itemDtl.setVatModified(request.getVatModified());
-        itemDtl.setCreatedBy(userId);
-        itemDtl.setLastmodifiedBy(userId);
 
         SalesQuotationSchItemDtl savedItemDtl = itemDtlRepository.save(itemDtl);
 
@@ -633,7 +753,6 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         itemDtl.setTaxAmount(request.getTaxAmount());
         itemDtl.setTaxPercentage(request.getTaxPercentage());
         itemDtl.setVatModified(request.getVatModified());
-        itemDtl.setLastmodifiedBy(userId);
 
         SalesQuotationSchItemDtl savedItemDtl = itemDtlRepository.save(itemDtl);
 
@@ -686,21 +805,33 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
 
     // Helper methods
     private void validateQuotationSchRequest(CreateSalesQuotationSchRequest request) {
-        if (request.getCustomerPoid() == null) {
+        // Allow null customerPoid if newAddressYN is true (temp address will be created)
+        if (request.getCustomerPoid() == null && !request.isNewAddressYN()) {
             log.warn("Validation failed : Customer is required");
             throw new CustomException("Customer is required");
+        }
+        // If newAddressYN is true, addressDetails must be provided
+        if (request.isNewAddressYN() && request.getAddressDetails() == null) {
+            log.warn("Validation failed : Address details are required when newAddressYN is true");
+            throw new CustomException("Address details are required when creating a new address");
         }
     }
 
     private void validateQuotationSchRequest(UpdateSalesQuotationSchRequest request) {
-        if (request.getCustomerPoid() == null) {
+        // Allow null customerPoid if newAddressYN is true (temp address will be created/updated)
+        if (request.getCustomerPoid() == null && !request.isNewAddressYN()) {
             log.warn("Validation failed : Customer is required");
             throw new CustomException("Customer is required");
+        }
+        // If newAddressYN is true, addressDetails must be provided
+        if (request.isNewAddressYN() && request.getAddressDetails() == null) {
+            log.warn("Validation failed : Address details are required when newAddressYN is true");
+            throw new CustomException("Address details are required when creating/updating a new address");
         }
     }
 
     private void saveItemDetails(Long transactionPoid, List<CreateSalesQuotationSchItemDtlRequest> details,
-            String userId) {
+            String userId, boolean logCreationDetails) {
         Long detRowId = 1L;
         Long maxDetRowId = itemDtlRepository.getMaxDetRowIdByTransactionPoid(transactionPoid);
         if (maxDetRowId != null && maxDetRowId > 0) {
@@ -736,9 +867,20 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             itemDtl.setTaxAmount(detail.getTaxAmount());
             itemDtl.setTaxPercentage(detail.getTaxPercentage());
             itemDtl.setVatModified(detail.getVatModified());
-            itemDtl.setCreatedBy(userId);
-            itemDtl.setLastmodifiedBy(userId);
-            itemDtlRepository.save(itemDtl);
+            SalesQuotationSchItemDtl savedItem= itemDtlRepository.save(itemDtl);
+
+            if (logCreationDetails) {
+                String logDetail = String.format(
+                        "Row Created on Sales Quotation Schedule Item Detail with DetRowId: %s",
+                        savedItem.getDetRowId()
+                );
+
+                loggingService.createLogSummaryEntry(
+                        UserContext.getDocumentId(),
+                        transactionPoid.toString(),
+                        logDetail
+                );
+            }
         }
     }
 
@@ -772,6 +914,11 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 if (existingItem == null) {
                     throw new CustomException("Item detail not found for delete. detRowId=" + item.getDetRowId());
                 }
+                loggingService.logDelete(
+                        existingItem,
+                        UserContext.getDocumentId(),
+                        transactionPoid.toString()
+                );
                 itemDtlRepository.deleteById(id);
                 log.debug("Deleted item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
                 continue;
@@ -791,6 +938,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                     // strict: do not create on update, to avoid accidental duplicates
                     throw new CustomException("Item detail not found for update. detRowId=" + item.getDetRowId());
                 }
+
+                // Create a copy of the existing item for logging
+                SalesQuotationSchItemDtl oldItem = new SalesQuotationSchItemDtl();
+                BeanUtils.copyProperties(existingItem, oldItem);
 
                 existingItem.setStockPoid(item.getStockPoid());
                 existingItem.setQuantity(item.getQuantity());
@@ -817,9 +968,16 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 existingItem.setTaxAmount(item.getTaxAmount());
                 existingItem.setTaxPercentage(item.getTaxPercentage());
                 existingItem.setVatModified(item.getVatModified());
-                existingItem.setLastmodifiedBy(userId);
 
                 itemDtlRepository.save(existingItem);
+
+                String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", existingItem.getTransactionPoid(), existingItem.getDetRowId());
+
+                // Log the changes
+                loggingService.createLog(oldItem, existingItem, SalesQuotationSchItemDtl.class,
+                        UserContext.getDocumentId(), transactionPoid.toString(),
+                        logDetail);
+
                 log.debug("Updated item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
                 continue;
             }
@@ -837,7 +995,8 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         }
 
         if (!itemsToCreate.isEmpty()) {
-            saveItemDetails(transactionPoid, itemsToCreate, userId);
+            // For CREATE via actionType, enable per-row creation logging
+            saveItemDetails(transactionPoid, itemsToCreate, userId, true);
         }
     }
 
@@ -901,6 +1060,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private SalesQuotationSchHdrDto convertToDto(SalesQuotationSchHdr quotationSch, boolean includeDetails) {
         SalesQuotationSchHdrDto dto = new SalesQuotationSchHdrDto();
         BeanUtils.copyProperties(quotationSch, dto);
+
+        if (quotationSch.getTransactionDate() != null) {
+            dto.setTransactionDate(quotationSch.getTransactionDate());
+        }
 
         if (includeDetails) {
             Map<Long, LovItem> stockCache = new HashMap<>();
@@ -1070,9 +1233,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     }
 
     /**
-     * Populate DTO from query result with LOV details
+     * Populate DTO from header row (without LOV details)
      */
-    private SalesQuotationSchHdrDto populateQuotationSchFromQueryResult(Object[] row, boolean includeDetails) {
+    private SalesQuotationSchHdrDto populateQuotationSchHeaderFromRow(Object[] row, boolean includeDetails) {
         SalesQuotationSchHdrDto dto = new SalesQuotationSchHdrDto();
 
         // Quotation Header fields (indices 0-53)
@@ -1081,14 +1244,14 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setDocRef(getStringValue(row[index++]));
         dto.setTransactionDate(getTimestampValue(row[index++]));
         dto.setCompanyPoid(getLongValue(row[index++]));
-        dto.setCustomerPoid(getLongValue(row[index++]));
+        dto.setCustomerPoid(getBigDecimalValue(row[index++]));
         dto.setAddressPoid(getLongValue(row[index++]));
         dto.setCurrencyCode(getStringValue(row[index++]));
-        dto.setCurrencyRate(getLongValue(row[index++]));
+        dto.setCurrencyRate(getBigDecimalValue(row[index++]));
         dto.setQuotationStatus(getStringValue(row[index++]));
         dto.setSalesmanPoid(getLongValue(row[index++]));
-        dto.setValidityFromDate(getTimestampValue(row[index++]));
-        dto.setValidityToDate(getTimestampValue(row[index++]));
+        dto.setValidityFromDate(getLocalDateValue(row[index++]));
+        dto.setValidityToDate(getLocalDateValue(row[index++]));
         dto.setPaymentMode(getStringValue(row[index++]));
         dto.setDeliveryTerms(getStringValue(row[index++]));
         dto.setLinePoid(getLongValue(row[index++]));
@@ -1098,20 +1261,287 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setPortPoid(getLongValue(row[index++]));
         dto.setPortDescription(getStringValue(row[index++]));
         dto.setRemarks(getStringValue(row[index++]));
-        dto.setTotalDiscount(getLongValue(row[index++]));
+        dto.setTotalDiscount(getBigDecimalValue(row[index++]));
         dto.setTotalAmount(getLongValue(row[index++]));
         dto.setActionStatus(getStringValue(row[index++]));
-        dto.setActionDueDate(getTimestampValue(row[index++]));
+        dto.setActionDueDate(getLocalDateValue(row[index++]));
         dto.setEnquiryRefNumber(getLongValue(row[index++]));
         dto.setLostReason(getStringValue(row[index++]));
         dto.setBusinessPromotionValue(getLongValue(row[index++]));
         dto.setPercentage(getLongValue(row[index++]));
         dto.setDetails(getStringValue(row[index++]));
-        dto.setExpectedDeliveryDate(getTimestampValue(row[index++]));
+        dto.setExpectedDeliveryDate(getLocalDateValue(row[index++]));
         dto.setVesselAgent(getStringValue(row[index++]));
         dto.setQuotedRate(getStringValue(row[index++]));
         dto.setRfqRefNo(getStringValue(row[index++]));
-        dto.setPercentageDisc(getLongValue(row[index++]));
+        dto.setPercentageDisc(getBigDecimalValue(row[index++]));
+        dto.setTotalGpAmt(getLongValue(row[index++]));
+        dto.setTotalGpPercentage(getLongValue(row[index++]));
+        dto.setCustomerRef(getStringValue(row[index++]));
+        dto.setDeliveryToAddress(getStringValue(row[index++]));
+        dto.setSelectAllDtl(getStringValue(row[index++]));
+        dto.setTotAmtPrintYn(getStringValue(row[index++]));
+        dto.setDescriptionPrintYn(getStringValue(row[index++]));
+        dto.setAdvanceDetail(getStringValue(row[index++]));
+        dto.setMtaInvPoid(getLongValue(row[index++]));
+        dto.setSalesInvPoid(getLongValue(row[index++]));
+        dto.setSalesInvDocRef(getStringValue(row[index++]));
+        dto.setTotalTax(getLongValue(row[index++]));
+        dto.setPartyAddressDetails(getStringValue(row[index++]));
+        dto.setDeleted(getStringValue(row[index++]));
+        dto.setCreatedBy(getStringValue(row[index++]));
+        dto.setCreatedDate(getTimestampValue(row[index++]));
+        dto.setLastmodifiedBy(getStringValue(row[index++]));
+        dto.setLastmodifiedDate(getTimestampValue(row[index++]));
+
+        // Initialize empty LOV details (will be populated separately)
+        setEmptyLovDetails(dto);
+
+        // Fetch item details if requested
+        if (includeDetails) {
+            Map<Long, LovItem> stockCache = new HashMap<>();
+            Map<Long, LovItem> stockUnitCache = new HashMap<>();
+            Map<Long, LovItem> taxCache = new HashMap<>();
+            Map<Long, StockDetailsResponse.CategoryDetailDto> categoryCache = new HashMap<>();
+
+            List<SalesQuotationSchItemDtl> itemDetails = itemDtlRepository
+                    .findByTransactionPoid(dto.getTransactionPoid());
+            dto.setItemDetails(itemDetails.stream()
+                    .map(item -> convertItemDtlToDto(
+                            item,
+                            dto.getCompanyPoid(),
+                            stockCache,
+                            stockUnitCache,
+                            taxCache,
+                            categoryCache))
+                    .collect(Collectors.toList()));
+        }
+
+        return dto;
+    }
+
+    /**
+     * Populate LOV details by calling separate queries
+     * Each query is wrapped in try-catch to prevent transaction rollback if no records are found
+     */
+    private void populateLovDetails(SalesQuotationSchHdrDto dto) {
+        // Customer Details (using GLOBAL_ADDRESS_DETAILS and GLOBAL_ADDRESS_MASTER)
+        // If customerPoid is present, use it; otherwise use addressPoid
+        if (dto.getCustomerPoid() != null) {
+            try {
+                // Fetch from global_address_details joined with global_address_master
+                Optional<Object[]> addressResult = globalAddressDetailsRepository.findAddressDetailsWithNameByAddressPoid(dto.getCustomerPoid());
+                if (addressResult.isPresent()) {
+                    Object[] result = addressResult.get();
+                    
+                    // Handle wrapped result - if result[0] is an Object[], use it; otherwise use result directly
+                    Object[] addressRow;
+                    if (result != null && result.length > 0 && result[0] instanceof Object[]) {
+                        addressRow = (Object[]) result[0];
+                    } else {
+                        addressRow = result;
+                    }
+                    
+                    // Validate array length before accessing indices
+                    if (addressRow != null && addressRow.length >= 2) {
+                        // Map to LOV format: [ADDRESS_POID, ADDRESS_POID, ADDRESS_NAME]
+                        // createLovDetailFromArray expects [POID, CODE, DESCRIPTION]
+                        Object[] lovRow = new Object[]{
+                            addressRow[0],  // ADDRESS_POID as POID
+                            addressRow[0],  // ADDRESS_POID as CODE
+                            addressRow[1]   // ADDRESS_NAME as DESCRIPTION
+                        };
+                        dto.setCustomerDetails(createLovDetailFromArray(lovRow));
+                        
+                        // Set AddressDetailsResponse
+                        // [ADDRESS_POID, ADDRESS_NAME, CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
+                        AddressDetailsResponse addressDetails = mapToAddressDetailsResponse(addressRow);
+                        if (addressDetails.getAddressPoid() != null) {
+                            dto.setAddressDetails(addressDetails);
+                        }
+                    } else {
+                        log.warn("Invalid address result format for customerPoid={}: expected at least 2 elements, got {}", 
+                                dto.getCustomerPoid(), addressRow != null ? addressRow.length : 0);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Error fetching customer LOV details for customerPoid={}: {}", dto.getCustomerPoid(), e.getMessage());
+                // Continue without customer details - don't rollback transaction
+            }
+        } else if (dto.getAddressPoid() != null) {
+            try {
+                List<Object[]> customerLov = quotationSchHdrRepository.findCustomerDetailsLov(dto.getAddressPoid());
+                if (customerLov != null && !customerLov.isEmpty() && customerLov.get(0) != null) {
+                    Object[] row = customerLov.get(0);
+                    dto.setCustomerDetails(createLovDetailFromArray(row));
+                }
+            } catch (Exception e) {
+                log.warn("Error fetching customer LOV details for addressPoid={}: {}", dto.getAddressPoid(), e.getMessage());
+                // Continue without customer details - don't rollback transaction
+            }
+        }
+
+        // Salesman Details
+        if (dto.getSalesmanPoid() != null) {
+            try {
+                List<Object[]> salesmanLov = quotationSchHdrRepository.findSalesmanDetailsLov(dto.getSalesmanPoid());
+                if (salesmanLov != null && !salesmanLov.isEmpty() && salesmanLov.get(0) != null) {
+                    Object[] row = salesmanLov.get(0);
+                    dto.setSalesmanDetails(createLovDetailFromArray(row));
+                }
+            } catch (Exception e) {
+                log.warn("Error fetching salesman LOV details for salesmanPoid={}: {}", dto.getSalesmanPoid(), e.getMessage());
+                // Continue without salesman details - don't rollback transaction
+            }
+        }
+
+        // Line Details
+        if (dto.getLinePoid() != null) {
+            try {
+                List<Object[]> lineLov = quotationSchHdrRepository.findLineDetailsLov(dto.getLinePoid());
+                if (lineLov != null && !lineLov.isEmpty() && lineLov.get(0) != null) {
+                    Object[] row = lineLov.get(0);
+                    dto.setLineDetails(createLovDetailFromArray(row));
+                }
+            } catch (Exception e) {
+                log.warn("Error fetching line LOV details for linePoid={}: {}", dto.getLinePoid(), e.getMessage());
+                // Continue without line details - don't rollback transaction
+            }
+        }
+
+        // Port Details
+        if (dto.getPortPoid() != null) {
+            try {
+                List<Object[]> portLov = quotationSchHdrRepository.findPortDetailsLov(dto.getPortPoid());
+                if (portLov != null && !portLov.isEmpty() && portLov.get(0) != null) {
+                    Object[] row = portLov.get(0);
+                    dto.setPortDetails(createLovDetailFromArray(row));
+                }
+            } catch (Exception e) {
+                log.warn("Error fetching port LOV details for portPoid={}: {}", dto.getPortPoid(), e.getMessage());
+                // Continue without port details - don't rollback transaction
+            }
+        }
+
+        // Vessel Details
+        if (dto.getVesselPoid() != null) {
+            try {
+                List<Object[]> vesselLov = quotationSchHdrRepository.findVesselDetailsLov(dto.getVesselPoid());
+                if (vesselLov != null && !vesselLov.isEmpty() && vesselLov.get(0) != null) {
+                    Object[] row = vesselLov.get(0);
+                    dto.setVesselDetails(createLovDetailFromArray(row));
+                }
+            } catch (Exception e) {
+                log.warn("Error fetching vessel LOV details for vesselPoid={}: {}", dto.getVesselPoid(), e.getMessage());
+                // Continue without vessel details - don't rollback transaction
+            }
+        }
+
+        // Address Details (contact person, email, mobile)
+        if (dto.getAddressPoid() != null) {
+            try {
+                List<Object[]> addressDetails = quotationSchHdrRepository.findAddressDetails(dto.getAddressPoid());
+                if (addressDetails != null && !addressDetails.isEmpty() && addressDetails.get(0) != null) {
+                    Object[] row = addressDetails.get(0);
+                    AddressDetailsResponse addr = new AddressDetailsResponse();
+                    if (row != null && row.length > 0 && row[0] != null) {
+                        addr.setAddressPoid(getBigDecimalValue(row[0]));
+                    }
+                    if (row != null && row.length > 1 && row[1] != null) {
+                        addr.setContactPerson(getStringValue(row[1]));
+                    }
+                    if (row != null && row.length > 2 && row[2] != null) {
+                        addr.setEmail1(getStringValue(row[2]));
+                    }
+                    if (row != null && row.length > 3 && row[3] != null) {
+                        addr.setMobile(getStringValue(row[3]));
+                    }
+                    if (addr.getAddressPoid() != null) {
+                        dto.setAddressDetails(addr);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Error fetching address details for addressPoid={}: {}", dto.getAddressPoid(), e.getMessage());
+                // Continue without address details - don't rollback transaction
+            }
+        }
+    }
+
+    /**
+     * Create LOV detail from Object array [poid, code, description]
+     */
+    private SalesQuotationSchHdrDto.LovDetailDto createLovDetailFromArray(Object[] row) {
+        SalesQuotationSchHdrDto.LovDetailDto detail = new SalesQuotationSchHdrDto.LovDetailDto();
+
+        if (row != null && row.length > 0) {
+            // Poid (index 0)
+            if (row[0] != null) {
+                if (row[0] instanceof java.math.BigDecimal) {
+                    detail.setPoid(((java.math.BigDecimal) row[0]).longValue());
+                } else if (row[0] instanceof Number) {
+                    detail.setPoid(((Number) row[0]).longValue());
+                }
+            }
+
+            // Code (index 1)
+            if (row.length > 1 && row[1] != null) {
+                detail.setCode(row[1].toString());
+            }
+
+            // Description (index 2)
+            if (row.length > 2 && row[2] != null) {
+                detail.setDescription(row[2].toString());
+            }
+        }
+
+        // If all fields are null, return empty detail
+        if (detail.getPoid() == null && detail.getCode() == null && detail.getDescription() == null) {
+            return createEmptyLovDetail();
+        }
+
+        return detail;
+    }
+
+    private SalesQuotationSchHdrDto populateQuotationSchFromQueryResult(Object[] row, boolean includeDetails) {
+        SalesQuotationSchHdrDto dto = new SalesQuotationSchHdrDto();
+
+        // Quotation Header fields (indices 0-53)
+        int index = 0;
+        dto.setTransactionPoid(getLongValue(row[index++]));
+        dto.setDocRef(getStringValue(row[index++]));
+        dto.setTransactionDate(getTimestampValue(row[index++]));
+        dto.setCompanyPoid(getLongValue(row[index++]));
+        dto.setCustomerPoid(getBigDecimalValue(row[index++]));
+        dto.setAddressPoid(getLongValue(row[index++]));
+        dto.setCurrencyCode(getStringValue(row[index++]));
+        dto.setCurrencyRate(getBigDecimalValue(row[index++]));
+        dto.setQuotationStatus(getStringValue(row[index++]));
+        dto.setSalesmanPoid(getLongValue(row[index++]));
+        dto.setValidityFromDate(getLocalDateValue(row[index++]));
+        dto.setValidityToDate(getLocalDateValue(row[index++]));
+        dto.setPaymentMode(getStringValue(row[index++]));
+        dto.setDeliveryTerms(getStringValue(row[index++]));
+        dto.setLinePoid(getLongValue(row[index++]));
+        dto.setVesselPoid(getStringValue(row[index++]));
+        dto.setVesselName(getStringValue(row[index++]));
+        dto.setVoyageRef(getStringValue(row[index++]));
+        dto.setPortPoid(getLongValue(row[index++]));
+        dto.setPortDescription(getStringValue(row[index++]));
+        dto.setRemarks(getStringValue(row[index++]));
+        dto.setTotalDiscount(getBigDecimalValue(row[index++]));
+        dto.setTotalAmount(getLongValue(row[index++]));
+        dto.setActionStatus(getStringValue(row[index++]));
+        dto.setActionDueDate(getLocalDateValue(row[index++]));
+        dto.setEnquiryRefNumber(getLongValue(row[index++]));
+        dto.setLostReason(getStringValue(row[index++]));
+        dto.setBusinessPromotionValue(getLongValue(row[index++]));
+        dto.setPercentage(getLongValue(row[index++]));
+        dto.setDetails(getStringValue(row[index++]));
+        dto.setExpectedDeliveryDate(getLocalDateValue(row[index++]));
+        dto.setVesselAgent(getStringValue(row[index++]));
+        dto.setQuotedRate(getStringValue(row[index++]));
+        dto.setRfqRefNo(getStringValue(row[index++]));
+        dto.setPercentageDisc(getBigDecimalValue(row[index++]));
         dto.setTotalGpAmt(getLongValue(row[index++]));
         dto.setTotalGpPercentage(getLongValue(row[index++]));
         dto.setCustomerRef(getStringValue(row[index++]));
@@ -1164,7 +1594,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // ADDRESS_POID, CONTACT_PERSON, EMAIL1, MOBILE
         AddressDetailsResponse addressDetails = new AddressDetailsResponse();
         if (row.length > index && row[index] != null) {
-            addressDetails.setAddressPoid(getLongValue(row[index]));
+            addressDetails.setAddressPoid(getBigDecimalValue(row[index]));
         }
         if (row.length > index + 1 && row[index + 1] != null) {
             addressDetails.setContactPerson(getStringValue(row[index + 1]));
@@ -1275,15 +1705,95 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         return null;
     }
 
+    private BigDecimal getBigDecimalValue(Object obj) {
+        if (obj == null)
+            return null;
+        if (obj instanceof BigDecimal) {
+            return (BigDecimal) obj;
+        }
+        if (obj instanceof Number) {
+            return BigDecimal.valueOf(((Number) obj).doubleValue());
+        }
+        return null;
+    }
+
     private String getStringValue(Object obj) {
         return obj != null ? obj.toString() : null;
     }
 
-    private Timestamp getTimestampValue(Object obj) {
+    /**
+     * Map Object[] to AddressDetailsResponse (full format)
+     * Format: [ADDRESS_POID, ADDRESS_NAME, CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
+     * 
+     * @param row Object array containing address details
+     * @return AddressDetailsResponse object
+     */
+    private AddressDetailsResponse mapToAddressDetailsResponse(Object[] row) {
+        AddressDetailsResponse response = new AddressDetailsResponse();
+        if (row != null && row.length > 0 && row[0] != null) {
+            response.setAddressPoid(getBigDecimalValue(row[0]));
+        }
+        if (row != null && row.length > 1 && row[1] != null) {
+            response.setAddressName(getStringValue(row[1]));
+        }
+        if (row != null && row.length > 2 && row[2] != null) {
+            response.setContactPerson(getStringValue(row[2]));
+        }
+        if (row != null && row.length > 3 && row[3] != null) {
+            response.setEmail1(getStringValue(row[3]));
+        }
+        if (row != null && row.length > 4 && row[4] != null) {
+            response.setTelephone(getStringValue(row[4]));
+        }
+        if (row != null && row.length > 5 && row[5] != null) {
+            response.setMobile(getStringValue(row[5]));
+        }
+        return response;
+    }
+
+  /*  private Timestamp getTimestampValue(Object obj) {
         if (obj == null)
             return null;
         if (obj instanceof Timestamp) {
             return (Timestamp) obj;
+        }
+        return null;
+    }*/
+
+    private LocalDateTime getTimestampValue(Object obj) {
+        if (obj == null) {
+            return null;
+        }
+        if (obj instanceof LocalDateTime) {
+            return (LocalDateTime) obj;
+        }
+        if (obj instanceof Timestamp) {
+            return ((Timestamp) obj).toLocalDateTime();
+        }
+        if (obj instanceof Date) {
+            return ((Date) obj).toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+        }
+        return null;
+    }
+
+    private LocalDate getLocalDateValue(Object obj) {
+        if (obj == null) {
+            return null;
+        }
+        if (obj instanceof LocalDate) {
+            return (LocalDate) obj;
+        }
+        if (obj instanceof java.sql.Date) {
+            return ((java.sql.Date) obj).toLocalDate();
+        }
+        if (obj instanceof Timestamp) {
+            return ((Timestamp) obj).toLocalDateTime().toLocalDate();
+        }
+        if (obj instanceof LocalDateTime) {
+            return ((LocalDateTime) obj).toLocalDate();
+        }
+        if (obj instanceof java.util.Date) {
+            return ((java.util.Date) obj).toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
         }
         return null;
     }
@@ -1526,6 +2036,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 if (row == null) {
                     continue; // Skip empty rows
                 }
+                if (isExcelRowEmpty(row)) {
+                    continue; // Skip rows with no data (empty cells)
+                }
 
                 try {
                     SalesQuotationSchItemDtl itemDtl = parseExcelRowToItemDtl(row, transactionPoid, nextDetRowId++,
@@ -1538,6 +2051,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                         continue;
                     }
 
+                    itemDtl.setItemType("BILLABLE");
                     // Save item detail
                     itemDtlRepository.save(itemDtl);
                     successfulRows++;
@@ -1595,8 +2109,9 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     /**
      * Parse Excel row to SalesQuotationSchItemDtl entity
      * Expected columns (0-based index):
-     * Column 5 (F): Stock Code (required)
-     * Column 6 (G): Stock Remarks (optional)
+     * Column 1 (B): STOCK_POID (optional - if provided, used directly; else lookup by Stock Code)
+     * Column 4 (E): Stock Code (optional - used to lookup STOCK_POID if column B is empty)
+     * Column 5 (F): Stock Remarks (optional)
      * Column 8 (I): Quantity (required)
      */
     private SalesQuotationSchItemDtl parseExcelRowToItemDtl(Row row, Long transactionPoid, Long detRowId, String userId,
@@ -1604,33 +2119,50 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         SalesQuotationSchItemDtl itemDtl = new SalesQuotationSchItemDtl();
         itemDtl.setTransactionPoid(transactionPoid);
         itemDtl.setDetRowId(detRowId);
-        itemDtl.setCreatedBy(userId);
-        itemDtl.setLastmodifiedBy(userId);
+        itemDtl.setItemType("BILLABLE"); // default for Excel import
 
-        // Stock Code (required) - Column 4 (F)
-        Cell stockCodeCell = row.getCell(4);
-        if (stockCodeCell != null) {
-            String stockCode = getStringValueFromCell(stockCodeCell);
-            if (stockCode != null && !stockCode.trim().isEmpty()) {
+        // STOCK_POID (optional) - Column 1 (B) - if provided, use it directly
+        Cell stockPoidCell = row.getCell(1);
+        if (stockPoidCell != null) {
+            Long stockPoid = getLongValueFromCell(stockPoidCell);
+            if (stockPoid != null && stockPoid > 0) {
                 try {
-                    StockDetailsResponse stockDetails = stockMasterService.getStockDetailsByCode(stockCode.trim(),
-                            companyPoid);
-                    // Check if stock was found (stockPoid is not null)
+                    StockDetailsResponse stockDetails = stockMasterService.getStockDetails(stockPoid, companyPoid);
                     if (stockDetails != null && stockDetails.getStockPoid() != null) {
                         BeanUtils.copyProperties(stockDetails, itemDtl);
                     } else {
-                        // Stock not found - return empty itemDtl
-                        log.warn("Stock not found for stockCode={}, returning empty itemDtl", stockCode);
-                        return itemDtl; // Return empty itemDtl with only basic fields set
+                        log.warn("Stock not found for stockPoid={}, will try Stock Code", stockPoid);
                     }
                 } catch (ResourceNotFoundException e) {
-                    // Stock not found - return empty itemDtl instead of throwing exception
-                    log.warn("Stock not found for stockCode={}, returning empty itemDtl: {}", stockCode,
-                            e.getMessage());
-                    return itemDtl; // Return empty itemDtl with only basic fields set
+                    log.warn("Stock not found for stockPoid={}: {}", stockPoid, e.getMessage());
                 } catch (Exception e) {
-                    log.warn("Error fetching stock details for stockCode=" + stockCode + ": " + e.getMessage());
-                    return itemDtl; // Return empty itemDtl with only basic fields set
+                    log.warn("Error fetching stock details for stockPoid={}: {}", stockPoid, e.getMessage());
+                }
+            }
+        }
+
+        // If STOCK_POID still not set, try Stock Code lookup - Column 4 (E)
+        if (itemDtl.getStockPoid() == null) {
+            Cell stockCodeCell = row.getCell(4);
+            if (stockCodeCell != null) {
+                String stockCode = getStringValueFromCell(stockCodeCell);
+                if (stockCode != null && !stockCode.trim().isEmpty()) {
+                    try {
+                        StockDetailsResponse stockDetails = stockMasterService.getStockDetailsByCode(stockCode.trim(),
+                                companyPoid);
+                        if (stockDetails != null && stockDetails.getStockPoid() != null) {
+                            BeanUtils.copyProperties(stockDetails, itemDtl);
+                        } else {
+                            log.warn("Stock not found for stockCode={}, returning empty itemDtl", stockCode);
+                            return itemDtl;
+                        }
+                    } catch (ResourceNotFoundException e) {
+                        log.warn("Stock not found for stockCode={}: {}", stockCode, e.getMessage());
+                        return itemDtl;
+                    } catch (Exception e) {
+                        log.warn("Error fetching stock details for stockCode={}: {}", stockCode, e.getMessage());
+                        return itemDtl;
+                    }
                 }
             }
         }
@@ -1647,13 +2179,46 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Quantity - Column 8 (I)
         Cell quantityCell = row.getCell(8);
         if (quantityCell != null) {
-            Long quantity = getLongValueFromCell(quantityCell);
-            if (quantity != null && quantity > 0) {
+            BigDecimal quantity = getBigDecimalValueFromCell(quantityCell);
+            if (quantity != null && quantity.compareTo(BigDecimal.ZERO) > 0) {
                 itemDtl.setQuantity(quantity);
             }
         }
 
         return itemDtl;
+    }
+
+    /**
+     * Returns true if every cell from index 0 to 8 in the row is empty or null (skip the row during Excel import).
+     */
+    private boolean isExcelRowEmpty(Row row) {
+        if (row == null) {
+            return true;
+        }
+        for (int i = 0; i <= 8; i++) {
+            if (excelCellHasContent(row.getCell(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Returns true if the cell has any non-empty value (string or numeric).
+     */
+    private boolean excelCellHasContent(Cell cell) {
+        if (cell == null) {
+            return false;
+        }
+        String s = getStringValueFromCell(cell);
+        if (s != null && !s.trim().isEmpty()) {
+            return true;
+        }
+        Long n = getLongValueFromCell(cell);
+        if (n != null) {
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -1685,6 +2250,41 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
             case FORMULA:
                 try {
                     return (long) cell.getNumericCellValue();
+                } catch (Exception e) {
+                    return null;
+                }
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Extract BigDecimal value from Excel cell
+     */
+    private BigDecimal getBigDecimalValueFromCell(Cell cell) {
+        if (cell == null) {
+            return null;
+        }
+
+        switch (cell.getCellType()) {
+            case NUMERIC:
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return null; // Date cells are not converted to BigDecimal
+                }
+                return BigDecimal.valueOf(cell.getNumericCellValue());
+            case STRING:
+                String stringValue = cell.getStringCellValue().trim();
+                if (stringValue.isEmpty()) {
+                    return null;
+                }
+                try {
+                    return new BigDecimal(stringValue);
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            case FORMULA:
+                try {
+                    return BigDecimal.valueOf(cell.getNumericCellValue());
                 } catch (Exception e) {
                     return null;
                 }
@@ -1783,5 +2383,51 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 currencyPoid, currency.getCurrencyCode(), latestRate.getBuyRate(), latestRate.getSellRate());
 
         return response;
+    }
+
+    @Override
+    public byte[] print(Long transactionPoid) throws Exception {
+        Map<String, Object> params = printService.buildBaseParams(transactionPoid, "350-104");
+        params.put("SUB_SALES_DTL", printService.load("ShipChandling/SALES/Sales_quotation_Items.jrxml"));
+        JasperReport mainReport = printService.load("ShipChandling/SALES/Sales_quotation.jrxml");
+        return printService.fillReportToPdf(mainReport, params, dataSource);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AddressDetailsResponse getAddressDetailsByPoid(java.math.BigDecimal addressPoid) {
+        log.info("getAddressDetailsByPoid called for addressPoid={}", addressPoid);
+
+        if (addressPoid == null) {
+            throw new CustomException("Address POID is required");
+        }
+
+        // Single query with JOIN - faster than entity-based approach (one round trip vs two)
+        Object[] result = globalAddressDetailsRepository.findAddressDetailsWithNameByAddressPoid(addressPoid)
+                .orElseThrow(() -> new ResourceNotFoundException("Address", "addressPoid", addressPoid));
+
+        // Handle wrapped result - if result[0] is an Object[], use it; otherwise use result directly
+        Object[] row;
+        if (result != null && result.length > 0 && result[0] instanceof Object[]) {
+            row = (Object[]) result[0];
+        } else {
+            row = result;
+        }
+
+        // Map Object[] to AddressDetailsResponse
+        // [ADDRESS_POID, DESCRIPTION (ADDRESS_NAME || ', TYPE-' || ADDRESS_TYPE), CONTACT_PERSON, EMAIL1, OFF_TEL1, MOBILE]
+        AddressDetailsResponse response = mapToAddressDetailsResponse(row);
+
+        log.info("getAddressDetailsByPoid completed for addressPoid={}", addressPoid);
+
+        return response;
+    }
+
+    private boolean isAddressChanged(AddressDetailsResponse oldSnap, AddressDetailsResponse newSnap) {
+        if (oldSnap == null && newSnap != null) return true;
+        if (oldSnap != null && newSnap == null) return true;
+        if (oldSnap == null) return false;
+
+        return !Objects.equals(oldSnap, newSnap);
     }
 }

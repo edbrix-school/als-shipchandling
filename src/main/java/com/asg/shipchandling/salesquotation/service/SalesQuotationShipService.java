@@ -1,5 +1,10 @@
 package com.asg.shipchandling.salesquotation.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.salesquotation.dto.*;
 import com.asg.shipchandling.salesquotation.entity.*;
 import com.asg.shipchandling.salesquotation.dto.*;
@@ -36,6 +41,8 @@ public class SalesQuotationShipService {
     private final SalesQuotationShipEquipmentDetailRepository equipmentDetailRepository;
     private final JdbcTemplate jdbcTemplate;
     private final EntityManager entityManager;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
 
     // Default currency code - can be retrieved from parameter SALES_QUOTATION_SH_DEF_CURRENCY
     private static final String DEFAULT_CURRENCY_CODE = "USD";
@@ -46,12 +53,16 @@ public class SalesQuotationShipService {
                                      SalesQuotationShipChargeDetailRepository chargeDetailRepository,
                                      SalesQuotationShipEquipmentDetailRepository equipmentDetailRepository,
                                      JdbcTemplate jdbcTemplate,
-                                     EntityManager entityManager) {
+                                     EntityManager entityManager,
+                                     LoggingService loggingService,
+                                     DocumentDeleteService documentDeleteService) {
         this.repository = repository;
         this.chargeDetailRepository = chargeDetailRepository;
         this.equipmentDetailRepository = equipmentDetailRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.entityManager = entityManager;
+        this.loggingService = loggingService;
+        this.documentDeleteService = documentDeleteService;
     }
 
     public SalesQuotationShipListResponse search(SalesQuotationShipFilter filter, BigDecimal userId) {
@@ -337,11 +348,7 @@ public class SalesQuotationShipService {
         if (auditUserId == null || auditUserId.isBlank()) {
             throw new IllegalArgumentException("userId or userPoid is required for audit fields");
         }
-        header.setCreatedBy(auditUserId);
-        header.setCreatedDate(now);
-        header.setLastModifiedBy(auditUserId);
-        header.setLastModifiedDate(now);
-        
+
         // Set Active default to "Y"
         header.setDeleted(command.getDeleted() != null ? command.getDeleted() : "N");
         
@@ -377,6 +384,10 @@ public class SalesQuotationShipService {
         
         // Reload to get auto-generated DocRef
         SalesQuotationShipHeader refreshed = reloadHeader(savedWithTotals);
+        
+        String key = refreshed.getTransactionPoid().toString();
+        String documentId = UserContext.getDocumentId();
+        loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
         
         return toDetailDto(refreshed);
     }
@@ -421,6 +432,9 @@ public class SalesQuotationShipService {
             header.getEquipment().size();
         }
         
+        SalesQuotationShipHeader oldEntity = new SalesQuotationShipHeader();
+        org.springframework.beans.BeanUtils.copyProperties(header, oldEntity);
+        
         // Validate status-based editing restrictions
         validateStatusForUpdate(header.getQuotationStatus());
         
@@ -439,8 +453,7 @@ public class SalesQuotationShipService {
         
         // Restore read-only fields (DocRef, CreatedBy, CreatedDate)
         header.setDocRef(originalDocRef); // DocRef is read-only
-        header.setCreatedBy(originalCreatedBy); // CreatedBy should NOT be updated
-        header.setCreatedDate(originalCreatedDate); // CreatedDate should NOT be updated
+       // CreatedDate should NOT be updated
         
         // Handle customer validation
         if ("Y".equalsIgnoreCase(command.getNewCustomer())) {
@@ -471,8 +484,6 @@ public class SalesQuotationShipService {
         if (auditUserId == null || auditUserId.isBlank()) {
             throw new IllegalArgumentException("userId or userPoid is required for audit fields");
         }
-        header.setLastModifiedBy(auditUserId);
-        header.setLastModifiedDate(now);
         
         // Map charges and equipment (upsert pattern)
         mapCharges(header, command.getCharges());
@@ -500,6 +511,10 @@ public class SalesQuotationShipService {
         
         // Reload to get any database-generated values
         SalesQuotationShipHeader refreshed = reloadHeader(savedWithTotals);
+        
+        String key = refreshed.getTransactionPoid().toString();
+        loggingService.logChanges(oldEntity, refreshed, SalesQuotationShipHeader.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
         
         return toDetailDto(refreshed);
     }
@@ -597,7 +612,7 @@ public class SalesQuotationShipService {
     }
 
     @Transactional
-    public SalesQuotationShipDeleteResponse deleteQuotation(BigDecimal transactionPoid, BigDecimal companyPoid, String userId) {
+    public SalesQuotationShipDeleteResponse deleteQuotation(BigDecimal transactionPoid, BigDecimal companyPoid, String userId, DeleteReasonDto deleteReasonDto) {
         Objects.requireNonNull(transactionPoid, "transactionPoid is required");
         Objects.requireNonNull(companyPoid, "companyPoid is required");
         Objects.requireNonNull(userId, "userId is required");
@@ -622,14 +637,19 @@ public class SalesQuotationShipService {
         
         // Validate status before allowing delete
         validateStatusForDelete(header.getQuotationStatus());
-        
+        documentDeleteService.deleteDocument(
+                header.getTransactionPoid().longValueExact(),
+                "SALES_QUOTATION_SHIP_HDR",
+                "TRANSACTION_POID",
+                deleteReasonDto,
+                header.getTransactionDate()
+        );
         // Perform soft delete (set Deleted = 'Y')
         header.setDeleted("Y");
-        
+
         // Update audit fields
         LocalDateTime now = LocalDateTime.now();
-        header.setLastModifiedBy(userId);
-        header.setLastModifiedDate(now);
+
         
         // Save the soft-deleted quotation
         repository.save(header);
@@ -1153,10 +1173,6 @@ public class SalesQuotationShipService {
 
         // Set audit fields
         LocalDateTime now = LocalDateTime.now();
-        chargeDetail.setCreatedBy(userId);
-        chargeDetail.setCreatedDate(now);
-        chargeDetail.setLastModifiedBy(userId);
-        chargeDetail.setLastModifiedDate(now);
 
         // Add charge detail to header collection (for bidirectional relationship)
         header.addCharge(chargeDetail);
@@ -1379,11 +1395,6 @@ public class SalesQuotationShipService {
         calculateChargeAmounts(chargeDetail, header.getQuotationType());
 
         // Update audit fields (preserve createdBy and createdDate)
-        chargeDetail.setCreatedBy(originalCreatedBy);
-        chargeDetail.setCreatedDate(originalCreatedDate);
-        LocalDateTime now = LocalDateTime.now();
-        chargeDetail.setLastModifiedBy(userId);
-        chargeDetail.setLastModifiedDate(now);
 
         // Save charge detail (it's already in the header's collection)
         chargeDetail = chargeDetailRepository.save(chargeDetail);
@@ -1556,11 +1567,6 @@ public class SalesQuotationShipService {
         equipmentDetail.setRemarks(request.getRemarks());
 
         // Set audit fields
-        LocalDateTime now = LocalDateTime.now();
-        equipmentDetail.setCreatedBy(userId);
-        equipmentDetail.setCreatedDate(now);
-        equipmentDetail.setLastModifiedBy(userId);
-        equipmentDetail.setLastModifiedDate(now);
 
         // Add equipment detail to header collection (for bidirectional relationship)
         header.addEquipment(equipmentDetail);
@@ -1643,11 +1649,7 @@ public class SalesQuotationShipService {
         equipmentDetail.setRemarks(request.getRemarks());
 
         // Update audit fields (preserve createdBy and createdDate)
-        equipmentDetail.setCreatedBy(originalCreatedBy);
-        equipmentDetail.setCreatedDate(originalCreatedDate);
-        LocalDateTime now = LocalDateTime.now();
-        equipmentDetail.setLastModifiedBy(userId);
-        equipmentDetail.setLastModifiedDate(now);
+
 
         // Save equipment detail (it's already in the header's collection)
         equipmentDetail = equipmentDetailRepository.save(equipmentDetail);

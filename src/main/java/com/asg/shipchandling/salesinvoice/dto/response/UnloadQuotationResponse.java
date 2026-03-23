@@ -1,5 +1,6 @@
 package com.asg.shipchandling.salesinvoice.dto.response;
 
+import com.asg.shipchandling.salesinvoice.dto.SalesInvoiceHdrDto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -10,4 +11,5 @@ import lombok.NoArgsConstructor;
 public class UnloadQuotationResponse {
     private Boolean success;
     private String message;
+    private SalesInvoiceHdrDto invoice;
 }

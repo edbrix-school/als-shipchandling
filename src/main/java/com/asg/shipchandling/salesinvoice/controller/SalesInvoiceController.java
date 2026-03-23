@@ -1,6 +1,9 @@
 package com.asg.shipchandling.salesinvoice.controller;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.salesinvoice.dto.*;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.CreateSalesDnDtlRequest;
@@ -12,19 +15,20 @@ import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesDnDtlRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceDtlRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceRequest;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDiscountCommissionResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateDueDateResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateGpResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadDeliveryNoteResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationCurrencyResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationItemsResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationSummaryResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationAndCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.VerifyInvoiceResponse;
 import com.asg.shipchandling.salesinvoice.service.SalesInvoiceService;
 import com.asg.common.lib.security.util.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
@@ -35,13 +39,16 @@ import com.asg.common.lib.enums.UserRolesRightsEnum;
 
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.List;
 
+import static com.asg.common.lib.dto.response.ApiResponse.error;
 import static com.asg.shipchandling.common.ApiResponse.success;
 
 @RestController
@@ -51,6 +58,7 @@ import static com.asg.shipchandling.common.ApiResponse.success;
 public class SalesInvoiceController {
 
         private final SalesInvoiceService invoiceService;
+        private final LoggingService loggingService;
 
         // ==================== BASIC CRUD OPERATIONS ====================
 
@@ -86,6 +94,7 @@ public class SalesInvoiceController {
                 SalesInvoiceHdrDto dto = invoiceService.getSalesInvoiceByPoid(
                                 transactionPoid, UserContext.getCompanyPoid(), includeDetails);
                 log.info("Sales invoice fetched with transactionPoid: {} companyId: {}", transactionPoid, UserContext.getCompanyPoid());
+            loggingService.createLogSummaryEntry(LogDetailsEnum.VIEWED, UserContext.getDocumentId(), transactionPoid.toString());
                 return success("Sales invoice fetched successfully", dto);
         }
 
@@ -118,10 +127,11 @@ public class SalesInvoiceController {
         @DeleteMapping("/{transactionPoid}")
         @AllowedAction(UserRolesRightsEnum.DELETE)
         public ResponseEntity<?> deleteSalesInvoice(
-                        @PathVariable Long transactionPoid) {
+                        @PathVariable Long transactionPoid,
+                        @Valid @RequestBody(required = false) DeleteReasonDto deleteReasonDto) {
                 log.info("Deleting sales invoice with transactionPoid: {} groupId: {} companyId: {}", transactionPoid,
                                 UserContext.getGroupPoid(), UserContext.getCompanyPoid());
-                invoiceService.deleteSalesInvoice(transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
+                invoiceService.deleteSalesInvoice(transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(),deleteReasonDto);
                 log.info("Sales invoice deleted with transactionPoid: {} groupId: {} companyId: {}", transactionPoid,
                                 UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 return success("Sales invoice deleted successfully", null);
@@ -283,32 +293,35 @@ public class SalesInvoiceController {
 
         // ==================== BUSINESS LOGIC APIs ====================
 
-        @Operation(summary = "Recalculates GP", description = "Recalculates Gross Profit for the invoice. Calls PROC_AR_SCH_GP_CALC.")
+        @Operation(summary = "Recalculates GP", description = "Recalculates discount/commission/GP for the invoice. Calls PROC_AR_SCH_DIS_COM_CAL.")
         @PostMapping("/{transactionPoid}/refresh-gp")
         @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> calculateGp(
-                        @PathVariable Long transactionPoid) {
+                        @PathVariable Long transactionPoid,
+                        @RequestBody CalculateDiscountCommissionRequest request) {
                 log.info("Calculating GP for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
-                CalculateGpResponse response = invoiceService.calculateGp(transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), "");
+                RefreshGpProcResponse response = invoiceService.calculateGp(
+                                transactionPoid, request, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserPoid());
                 log.info("GP calculated for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 return success(response.getMessage(), response);
         }
 
+        //not used anymore
         @Operation(summary = "Calculate Due Date", description = "Calculates due date from transaction date and credit days. Calls PROC_CALC_DUEDAYS.")
-        @GetMapping("/{transactionPoid}/calculate-due-date")
+        @GetMapping("/{customerPoid}/calculate-due-date")
         @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> calculateDueDate(
-                        @PathVariable Long transactionPoid,
-                        @RequestParam Timestamp transactionDate,
+                        @PathVariable Long customerPoid,
+                        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate docDate,
                         @RequestParam Long creditDays) {
-                log.info("Calculating due date for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
-                CalculateDueDateResponse response = invoiceService.calculateDueDate(transactionPoid,
-                                transactionDate, creditDays, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
-                log.info("Due date calculated for sales invoice with transactionPoid: {} groupId: {} companyId: {}",
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
+                log.info("Calculating due date for sales invoice with customerPoid: {} groupId: {} companyId: {}",
+                        customerPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
+                CreditDetailsResponse response = invoiceService.calculateDueDate(customerPoid,
+                        docDate, creditDays);
+                log.info("Due date calculated for sales invoice with customerPoid: {} groupId: {} companyId: {}",
+                        customerPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 return success("Due date calculated successfully", response);
         }
 
@@ -346,7 +359,7 @@ public class SalesInvoiceController {
                 return success("", response);
         }
 
-        @Operation(summary = "Load Quotation", description = "Loads quotation items into invoice. Invoice details table must be empty. Calls PROC_AR_SCH_QTN_LOAD_BUTTON.")
+        @Operation(summary = "Load Quotation", description = "Loads quotation items into invoice and cost booking details. Calls PROC_AR_SCH_UNLOAD_QUOTATION1, PROC_AR_SCH_QTN_LOAD_BUTTON, and PROC_AR_SCH_SALES_INV_PJ_LOAD1.")
         @PostMapping("/{transactionPoid}/load-quotation")
         @AllowedAction(UserRolesRightsEnum.CREATE)
         public ResponseEntity<?> loadQuotationItems(
@@ -354,17 +367,12 @@ public class SalesInvoiceController {
                         @RequestBody LoadQuotationItemsRequest request) {
                 log.info("Loading quotation items into sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
-                LoadQuotationItemsResponse response = invoiceService.loadQuotationItems(
+                LoadQuotationAndCostBookingsResponse response = invoiceService.loadQuotationAndCostBookings(
                                 transactionPoid, request,
-                                // request.getQtnPoid(), request.getIncentiveAmt(),
-                                // request.getIncentiveAmt2(), request.getIncentiveAmt3(),
                                 UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
-                SalesInvoiceHdrDto dto = invoiceService.getSalesInvoiceByPoid(
-                                transactionPoid, UserContext.getCompanyPoid(), true);
-                response.setInvoice(dto);
                 log.info("Quotation items loaded into sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
-                return success(response.getMessage(), response);
+                return success("", response);
         }
 
         @Operation(summary = "Load Delivery Note", description = "Loads delivery note items into invoice. Delivery notes must be selected first. Invoice details table must be empty. Calls PROC_AR_SCH_SALESINV_DN_LOAD.")
@@ -385,11 +393,12 @@ public class SalesInvoiceController {
         @PostMapping("/{transactionPoid}/unload-quotation")
         @AllowedAction(UserRolesRightsEnum.EDIT)
         public ResponseEntity<?> unloadQuotation(
-                        @PathVariable Long transactionPoid) {
+                        @PathVariable Long transactionPoid,
+                        @RequestParam Long qtnPoid) {
                 log.info("Unloading quotation from sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 UnloadQuotationResponse response = invoiceService.unloadQuotation(
-                                transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
+                                transactionPoid, qtnPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 log.info("Quotation unloaded from sales invoice with transactionPoid: {} groupId: {} companyId: {} userId: {}",
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getUserId());
                 return success(response.getMessage(), response);
@@ -441,26 +450,25 @@ public class SalesInvoiceController {
         @PostMapping("/load-credit-details")
         @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> loadCreditDetails(
-                        @RequestParam Long customerPoid,
                         @RequestBody CreditDetailsRequest request) {
-                log.info("Loading credit details for customerPoid: {} groupId: {} companyId: {}", customerPoid,
+                log.info("Loading credit details for partyPoid: {} groupId: {} companyId: {}", request.getPartyPoid(),
                                 UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 CreditDetailsResponse response = invoiceService.loadCreditDetails(
-                                customerPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid(), request);
-                log.info("Credit details loaded for customerPoid: {} groupId: {} companyId: {}", customerPoid,
+                                UserContext.getGroupPoid(), UserContext.getCompanyPoid(), UserContext.getDocumentId(), request);
+                log.info("Credit details loaded for partyPoid: {} groupId: {} companyId: {}", request.getPartyPoid(),
                                 UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 return success(response.getMessage(), response);
         }
 
-        @Operation(summary = "Load Quotation Currency", description = "Loads currency code and rate from quotation. Calls PROC_AR_SCH_QTN_LOAD_CUR1.")
-        @GetMapping("/load-quotation-currency/{transactionPoid}")
-        @AllowedAction(UserRolesRightsEnum.VIEW)
-        public ResponseEntity<?> loadQuotationCurrency(
+        @Operation(summary = "Load Quotation Summary", description = "Loads quotation summary fields using the cursor returned by PROC_AR_SCH_QTN_LOAD_CUR1.")
+        @PostMapping("/load-quotation-summary/{transactionPoid}")
+        @AllowedAction(UserRolesRightsEnum.EDIT)
+        public ResponseEntity<?> loadQuotationSummary(
                         @PathVariable Long transactionPoid,
-                        @RequestParam String qtnPoid) {
-                log.info("Loading quotation currency for qtnPoid: {}", qtnPoid);
-                LoadQuotationCurrencyResponse response = invoiceService.loadQuotationCurrency(transactionPoid, qtnPoid);
-                log.info("Quotation currency loaded for qtnPoid: {}", qtnPoid);
+                        @RequestParam Long qtnPoid) {
+                log.info("Loading quotation summary for qtnPoid: {}", qtnPoid);
+                LoadQuotationSummaryResponse response = invoiceService.loadQuotationSummary(transactionPoid, qtnPoid);
+                log.info("Quotation summary loaded for qtnPoid: {}", qtnPoid);
                 return success(response.getMessage(), response);
         }
 
@@ -477,4 +485,32 @@ public class SalesInvoiceController {
                                 transactionPoid, UserContext.getGroupPoid(), UserContext.getCompanyPoid());
                 return success("Dependency check completed", dto);
         }
+
+    @AllowedAction(UserRolesRightsEnum.PRINT)
+    @Operation(
+            summary = "Generate PDF for Sales Invoice",
+            description = "Generate PDF report for a specific Sales Invoice",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "PDF generated successfully",
+                            content = @Content(mediaType = "application/pdf")),
+                    @ApiResponse(responseCode = "404", description = "Sales Invoice not found"),
+                    @ApiResponse(responseCode = "500", description = "Failed to generate PDF")
+            }
+    )
+    @GetMapping("/print/{transactionPoid}")
+    public ResponseEntity<?> print(
+            @Parameter(description = "Transaction POID", example = "281")
+            @PathVariable Long transactionPoid) {
+        try {
+            byte[] pdf = invoiceService.print(transactionPoid);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=imco-deposit-refund-" + transactionPoid + ".pdf")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(pdf);
+        } catch (Exception e) {
+            log.error("Failed to generate PDF for Sales Invoice: {}", transactionPoid, e);
+            return error("Failed to generate PDF: " + e.getMessage(), 500);
+        }
+    }
 }

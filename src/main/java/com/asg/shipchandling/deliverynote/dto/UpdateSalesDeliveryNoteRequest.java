@@ -6,7 +6,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.sql.Timestamp;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -15,14 +16,14 @@ import java.util.List;
 public class UpdateSalesDeliveryNoteRequest {
     // Same fields as CreateSalesDeliveryNoteRequest (excluding transactionPoid, docRef, createdBy, createdDate, qtnRefNo)
     
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
 
     private Long customerPoid;
 
     @Size(max = 20, message = "Currency code must not exceed 20 characters")
     private String currencyCode;
     
-    private Long currencyRate;
+    private BigDecimal currencyRate;
 
     @Size(max = 20, message = "Delivery status must not exceed 20 characters")
     private String deliveryStatus;
@@ -59,6 +60,8 @@ public class UpdateSalesDeliveryNoteRequest {
 
     @Size(max = 1, message = "Description print flag must be Y or N")
     private String descriptionPrintYn;
+
+    private Long printDivisionPoid;
 
     @Size(max = 500, message = "Remarks must not exceed 500 characters")
     private String remarks;

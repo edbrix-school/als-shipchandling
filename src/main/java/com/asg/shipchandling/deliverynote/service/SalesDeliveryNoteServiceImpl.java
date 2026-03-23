@@ -1,9 +1,16 @@
 package com.asg.shipchandling.deliverynote.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
+import com.asg.common.lib.service.PrintService;
+import com.asg.common.lib.security.util.UserContext;
 import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.commonlov.service.LovService;
 import com.asg.shipchandling.deliverynote.dto.*;
@@ -15,6 +22,7 @@ import com.asg.shipchandling.deliverynote.repository.SalesDeliveryNoteRepository
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
 import com.asg.shipchandling.exceptions.CustomException;
 import com.asg.shipchandling.deliverynote.repository.SalesDeliveryNoteHdrRepositoryImpl;
+import com.asg.shipchandling.salesinvoice.entity.SalesInvoiceDtl;
 import com.asg.shipchandling.salesinvoice.repository.SalesDnDtlRepository;
 import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
 import com.asg.shipchandling.StockMaster.repository.StockMasterRepository;
@@ -23,8 +31,10 @@ import com.asg.shipchandling.stockunitmaster.repository.StockUnitRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import net.sf.jasperreports.engine.JasperReport;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -43,9 +53,10 @@ import java.sql.ResultSet;
 
 import javax.sql.DataSource;
 import java.sql.SQLException;
-import java.sql.Timestamp;
+import java.math.BigDecimal;
 import java.sql.Types;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -68,6 +79,9 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     private final StockUnitRepository stockUnitRepository;
     private final DocumentSearchService documentService;
     private final LovService lovService;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
+    private final PrintService printService;
 
     // Add OracleDataSource or DataSource injection for stored procedure calls
     private final DataSource dataSource;
@@ -86,13 +100,14 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
         // Create entity
         SalesDeliveryNoteHdr deliveryNote = new SalesDeliveryNoteHdr();
-        BeanUtils.copyProperties(request, deliveryNote);
+        BeanUtils.copyProperties(request, deliveryNote, "qtnRefNo");
         deliveryNote.setCompanyPoid(companyPoid);
-        deliveryNote.setCreatedBy(userId);
-        deliveryNote.setLastmodifiedBy(userId);
         deliveryNote.setDeleted("N");
         deliveryNote.setDescriptionPrintYn("Y"); // Default value
-        deliveryNote.setTransactionDate(new Timestamp(System.currentTimeMillis())); // Set current date
+        LocalDateTime resolvedTransactionDate = request.getTransactionDate() != null
+                ? request.getTransactionDate()
+                : LocalDateTime.now();
+        deliveryNote.setTransactionDate(resolvedTransactionDate);
 
         // Handle partyType-based field requirements
         if (request.getPartyType() != null && "PRINCIPAL".equalsIgnoreCase(request.getPartyType())) {
@@ -125,6 +140,12 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         SalesDeliveryNoteHdrDto dto = convertToDto(refreshedDeliveryNote, false);
         log.info("createDeliveryNote completed for groupPoid={} userId={} transactionPoid={}", groupPoid, userId,
                 dto.getTransactionPoid());
+        
+        // Log the creation
+        String key = savedDeliveryNote.getTransactionPoid().toString();
+        String documentId = UserContext.getDocumentId();
+        loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
+        
         return dto;
     }
 
@@ -146,18 +167,11 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
             throw new ResourceNotFoundException("Delivery Note", "transactionPoid", transactionPoid);
         }
 
-        // Fetch delivery note with all LOV details in a single query
-        List<Object[]> results = deliveryNoteHdrRepository.findDeliveryNoteWithDetails(transactionPoid, companyPoid);
-        SalesDeliveryNoteHdrDto dto;
-
-        if (!results.isEmpty()) {
-            Object[] row = results.get(0);
-            dto = populateDeliveryNoteFromQueryResult(row, includeDetails != null && includeDetails);
-        } else {
-            // Fallback: use entity if query fails
-            dto = convertToDto(deliveryNote, includeDetails != null && includeDetails);
-            setEmptyLovDetails(dto);
-        }
+        // Convert entity to DTO
+        SalesDeliveryNoteHdrDto dto = convertToDto(deliveryNote, includeDetails != null && includeDetails);
+        
+        // Populate LOV details using separate queries
+        populateLovDetails(dto, companyPoid);
 
         log.info("getDeliveryNoteByPoid completed for transactionPoid={} companyPoid={}",
                 transactionPoid, companyPoid);
@@ -173,6 +187,8 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         SalesDeliveryNoteHdr deliveryNote = deliveryNoteHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Delivery Note", "transactionPoid", transactionPoid));
+        SalesDeliveryNoteHdr oldDtl = new SalesDeliveryNoteHdr();
+        BeanUtils.copyProperties(deliveryNote, oldDtl);
 
         if ("Y".equals(deliveryNote.getDeleted())) {
             log.warn("updateDeliveryNote found companyPoid={} transactionPoid={} marked as deleted", companyPoid,
@@ -206,14 +222,14 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
         // Update fields (excluding read-only fields)
         // Store original transactionDate before copying
-        Timestamp originalTransactionDate = deliveryNote.getTransactionDate();
+        LocalDateTime originalTransactionDate = deliveryNote.getTransactionDate();
         BeanUtils.copyProperties(request, deliveryNote, "transactionPoid", "docRef", "createdBy",
                 "createdDate", "qtnRefNo");
         // If transactionDate is not provided in request, preserve the original value
         if (request.getTransactionDate() == null) {
             deliveryNote.setTransactionDate(originalTransactionDate);
         }
-        deliveryNote.setLastmodifiedBy(userId);
+
 
         // Handle partyType-based field requirements
         if (request.getPartyType() != null && "PRINCIPAL".equalsIgnoreCase(request.getPartyType())) {
@@ -255,6 +271,11 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         // callUpdateDeletedDetailsProcedure(groupPoid, companyPoid, userId,
         // transactionPoid);
 
+        // Log the update
+        String key = savedDeliveryNote.getTransactionPoid().toString();
+        loggingService.logChanges(oldDtl, deliveryNote, SalesDeliveryNoteHdr.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
+
         SalesDeliveryNoteHdrDto dto = convertToDto(refreshedDeliveryNote, true);
         log.info("updateDeliveryNote completed for transactionPoid={} companyPoid={}",
                 deliveryNote.getTransactionPoid(), deliveryNote.getCompanyPoid());
@@ -263,7 +284,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
 
     @Override
     @Transactional
-    public void deleteDeliveryNote(Long groupPoid, Long transactionPoid, Long companyPoid) {
+    public void deleteDeliveryNote(Long groupPoid, Long transactionPoid, Long companyPoid, DeleteReasonDto deleteReasonDto) {
         SalesDeliveryNoteHdr deliveryNote = deliveryNoteHdrRepository
                 .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Delivery Note", "transactionPoid", transactionPoid));
@@ -279,6 +300,14 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
             throw new CustomException("Cannot delete delivery note. It is closed.");
         }
 
+        documentDeleteService.deleteDocument(
+                transactionPoid,
+                "SALES_DELIVERY_NOTE_HDR",
+                "TRANSACTION_POID",
+                deleteReasonDto,
+                LocalDate.now()
+        );
+
         // Delete item details
         itemDtlRepository.deleteByTransactionPoid(transactionPoid);
 
@@ -292,8 +321,8 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     @Override
     @Transactional(readOnly = true)
     public PaginatedResponse<SalesDeliveryNoteHdrDto> getAllDeliveryNotes(Long groupPoid, Long companyPoid,
-                                                                          String deliveryStatus, Long customerPoid, Long salesmanPoid, String qtnRefNo, Timestamp fromDate,
-                                                                          Timestamp toDate, String search, Integer page, Integer size) {
+                                                                          String deliveryStatus, Long customerPoid, Long salesmanPoid, String qtnRefNo, LocalDateTime fromDate,
+                                                                          LocalDateTime toDate, String search, Integer page, Integer size) {
         log.info("getAllDeliveryNotes service started for groupPoid={} companyPoid={} page={} size={}",
                 groupPoid, companyPoid, page, size);
 
@@ -417,8 +446,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         itemDtl.setQtnDetRowId(request.getQtnDetRowId());
         itemDtl.setTotCost(request.getTotCost());
         itemDtl.setItemType(request.getItemType());
-        itemDtl.setCreatedBy(userId);
-        itemDtl.setLastmodifiedBy(userId);
+
 
         SalesDeliveryNoteItemDtl savedItemDtl = itemDtlRepository.save(itemDtl);
 
@@ -490,7 +518,6 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         itemDtl.setCheckAll(request.getCheckAll() != null ? request.getCheckAll() : "Y");
         itemDtl.setTotCost(request.getTotCost());
         itemDtl.setItemType(request.getItemType());
-        itemDtl.setLastmodifiedBy(userId);
 
         SalesDeliveryNoteItemDtl savedItemDtl = itemDtlRepository.save(itemDtl);
 
@@ -620,9 +647,17 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
             itemDtl.setQtnDetRowId(detail.getQtnDetRowId());
             itemDtl.setTotCost(detail.getTotCost());
             itemDtl.setItemType(detail.getItemType());
-            itemDtl.setCreatedBy(userId);
-            itemDtl.setLastmodifiedBy(userId);
-            itemDtlRepository.save(itemDtl);
+            SalesDeliveryNoteItemDtl savedItem = itemDtlRepository.save(itemDtl);
+            String logDetail = String.format(
+                    "Row Created on Sales Delivery Note Item with detRowId: %s",
+                    savedItem.getDetRowId()
+            );
+
+            loggingService.createLogSummaryEntry(
+                    UserContext.getDocumentId(),
+                    transactionPoid.toString(),
+                    logDetail
+            );
         }
         // Flush to ensure items are persisted
         entityManager.flush();
@@ -683,6 +718,11 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
                 // Delete item by detRowId
                 if (item.getDetRowId() != null) {
                     try {
+                        loggingService.logDelete(
+                                item,
+                                UserContext.getDocumentId(),
+                                transactionPoid.toString()
+                        );
                         itemDtlRepository.deleteById(new SalesDeliveryNoteItemDtlId(transactionPoid, item.getDetRowId()));
                         log.debug("Deleted item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
                     } catch (Exception ex) {
@@ -701,21 +741,10 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
                                 .orElse(null);
 
                         if (existingItem != null) {
-                            // Check if item is from quotation (read-only fields)
-                           /*  if (existingItem.getQtnDetRowId() != null && existingItem.getQtnDetRowId() > 0) {
-                                // StockPoid and Quantity are read-only if loaded from quotation
-                                if (item.getStockPoid() != null && !item.getStockPoid().equals(existingItem.getStockPoid())) {
-                                    log.warn("Attempt to change stockPoid for item loaded from quotation. transactionPoid={} detRowId={}",
-                                            transactionPoid, item.getDetRowId());
-                                    throw new CustomException("Cannot change stock. Item is loaded from quotation.");
-                                }
-                                if (item.getQuantity() != null && !item.getQuantity().equals(existingItem.getQuantity())) {
-                                    log.warn("Attempt to change quantity for item loaded from quotation. transactionPoid={} detRowId={}",
-                                            transactionPoid, item.getDetRowId());
-                                    throw new CustomException("Cannot change quantity. Item is loaded from quotation.");
-                                }
-                            }
-                             */
+                            // Create a copy of the existing item for logging
+                            SalesDeliveryNoteItemDtl oldItem = new SalesDeliveryNoteItemDtl();
+                            BeanUtils.copyProperties(existingItem, oldItem);
+
                             // Update fields
                             if (existingItem.getQtnDetRowId() == null || existingItem.getQtnDetRowId() == 0) {
                                 existingItem.setStockPoid(item.getStockPoid());
@@ -729,9 +758,17 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
                             existingItem.setCheckAll(item.getCheckAll() != null ? item.getCheckAll() : "Y");
                             existingItem.setTotCost(item.getTotCost());
                             existingItem.setItemType(item.getItemType());
-                            existingItem.setLastmodifiedBy(userId);
+
 
                             itemDtlRepository.save(existingItem);
+
+                            String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", existingItem.getTransactionPoid(),existingItem.getDetRowId());
+                            
+                            // Log the changes
+                            loggingService.createLog(oldItem, existingItem, SalesDeliveryNoteItemDtl.class,
+                                    UserContext.getDocumentId(),transactionPoid.toString(),
+                                    logDetail);
+                            
                             log.debug("Updated item detail transactionPoid={} detRowId={}", transactionPoid, item.getDetRowId());
                         } else {
                             log.warn("Item not found for UPDATE action transactionPoid={} detRowId={}, treating as CREATE",
@@ -868,11 +905,11 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         int index = 0;
         dto.setTransactionPoid(getLongValue(row[index++]));
         dto.setDocRef(getStringValue(row[index++]));
-        dto.setTransactionDate(getTimestampValue(row[index++]));
+        dto.setTransactionDate(getLocalDateTimeValue(row[index++]));
         dto.setCompanyPoid(getLongValue(row[index++]));
         dto.setCustomerPoid(getLongValue(row[index++]));
         dto.setCurrencyCode(getStringValue(row[index++]));
-        dto.setCurrencyRate(getLongValue(row[index++]));
+        dto.setCurrencyRate(getBigDecimalValue(row[index++]));
         dto.setDeliveryStatus(getStringValue(row[index++]));
         dto.setSalesmanPoid(getLongValue(row[index++]));
         dto.setPaymentMode(getStringValue(row[index++]));
@@ -896,9 +933,9 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         dto.setRemarks(getStringValue(row[index++]));
         dto.setDeleted(getStringValue(row[index++]));
         dto.setCreatedBy(getStringValue(row[index++]));
-        dto.setCreatedDate(getTimestampValue(row[index++]));
+        dto.setCreatedDate(getLocalDateTimeValue(row[index++]));
         dto.setLastmodifiedBy(getStringValue(row[index++]));
-        dto.setLastmodifiedDate(getTimestampValue(row[index++]));
+        dto.setLastmodifiedDate(getLocalDateTimeValue(row[index++]));
 
         // LOV Details start at index 28
         // Customer Details (cust: index 28-30)
@@ -1004,6 +1041,138 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     }
 
     /**
+     * Populate LOV details using separate queries based on LOV_Script.sql patterns
+     */
+    private void populateLovDetails(SalesDeliveryNoteHdrDto dto, Long companyPoid) {
+        // Get company poid from UserContext
+        Long contextCompanyPoid = UserContext.getCompanyPoid() != null ? UserContext.getCompanyPoid() : companyPoid;
+
+        // Customer Details (CUSTOMER_MASTER)
+        if (dto.getCustomerPoid() != null) {
+            List<Object[]> customerResults = deliveryNoteHdrRepository.findCustomerLovDetail(dto.getCustomerPoid());
+            if (!customerResults.isEmpty()) {
+                dto.setCustomerDetails(createLovDetailFromQueryResult(customerResults.get(0)));
+                if (dto.getCustomerDetails() != null && dto.getCustomerDetails().getDescription() != null) {
+                    dto.setCustomerName(dto.getCustomerDetails().getDescription());
+                }
+            } else {
+                dto.setCustomerDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setCustomerDetails(createEmptyLovDetail());
+        }
+
+        // Salesman Details (SALESMAN)
+        if (dto.getSalesmanPoid() != null) {
+            List<Object[]> salesmanResults = deliveryNoteHdrRepository.findSalesmanLovDetail(dto.getSalesmanPoid());
+            if (!salesmanResults.isEmpty()) {
+                dto.setSalesmanDetails(createLovDetailFromQueryResult(salesmanResults.get(0)));
+            } else {
+                dto.setSalesmanDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setSalesmanDetails(createEmptyLovDetail());
+        }
+
+        // Line Details (LINE_MASTER)
+        if (dto.getLinePoid() != null) {
+            List<Object[]> lineResults = deliveryNoteHdrRepository.findLineLovDetail(dto.getLinePoid());
+            if (!lineResults.isEmpty()) {
+                dto.setLineDetails(createLovDetailFromQueryResult(lineResults.get(0)));
+            } else {
+                dto.setLineDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setLineDetails(createEmptyLovDetail());
+        }
+
+        // Port Details (PORT_MASTER)
+        if (dto.getPortPoid() != null) {
+            List<Object[]> portResults = deliveryNoteHdrRepository.findPortLovDetail(dto.getPortPoid());
+            if (!portResults.isEmpty()) {
+                dto.setPortDetails(createLovDetailFromQueryResult(portResults.get(0)));
+            } else {
+                dto.setPortDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setPortDetails(createEmptyLovDetail());
+        }
+
+        // Vessel Details (VESSEL_MASTER)
+        if (dto.getVesselPoid() != null && !dto.getVesselPoid().trim().isEmpty()) {
+            List<Object[]> vesselResults = deliveryNoteHdrRepository.findVesselLovDetail(dto.getVesselPoid());
+            if (!vesselResults.isEmpty()) {
+                dto.setVesselDetails(createLovDetailFromQueryResult(vesselResults.get(0)));
+            } else {
+                dto.setVesselDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setVesselDetails(createEmptyLovDetail());
+        }
+
+        // Print Division Details (COMPANY_DIVISION)
+        if (dto.getPrintDivisionPoid() != null) {
+            List<Object[]> divResults = deliveryNoteHdrRepository.findPrintDivisionLovDetail(
+                    dto.getPrintDivisionPoid(), contextCompanyPoid);
+            if (!divResults.isEmpty()) {
+                dto.setPrintDivisionDetails(createLovDetailFromQueryResult(divResults.get(0)));
+            } else {
+                dto.setPrintDivisionDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setPrintDivisionDetails(createEmptyLovDetail());
+        }
+
+        // Principal Details (PRINCIPAL_MASTER_FOR_DN)
+        if (dto.getPrincipalPoid() != null) {
+            List<Object[]> principalResults = deliveryNoteHdrRepository.findPrincipalLovDetail(dto.getPrincipalPoid());
+            if (!principalResults.isEmpty()) {
+                dto.setPrincipalDetails(createLovDetailFromQueryResult(principalResults.get(0)));
+            } else {
+                dto.setPrincipalDetails(createEmptyLovDetail());
+            }
+        } else {
+            dto.setPrincipalDetails(createEmptyLovDetail());
+        }
+    }
+
+    /**
+     * Create LOV detail from query result Object[]
+     * Expects: [POID, CODE, DESCRIPTION] at indices [0, 1, 2]
+     */
+    private SalesDeliveryNoteHdrDto.LovDetailDto createLovDetailFromQueryResult(Object[] row) {
+        SalesDeliveryNoteHdrDto.LovDetailDto detail = new SalesDeliveryNoteHdrDto.LovDetailDto();
+
+        if (row != null && row.length > 0) {
+            // Poid (index 0)
+            if (row[0] != null) {
+                if (row[0] instanceof java.math.BigDecimal) {
+                    detail.setPoid(((java.math.BigDecimal) row[0]).longValue());
+                } else if (row[0] instanceof Number) {
+                    detail.setPoid(((Number) row[0]).longValue());
+                }
+            }
+
+            // Code (index 1)
+            if (row.length > 1 && row[1] != null) {
+                detail.setCode(row[1].toString());
+            }
+
+            // Description (index 2)
+            if (row.length > 2 && row[2] != null) {
+                detail.setDescription(row[2].toString());
+            }
+        }
+
+        // If all fields are null, return empty detail
+        if (detail.getPoid() == null && detail.getCode() == null && detail.getDescription() == null) {
+            return createEmptyLovDetail();
+        }
+
+        return detail;
+    }
+
+    /**
      * Helper methods to safely extract values from Object[]
      */
     private Long getLongValue(Object obj) {
@@ -1027,12 +1196,31 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         return obj.toString();
     }
 
-    private Timestamp getTimestampValue(Object obj) {
+    private LocalDateTime getLocalDateTimeValue(Object obj) {
         if (obj == null) return null;
-        if (obj instanceof Timestamp) {
-            return (Timestamp) obj;
+
+        if (obj instanceof LocalDateTime ldt) {
+            return ldt;
         }
+
+        if (obj instanceof java.sql.Timestamp ts) {
+            return ts.toLocalDateTime();
+        }
+
         return null;
+    }
+
+    private BigDecimal getBigDecimalValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof BigDecimal) {
+            return (BigDecimal) value;
+        }
+        if (value instanceof Number) {
+            return new BigDecimal(value.toString()); // NO precision loss
+        }
+        return new BigDecimal(value.toString());
     }
 
     // Placeholder for stored procedure call (implemented in Part 2)
@@ -1139,8 +1327,8 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
                         Long qty = rs.getLong("QUANTITY");
                         dto.setQuantity(qty);
 
-                        Long price = rs.getLong("PRICE");
-                        dto.setPrice(price);
+                        Object priceObj = rs.getObject("PRICE");
+                        dto.setPrice(priceObj != null ? getBigDecimalValue(priceObj) : null);
 
                         Long discount = rs.getLong("DISCOUNT");
                         dto.setDiscount(discount);
@@ -1230,5 +1418,12 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
         }
         log.info("checkDeliveryNoteDependencies completed for transactionPoid={} companyPoid={}", transactionPoid, companyPoid);
         return resp;
+    }
+
+    @Override
+    public byte[] print(Long transactionPoid) throws Exception {
+        Map<String, Object> params = printService.buildBaseParams(transactionPoid, "350-104");
+        JasperReport mainReport = printService.load("ShipChandling/SALES/Sales_Delivery_note.jrxml");
+        return printService.fillReportToPdf(mainReport, params, dataSource);
     }
 }

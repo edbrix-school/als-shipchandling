@@ -1,11 +1,11 @@
 package com.asg.shipchandling.deliverynote.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.deliverynote.dto.*;
 import org.springframework.data.domain.Pageable;
-
-import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -18,9 +18,9 @@ public interface SalesDeliveryNoteService {
 
     SalesDeliveryNoteHdrDto updateDeliveryNote(Long groupPoid, Long transactionPoid, UpdateSalesDeliveryNoteRequest request, Long companyPoid, String userId);
 
-    void deleteDeliveryNote(Long groupPoid, Long transactionPoid, Long companyPoid);
+    void deleteDeliveryNote(Long groupPoid, Long transactionPoid, Long companyPoid, DeleteReasonDto deleteReasonDto);
 
-    PaginatedResponse<SalesDeliveryNoteHdrDto> getAllDeliveryNotes(Long groupPoid, Long companyPoid, String deliveryStatus, Long customerPoid, Long salesmanPoid, String qtnRefNo, Timestamp fromDate, Timestamp toDate, String search, Integer page, Integer size);
+    PaginatedResponse<SalesDeliveryNoteHdrDto> getAllDeliveryNotes(Long groupPoid, Long companyPoid, String deliveryStatus, Long customerPoid, Long salesmanPoid, String qtnRefNo, LocalDateTime fromDate, LocalDateTime toDate, String search, Integer page, Integer size);
 
 //    Page<SalesDeliveryNoteHdrDto> getAllDeliveryNotesWithFilters(Long groupPoid, Long companyPoid, GetAllDeliveryNoteFilterRequest filterRequest, int page, int size);
 
@@ -44,4 +44,6 @@ public interface SalesDeliveryNoteService {
     SalesDeliveryNoteDependenciesDto checkDeliveryNoteDependencies(Long transactionPoid, Long companyPoid);
 
     Map<String, Object> listDeliveryNotes(String docId, FilterRequestDto request, LocalDate startDateValue, LocalDate endDateValue, Pageable pageable);
+
+    byte[] print(Long transactionPoid) throws Exception;
 }

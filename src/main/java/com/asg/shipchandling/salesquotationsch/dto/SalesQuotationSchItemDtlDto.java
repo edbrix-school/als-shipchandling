@@ -6,7 +6,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.sql.Timestamp;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -17,19 +18,19 @@ public class SalesQuotationSchItemDtlDto {
     private Long stockPoid;
     private LovItem stockPoidDetails;
     private StockDetailsResponse.CategoryDetailDto categoryDetails;
-    private Long quantity;
-    private Long price;
+    private BigDecimal quantity;
+    private BigDecimal price;
     private Long discount;
     private Long amount;
     private String remarks;
     private Long stockUnitPoid;
     private LovItem stockUnitDetails;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
     private Long adjQuantity;
-    private Long cost;
+    private BigDecimal cost;
     private Long lastRate1;
     private Long lastRate2;
     private String deliverySelect;

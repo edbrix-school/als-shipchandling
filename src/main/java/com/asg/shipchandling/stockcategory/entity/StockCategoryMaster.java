@@ -1,6 +1,8 @@
 package com.asg.shipchandling.stockcategory.entity;
 
 
+import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -9,7 +11,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
 
 @Entity
 @Table(name = "STOCK_CATEGORY_MASTER")
@@ -17,7 +18,7 @@ import java.sql.Timestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 @SequenceGenerator(name = "category_seq", sequenceName = "CATEGORY_POID_SEQ", allocationSize = 1)
-public class StockCategoryMaster {
+public class StockCategoryMaster extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -37,6 +38,7 @@ public class StockCategoryMaster {
     private String categoryType = "GROUP";
 
     @Column(name = "PARENT_CATEGORY_POID")
+    @AuditIgnore
     private Long parentCategoryPoid;
 
     @Column(name = "STOCK_GL_POID")
@@ -64,22 +66,11 @@ public class StockCategoryMaster {
     private String active = "Y";
 
     @Column(name = "DELETED", length = 1)
+    @AuditIgnore
     private String deleted = "N";
 
     @Column(name = "GROUP_POID", nullable = false)
+    @AuditIgnore
     private Long groupPoid;
 
-    @Column(name = "CREATED_BY", length = 20)
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    private Timestamp lastmodifiedDate;
 }

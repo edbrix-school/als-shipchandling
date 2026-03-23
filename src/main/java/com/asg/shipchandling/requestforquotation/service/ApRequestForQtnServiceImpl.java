@@ -1,11 +1,19 @@
 package com.asg.shipchandling.requestforquotation.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
+import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.commonlov.dto.LovItem;
+import com.asg.shipchandling.deliverynote.entity.SalesDeliveryNoteHdr;
+import com.asg.shipchandling.deliverynote.entity.SalesDeliveryNoteItemDtl;
 import com.asg.shipchandling.exceptions.CustomException;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
 import com.asg.shipchandling.requestforquotation.dto.ItemWithoutSupplierDto;
@@ -18,11 +26,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import net.sf.jasperreports.engine.JasperReport;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,8 +40,8 @@ import javax.sql.DataSource;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.*;
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -47,6 +57,9 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     private final GlobalTaxMasterRepository globalTaxMasterRepository;
     private final CurrencyRateUploadTempRepository currencyRateUploadTempRepository;
     private final DocumentSearchService documentService;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
+    private final PrintService printService;
 
     @Autowired
     private DataSource dataSource;
@@ -74,17 +87,15 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
         String normalizedUserId = normalizeUserId(userId);
 
-        Timestamp resolvedTransactionDate = request.getTransactionDate() != null
+        LocalDateTime resolvedTransactionDate = request.getTransactionDate() != null
                 ? request.getTransactionDate()
-                : Timestamp.from(Instant.now());
+                : LocalDateTime.now();
 
         ApRequestForQtnHdr rfq = new ApRequestForQtnHdr();
         BeanUtils.copyProperties(request, rfq);
         rfq.setTransactionDate(resolvedTransactionDate);
         rfq.setGroupPoid(groupPoid);
         rfq.setCompanyPoid(companyPoid);
-        rfq.setCreatedBy(normalizedUserId);
-        rfq.setLastmodifiedBy(normalizedUserId);
         rfq.setStatus("IN PROGRESS");
         rfq.setDeleted("N");
 
@@ -132,6 +143,12 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         // Convert to DTO
         ApRequestForQtnHdrDto dto = convertToDto(refreshedRfq, true);
         log.info("RFQ created successfully with DOC_REF: {}", dto.getDocRef());
+        
+        // Log the creation
+        String key = savedRfq.getTransactionPoid().toString();
+        String documentId = UserContext.getDocumentId();
+        loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
+        
         return dto;
     }
 
@@ -186,6 +203,9 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                 .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("RFQ", "transactionPoid", transactionPoid));
 
+        ApRequestForQtnHdr oldDtl = new ApRequestForQtnHdr();
+        BeanUtils.copyProperties(rfq, oldDtl);
+
         // Validate Deletion Flag
         if ("Y".equalsIgnoreCase(rfq.getDeleted())) {
             throw new CustomException("Cannot update deleted RFQ");
@@ -232,9 +252,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             rfq.setCurrencyRate(null);
         }
 
-        // Audit fields update
-        rfq.setLastmodifiedBy(normalizedUserId);
-        rfq.setLastmodifiedDate(new Timestamp(System.currentTimeMillis()));
 
         // Save header first
         ApRequestForQtnHdr savedRfq = rfqHdrRepository.save(rfq);
@@ -250,12 +267,17 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         // Call stored procedure AFTER SAVE
         callItemsWithoutSupplierProcedure(groupPoid, companyPoid, normalizedUserId, transactionPoid);
 
+        // Log the update
+        String key = savedRfq.getTransactionPoid().toString();
+        loggingService.logChanges(oldDtl, rfq, ApRequestForQtnHdr.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
+
         return convertToDto(savedRfq, true);
     }
 
     @Override
     @Transactional
-    public void deleteRequestForQuotation(Long transactionPoid, Long groupPoid, Long companyPoid) {
+    public void deleteRequestForQuotation(Long transactionPoid, Long groupPoid, Long companyPoid, DeleteReasonDto deleteReasonDto) {
         if (groupPoid == null) {
             throw new CustomException("Group POID header is required");
         }
@@ -284,6 +306,14 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         if (existsPurchaseOrderForRfq(transactionPoid)) {
             throw new CustomException("Cannot delete RFQ. Purchase Orders are linked to this document.");
         }
+
+        documentDeleteService.deleteDocument(
+                transactionPoid,
+                "AP_REQUEST_FOR_QTN_HDR",
+                "TRANSACTION_POID",
+                deleteReasonDto,
+                LocalDate.now()
+        );
 
         performSoftDelete(rfq);
     }
@@ -394,8 +424,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             populateTaxDetails(itemDtl, detail.getTaxPoid(), detail.getQty(), detail.getPrice());
 
             itemDtl.setRemarks(detail.getRemarks());
-            itemDtl.setCreatedBy(userId);
-            itemDtl.setLastmodifiedBy(userId);
 
             rfqItemDtlRepository.save(itemDtl);
         }
@@ -412,8 +440,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             supDtl.setDetRowId(detRowId++);
             supDtl.setSupplierPoid(detail.getSupplierPoid());
             supDtl.setRemarks(detail.getRemarks());
-            supDtl.setCreatedBy(userId);
-            supDtl.setLastmodifiedBy(userId);
             rfqSupDtlRepository.save(supDtl);
         }
     }
@@ -666,10 +692,19 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
         populateTaxDetails(itemDtl, request.getTaxPoid(), request.getQty(), request.getPrice());
         itemDtl.setRemarks(request.getRemarks());
-        itemDtl.setCreatedBy(userId);
-        itemDtl.setLastmodifiedBy(userId);
 
-        rfqItemDtlRepository.save(itemDtl);
+        ApRequestForQtnItemDtl savedItem = rfqItemDtlRepository.save(itemDtl);
+        // ✅ LOG CREATE (old entity = null)
+        String logDetail = String.format(
+                "Row Created on RFQ Item Detail with DetRowId: %s",
+                savedItem.getDetRowId()
+        );
+
+        loggingService.createLogSummaryEntry(
+                UserContext.getDocumentId(),
+                transactionPoid.toString(),
+                logDetail
+        );
     }
 
     /**
@@ -681,6 +716,10 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         ApRequestForQtnItemDtl itemDtl = rfqItemDtlRepository
                 .findById(new ApRequestForQtnItemDtlId(transactionPoid, request.getDetRowId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Item Detail", "detRowId", request.getDetRowId()));
+
+        // Create a copy of the existing item for logging
+        ApRequestForQtnItemDtl oldItem = new ApRequestForQtnItemDtl();
+        BeanUtils.copyProperties(itemDtl, oldItem);
 
         // Check conditional read-only: If RefPoid > 0, some fields become read-only
         if (itemDtl.getRefPoid() != null && !itemDtl.getRefPoid().isEmpty() &&
@@ -733,9 +772,16 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         }
 
         populateTaxDetails(itemDtl, request.getTaxPoid(), itemDtl.getQty(), itemDtl.getPrice());
-        itemDtl.setLastmodifiedBy(userId);
-
         rfqItemDtlRepository.save(itemDtl);
+
+
+        String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", itemDtl.getTransactionPoid(),itemDtl.getDetRowId());
+
+        // Log the changes
+        loggingService.createLog(oldItem, itemDtl, ApRequestForQtnItemDtl.class,
+                UserContext.getDocumentId(),transactionPoid.toString(),
+                logDetail);
+
     }
 
     /**
@@ -753,7 +799,11 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         if (itemDtl.getRefDocId() != null && itemDtl.getRefDocId().contains("400")) {
             throw new CustomException("Cannot delete item detail linked to Purchase Order.");
         }
-
+        loggingService.logDelete(
+                itemDtl,
+                UserContext.getDocumentId(),
+                transactionPoid.toString()
+        );
         rfqItemDtlRepository.delete(itemDtl);
     }
 
@@ -767,10 +817,19 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         supDtl.setDetRowId(detRowId);
         supDtl.setSupplierPoid(request.getSupplierPoid());
         supDtl.setRemarks(hasText(request.getRemarks()) ? request.getRemarks().trim() : null);
-        supDtl.setCreatedBy(userId);
-        supDtl.setLastmodifiedBy(userId);
 
-        rfqSupDtlRepository.save(supDtl);
+        ApRequestForQtnSupDtl savedSupDtl =rfqSupDtlRepository.save(supDtl);
+        // ✅ LOG CREATE
+        String logDetail = String.format(
+                "Row Created on RFQ Supplier Detail with DetRowId: %s",
+                savedSupDtl.getDetRowId()
+        );
+
+        loggingService.createLogSummaryEntry(
+                UserContext.getDocumentId(),
+                transactionPoid.toString(),
+                logDetail
+        );
     }
 
     /**
@@ -783,12 +842,22 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                 .findById(new ApRequestForQtnSupDtlId(transactionPoid, request.getDetRowId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Supplier Detail", "detRowId", request.getDetRowId()));
 
+        // Create a copy of the existing supplier for logging
+        ApRequestForQtnSupDtl oldSupDtl = new ApRequestForQtnSupDtl();
+        BeanUtils.copyProperties(supDtl, oldSupDtl);
+
         // Update fields
         supDtl.setSupplierPoid(request.getSupplierPoid());
         supDtl.setRemarks(hasText(request.getRemarks()) ? request.getRemarks().trim() : null);
-        supDtl.setLastmodifiedBy(userId);
-
         rfqSupDtlRepository.save(supDtl);
+
+        String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", supDtl.getTransactionPoid(),supDtl.getDetRowId());
+
+        // Log the changes
+        loggingService.createLog(oldSupDtl, supDtl, ApRequestForQtnSupDtl.class,
+                UserContext.getDocumentId(),transactionPoid.toString(),
+                logDetail);
+
     }
 
     /**
@@ -798,6 +867,18 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         ApRequestForQtnSupDtl supDtl = rfqSupDtlRepository
                 .findById(new ApRequestForQtnSupDtlId(transactionPoid, detRowId))
                 .orElseThrow(() -> new ResourceNotFoundException("Supplier Detail", "detRowId", detRowId));
+
+        // ✅ LOG DELETE (before delete)
+        String logDetail = String.format(
+                "Row Deleted from RFQ Supplier Detail with DetRowId: %s",
+                supDtl.getDetRowId()
+        );
+
+        loggingService.createLogSummaryEntry(
+                UserContext.getDocumentId(),
+                transactionPoid.toString(),
+                logDetail
+        );
 
         rfqSupDtlRepository.delete(supDtl);
     }
@@ -898,7 +979,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         rfqItemDtlRepository.deleteByTransactionPoid(transactionPoid);
         rfqSupDtlRepository.deleteByTransactionPoid(transactionPoid);
         rfq.setDeleted("Y");
-        rfq.setLastmodifiedDate(new Timestamp(System.currentTimeMillis()));
         rfqHdrRepository.save(rfq);
     }
 
@@ -1112,8 +1192,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         populateTaxDetails(itemDtl, request.getTaxPoid(), request.getQty(), request.getPrice());
 
         itemDtl.setRemarks(request.getRemarks());
-        itemDtl.setCreatedBy(normalizedUserId);
-        itemDtl.setLastmodifiedBy(normalizedUserId);
 
         ApRequestForQtnItemDtl savedItemDtl = rfqItemDtlRepository.save(itemDtl);
         return convertItemDtlToDto(savedItemDtl, groupPoid);
@@ -1191,7 +1269,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         Long normalizedSupplierPoid = normalizeSupplierPoid(request.getSupplierPoid());
         itemDtl.setSupplierPoid(normalizedSupplierPoid);
         itemDtl.setRemarks(request.getRemarks());
-        itemDtl.setLastmodifiedBy(normalizedUserId);
+
 
         // Update last price if stock, unit, and supplier are all set
         if (normalizedSupplierPoid != null) {
@@ -1203,7 +1281,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         }
 
         populateTaxDetails(itemDtl, request.getTaxPoid(), itemDtl.getQty(), itemDtl.getPrice());
-        itemDtl.setLastmodifiedBy(normalizedUserId);
+
 
         ApRequestForQtnItemDtl savedItemDtl = rfqItemDtlRepository.save(itemDtl);
         return convertItemDtlToDto(savedItemDtl, groupPoid);
@@ -1302,8 +1380,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         supDtl.setDetRowId(detRowId);
         supDtl.setSupplierPoid(request.getSupplierPoid());
         supDtl.setRemarks(hasText(request.getRemarks()) ? request.getRemarks().trim() : null);
-        supDtl.setCreatedBy(normalizedUserId);
-        supDtl.setLastmodifiedBy(normalizedUserId);
 
         ApRequestForQtnSupDtl savedSupDtl = rfqSupDtlRepository.save(supDtl);
         return convertSupDtlToDto(savedSupDtl);
@@ -1346,7 +1422,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         // Update fields
         supDtl.setSupplierPoid(request.getSupplierPoid());
         supDtl.setRemarks(hasText(request.getRemarks()) ? request.getRemarks().trim() : null);
-        supDtl.setLastmodifiedBy(normalizedUserId);
 
         ApRequestForQtnSupDtl savedSupDtl = rfqSupDtlRepository.save(supDtl);
         return convertSupDtlToDto(savedSupDtl);
@@ -1421,23 +1496,46 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             throw new CustomException("Cannot add suppliers. RFQ is in closed status");
         }
 
+        // Get suppliers before adding new ones for logging
+        List<ApRequestForQtnSupDtl> suppliersBefore = rfqSupDtlRepository.findByTransactionPoid(transactionPoid);
+
         // Call stored procedure
         String result = callAddSuppliersProcedure(groupPoid, companyPoid, normalizedUserId, transactionPoid);
 
         if (result != null && result.contains("ERROR")) {
             throw new CustomException("Error adding suppliers: " + result);
         }
+        if (result != null && result.trim().toUpperCase(Locale.ROOT).startsWith("WARNING")) {
+            // Treat stored-proc warnings as business failure (HTTP 422 via GlobalExceptionHandler)
+            throw new CustomException(result, HttpStatus.UNPROCESSABLE_ENTITY.value());
+        }
 
-        // Count suppliers added (or get from result message)
-        List<ApRequestForQtnSupDtl> suppliers = rfqSupDtlRepository.findByTransactionPoid(transactionPoid);
-        int suppliersAdded = suppliers.size();
+        // Get suppliers after adding for logging
+        List<ApRequestForQtnSupDtl> suppliersAfter = rfqSupDtlRepository.findByTransactionPoid(transactionPoid);
+        
+        // Log newly added suppliers
+        List<ApRequestForQtnSupDtl> newSuppliers = suppliersAfter.stream()
+                .filter(supplier -> suppliersBefore.stream()
+                        .noneMatch(before -> before.getDetRowId().equals(supplier.getDetRowId())))
+                .collect(Collectors.toList());
+
+        for (ApRequestForQtnSupDtl newSupplier : newSuppliers) {
+            String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", 
+                    newSupplier.getTransactionPoid(), newSupplier.getDetRowId());
+            
+            loggingService.createLog(null, newSupplier, ApRequestForQtnSupDtl.class,
+                    UserContext.getDocumentId(), transactionPoid.toString(),
+                    logDetail);
+        }
+
+        int suppliersAdded = newSuppliers.size();
 
         AddSuppliersResponse response = new AddSuppliersResponse();
         response.setSuccess(true);
         response.setMessage(result != null ? result : "Suppliers added successfully");
         response.setSuppliersAdded(suppliersAdded);
         response.setAddedSupplierPoidList(
-                suppliers.stream()
+                newSuppliers.stream()
                         .map(ApRequestForQtnSupDtl::getSupplierPoid)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toList()));
@@ -2170,5 +2268,21 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             log.error("Failed to fetch supplier LOV for supplierPoid {}", supplierPoid, ex);
             return null;
         }
+    }
+
+    @Override
+    public byte[] printConfirmedSupplier(Long transactionPoid) throws Exception {
+        Map<String, Object> params = printService.buildBaseParams(transactionPoid, "200-100");
+        params.put("SUB_RFQ_DTL", printService.load("ShipChandling/AP/RequestForQuotationConfirmedSuppliersSubreport1.jrxml"));
+        JasperReport mainReport = printService.load("ShipChandling/AP/RequestForQuotationConfirmedSupplier.jrxml");
+        return printService.fillReportToPdf(mainReport, params, dataSource);
+    }
+
+    @Override
+    public byte[] print(Long transactionPoid) throws Exception {
+        Map<String, Object> params = printService.buildBaseParams(transactionPoid, "200-100");
+        params.put("SUB_RFQ_DTL_1", printService.load("ShipChandling/AP/RequestForQuotationNoSupplier_subreport1.jrxml"));
+        JasperReport mainReport = printService.load("ShipChandling/AP/RequestForQuotationNoSupplier.jrxml");
+        return printService.fillReportToPdf(mainReport, params, dataSource);
     }
 }

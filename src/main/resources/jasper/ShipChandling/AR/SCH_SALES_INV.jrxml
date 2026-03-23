@@ -1,0 +1,965 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="SCH_SALES_INV" language="groovy" pageWidth="595" pageHeight="842" columnWidth="557" leftMargin="22" rightMargin="16" topMargin="20" bottomMargin="14" uuid="51f26c1c-332c-43f0-beb9-5722768520c7">
+	<property name="ireport.zoom" value="2.3579476910000063"/>
+	<property name="ireport.x" value="187"/>
+	<property name="ireport.y" value="254"/>
+	<style name="Title" fontName="Times New Roman" fontSize="50" isBold="true" pdfFontName="Times-Bold"/>
+	<style name="SubTitle" forecolor="#736343" fontName="Arial" fontSize="18"/>
+	<style name="Column header" forecolor="#666666" fontName="Arial" fontSize="12" isBold="true" pdfFontName="Helvetica-Bold"/>
+	<style name="Detail" fontName="Arial" fontSize="12"/>
+	<style name="Row" mode="Transparent">
+		<conditionalStyle>
+			<conditionExpression><![CDATA[$V{REPORT_COUNT}%2 == 0]]></conditionExpression>
+			<style backcolor="#E6DAC3"/>
+		</conditionalStyle>
+	</style>
+	<subDataset name="Amt_words" uuid="a05785b4-9c5a-4467-99f5-773932b75221">
+		<parameter name="Total_amount" class="java.math.BigDecimal"/>
+		<parameter name="Total_discount" class="java.math.BigDecimal"/>
+		<parameter name="Currency" class="java.lang.String"/>
+		<queryString>
+			<![CDATA[select FN_AMOUNT_IN_WORDS_common($P{Total_amount},$P{Currency}) Amount_word,$P{Currency} Curr from dual]]>
+		</queryString>
+		<field name="AMOUNT_WORD" class="java.lang.String"/>
+		<field name="CURR" class="java.lang.String"/>
+	</subDataset>
+	<parameter name="LOGIN_GROUP_POID" class="java.lang.String" isForPrompting="false">
+		<defaultValueExpression><![CDATA[1]]></defaultValueExpression>
+	</parameter>
+	<parameter name="LOGIN_COMP_POID" class="java.lang.String">
+		<parameterDescription><![CDATA[]]></parameterDescription>
+		<defaultValueExpression><![CDATA[1]]></defaultValueExpression>
+	</parameter>
+	<parameter name="LOGIN_USER_POID" class="java.lang.String" isForPrompting="false"/>
+	<parameter name="DOC_ID" class="java.lang.String" isForPrompting="false">
+		<defaultValueExpression><![CDATA["300-100"]]></defaultValueExpression>
+	</parameter>
+	<parameter name="DOC_KEY_POID" class="java.lang.String"/>
+	<parameter name="SUBREPORT_DIR" class="java.lang.String" isForPrompting="false">
+		<defaultValueExpression><![CDATA["////10.100.100.159/ERP_Reports/Reports/"]]></defaultValueExpression>
+	</parameter>
+	<parameter name="LOGIN_DIV_POID" class="java.lang.String">
+		<defaultValueExpression><![CDATA["2"]]></defaultValueExpression>
+	</parameter>
+    <parameter name="SUB_HEADER" class="net.sf.jasperreports.engine.JasperReport"/>
+    <parameter name="SUB_FOOTER" class="net.sf.jasperreports.engine.JasperReport"/>
+    <parameter name="SUB_RFQ_DTL" class="net.sf.jasperreports.engine.JasperReport"/>
+	<queryString>
+		<![CDATA[SELECT a.TRANSACTION_POID, a.COMPANY_POID, TO_CHAR(a.TRANSACTION_DATE, nvl( nvl(invoice_date_format,'DD-MON-RRRR'), 'DD-MON-RRRR')) as TRANSACTION_DATE,
+a.DOC_REF,a.DN_POID,a.COMPANY_POID,GET_COMPANY_NAME(a.COMPANY_POID)COMPANY,
+a.CURRENCY_CODE,a.CURRENCY_RATE,a.CREDIT_DAYS,a.DUE_DATE,a.PAYMENT_MODE,nvl(a.LPO_DETAILS,Q.CUSTOMER_REF) as LPO_DETAILS,a.REMARKS,a.DELIVERY_TO_ADDRESS,
+FN_AMOUNT_IN_WORDS_COMMON((GET_SCH_INV_AMT(a.TRANSACTION_POID)/NVL(a.CURRENCY_RATE ,1))-ROUND(NVL(a.INV_DISCOUNT,0)/NVL(a.CURRENCY_RATE ,1),3),a.CURRENCY_CODE)AMT_IN_WORDS1,
+FN_AMOUNT_IN_WORDS_COMMON((GET_SCH_INV_AMT(a.TRANSACTION_POID)/NVL(a.CURRENCY_RATE ,1))-ROUND(NVL(a.DISCOUNT_AMT,0)/NVL(a.CURRENCY_RATE ,1),3),a.CURRENCY_CODE)AMT_IN_WORDS,
+a.CURRENCY_CODE,
+nvl(ROUND(NVL(a.INV_DISCOUNT,0)/NVL(a.CURRENCY_RATE ,1),3),0) TOTAL_DISCOUNT1,
+nvl(ROUND(NVL(a.DISCOUNT_AMT,0)/NVL(a.CURRENCY_RATE ,1),3),0) TOTAL_DISCOUNT,
+Q.DOC_REF QUOTATION_DTL,A.VESSEL_NAME,A.PORT_NAME,
+Q.PORT_DESCRIPTION,
+GET_SALES_CUST_NAME(a.CUSTOMER_POID) AS CUSTOMER,
+nvl(GA1.PO_BOX,'') AS PO_BOX,
+nvl(GA1.BLDG,'') AS BUILDING,
+nvl(GA1.STATE,'') AS STATE,
+nvl(GA1.EMAIL1,'') AS EMAIL,
+nvl(GA1.OFF_TEL1,'') AS OFFICE_TEL,
+'Contact: '||nvl(GA1.MOBILE,'--')||','||nvl(GA1.OFF_TEL1,'.') AS MOBILE,
+replace(substr(NUMBER_FORMAT_CURRENCY,1,15),'9','#')||replace(substr(NUMBER_FORMAT_CURRENCY,16),'9','0') NUMBER_FORMAT_CURRENCY,
+CASE WHEN RTN_GLOBAL_PARAMETER( 1,'GLOBAL_TAX_APPLICABLE','TAX','1',NULL) = 'Y' AND EXTRACT(YEAR FROM  a.TRANSACTION_DATE)>2018
+THEN 'Y'
+ELSE
+'N'
+END AS TAX_APPLICABLE,
+nvl(SM.TIN_NUMBER , SPM.TIN_NUMBER) AS CUSTOMER_TIN_NUMBER,
+decode(COMMAST.TIN_NUMBER ,null,null,COMMAST.TIN_NUMBER ) Company_TIN_NUMBER,
+CASE WHEN RTN_GLOBAL_PARAMETER( 1,'GLOBAL_TAX_APPLICABLE','TAX','1',NULL) = 'Y' AND EXTRACT(YEAR FROM  a.TRANSACTION_DATE)>2018
+     THEN
+     'TAX INVOICE'
+     ELSE
+     'INVOICE'
+     END AS INVOICE_HEADING,
+NVL(a.PARTY_ADDRESS_DETAILS,FN_FOR_CUSTOMER_ADDRESS('300-100',DECODE(a.PARTY_TYPE,'CUSTOMER',a.CUSTOMER_POID,'PRINCIPAL',a.PRINCIPAL_POID),a.PARTY_TYPE,'SHIP_CHANDLING')) as CUSTOMER_ADDRESS,
+a.PRINT_DIVISION_POID, a.PRINT_BANK_POID, GCMBM.COMPANY_NAME AS BANK_BEF_NAME, GBM.BANK_ADDRESS, GBM.SWIFT_CODE, GBM.IBAN, GBM.BANK_ACCOUNT_NO,
+FUNC_SPECIAL_DATE_PARAMETERS(a.CUSTOMER_POID) as CUSTOMER_CONDITION, CONTRACT_REF_NUMBER, COST_REF_NUMBER
+FROM AR_SCH_SALES_INVOICE_HDR a
+LEFT JOIN SALES_QUOTATION_HDR Q ON a.QTN_POID=Q.TRANSACTION_POID
+LEFT JOIN SALES_CUSTOMER_MASTER SM ON a.CUSTOMER_POID=SM.CUSTOMER_POID and a.PARTY_TYPE = 'CUSTOMER'
+LEFT JOIN SHIP_PRINCIPAL_MASTER SPM ON SPM.PRINCIPAL_POID=a.PRINCIPAL_POID and a.PARTY_TYPE = 'PRINCIPAL'
+LEFT JOIN GLOBAL_ADDRESS_DETAILS GA1 ON SM.ADDRESS_POID = GA1.ADDRESS_MASTER_POID AND GA1.ADDRESS_TYPE='SHIP_CHANDLING'
+LEFT JOIN GLOBAL_ADDRESS_MASTER GA ON GA1.ADDRESS_MASTER_POID = GA.ADDRESS_MASTER_POID
+LEFT JOIN GLOBAL_CURRENCY_MASTER GLOBCURCY ON a.CURRENCY_CODE=GLOBCURCY.CURRENCY_CODE
+LEFT JOIN GLOBAL_COMPANY_MASTER COMMAST  ON COMMAST.COMPANY_POID=A.COMPANY_POID
+LEFT JOIN GL_BANK_MASTER GBM ON GBM.BANK_POID = A.PRINT_BANK_POID
+LEFT JOIN GLOBAL_COMPANY_MASTER GCMBM ON GCMBM.COMPANY_POID = GBM.COMPANY_POID
+where a.TRANSACTION_POID= $P{DOC_KEY_POID}]]>
+	</queryString>
+	<field name="TRANSACTION_POID" class="java.math.BigDecimal"/>
+	<field name="COMPANY_POID" class="java.math.BigDecimal"/>
+	<field name="TRANSACTION_DATE" class="java.lang.String"/>
+	<field name="DOC_REF" class="java.lang.String"/>
+	<field name="DN_POID" class="java.lang.String"/>
+	<field name="COMPANY" class="java.lang.String"/>
+	<field name="CURRENCY_CODE" class="java.lang.String"/>
+	<field name="CURRENCY_RATE" class="java.math.BigDecimal"/>
+	<field name="CREDIT_DAYS" class="java.math.BigDecimal"/>
+	<field name="DUE_DATE" class="java.sql.Timestamp"/>
+	<field name="PAYMENT_MODE" class="java.lang.String"/>
+	<field name="LPO_DETAILS" class="java.lang.String"/>
+	<field name="REMARKS" class="java.lang.String"/>
+	<field name="DELIVERY_TO_ADDRESS" class="java.lang.String"/>
+	<field name="AMT_IN_WORDS1" class="java.lang.String"/>
+	<field name="AMT_IN_WORDS" class="java.lang.String"/>
+	<field name="TOTAL_DISCOUNT1" class="java.math.BigDecimal"/>
+	<field name="TOTAL_DISCOUNT" class="java.math.BigDecimal"/>
+	<field name="QUOTATION_DTL" class="java.lang.String"/>
+	<field name="VESSEL_NAME" class="java.lang.String"/>
+	<field name="PORT_NAME" class="java.lang.String"/>
+	<field name="PORT_DESCRIPTION" class="java.lang.String"/>
+	<field name="CUSTOMER" class="java.lang.String"/>
+	<field name="PO_BOX" class="java.lang.String"/>
+	<field name="BUILDING" class="java.lang.String"/>
+	<field name="STATE" class="java.lang.String"/>
+	<field name="EMAIL" class="java.lang.String"/>
+	<field name="OFFICE_TEL" class="java.lang.String"/>
+	<field name="MOBILE" class="java.lang.String"/>
+	<field name="NUMBER_FORMAT_CURRENCY" class="java.lang.String"/>
+	<field name="TAX_APPLICABLE" class="java.lang.String"/>
+	<field name="CUSTOMER_TIN_NUMBER" class="java.lang.String"/>
+	<field name="COMPANY_TIN_NUMBER" class="java.lang.String"/>
+	<field name="INVOICE_HEADING" class="java.lang.String"/>
+	<field name="CUSTOMER_ADDRESS" class="java.lang.String"/>
+	<field name="PRINT_DIVISION_POID" class="java.math.BigDecimal"/>
+	<field name="PRINT_BANK_POID" class="java.math.BigDecimal"/>
+	<field name="BANK_BEF_NAME" class="java.lang.String"/>
+	<field name="BANK_ADDRESS" class="java.lang.String"/>
+	<field name="SWIFT_CODE" class="java.lang.String"/>
+	<field name="IBAN" class="java.lang.String"/>
+	<field name="BANK_ACCOUNT_NO" class="java.lang.String"/>
+	<field name="CUSTOMER_CONDITION" class="java.lang.String"/>
+	<field name="CONTRACT_REF_NUMBER" class="java.lang.String"/>
+	<field name="COST_REF_NUMBER" class="java.lang.String"/>
+	<variable name="Address" class="java.lang.String">
+		<initialValueExpression><![CDATA[$F{DELIVERY_TO_ADDRESS} == null || $F{DELIVERY_TO_ADDRESS}== "" ? ("P. O. BOX :" +($F{PO_BOX} == null? "":$F{PO_BOX}) +($F{BUILDING} == null ? "":$F{BUILDING}) + "\n" + "Email :" +($F{EMAIL}== null ? "":$F{EMAIL})+"\n"+"Contact Number :" +($F{OFFICE_TEL} == null ? "" :$F{OFFICE_TEL}) +($F{MOBILE} == null ?"" :"/"+ $F{MOBILE} ))
+ :
+($F{DELIVERY_TO_ADDRESS}.trim()  + "\n" +"P. O. BOX :"+($F{PO_BOX} == null? "":$F{PO_BOX}) +($F{BUILDING} == null ? "":$F{BUILDING}) + "\n" + "Email :" +($F{EMAIL}== null ? "":$F{EMAIL})+"\n"+"Contact Number :" + ($F{OFFICE_TEL} == null ? "" :$F{OFFICE_TEL}+"/")+($F{MOBILE} == null ?"" :$F{MOBILE} ))]]></initialValueExpression>
+	</variable>
+	<variable name="BILLING_ADDRESS" class="java.lang.String">
+		<variableExpression><![CDATA[]]></variableExpression>
+		<initialValueExpression><![CDATA[$F{VESSEL_NAME} != null ? ("TO THE MASTER OF "+  $F{VESSEL_NAME} + "\n" + "Port : " + $F{PORT_NAME}+ "\n" + "C/O : ") : ("TO,")]]></initialValueExpression>
+	</variable>
+	<variable name="Address_OLD" class="java.lang.String">
+		<initialValueExpression><![CDATA[$F{DELIVERY_TO_ADDRESS} == null || $F{DELIVERY_TO_ADDRESS}== "" ? ($F{CUSTOMER} + "\n" +"P. O. BOX :" +($F{PO_BOX} == null? "":$F{PO_BOX}) +($F{BUILDING} == null ? "":$F{BUILDING}) + "\n" + "Email :" +($F{EMAIL}== null ? "":$F{EMAIL})+"\n"+"Contact Number :" +($F{OFFICE_TEL} == null ? "" :$F{OFFICE_TEL}) +($F{MOBILE} == null ?"" :"/"+ $F{MOBILE} ))
+ :
+($F{DELIVERY_TO_ADDRESS}.trim() + "\n" +$F{CUSTOMER} + "\n" +"P. O. BOX :"+($F{PO_BOX} == null? "":$F{PO_BOX}) +($F{BUILDING} == null ? "":$F{BUILDING}) + "\n" + "Email :" +($F{EMAIL}== null ? "":$F{EMAIL})+"\n"+"Contact Number :" + ($F{OFFICE_TEL} == null ? "" :$F{OFFICE_TEL}+"/")+($F{MOBILE} == null ?"" :$F{MOBILE} ))]]></initialValueExpression>
+	</variable>
+	<variable name="TOTAL_AMOUNT" class="java.math.BigDecimal">
+		<initialValueExpression><![CDATA[$F{CURRENCY_CODE}=='BHD'?"#,##0.000":"#,##0.00"]]></initialValueExpression>
+	</variable>
+	<variable name="TOTAL_VAT_AMOUNT" class="java.math.BigDecimal"/>
+	<variable name="TOTAL_BASE_AMOUNT" class="java.math.BigDecimal"/>
+	<variable name="TOTAL_BASE_AMT_BHD" class="java.math.BigDecimal">
+		<variableExpression><![CDATA[]]></variableExpression>
+	</variable>
+	<variable name="TOTAL_VAT_AMT_BHD" class="java.math.BigDecimal">
+		<initialValueExpression><![CDATA[$F{CURRENCY_CODE}=='BHD'?"#,##0.000":"#,##0.00"]]></initialValueExpression>
+	</variable>
+	<variable name="TOTAL_AMOUNT_BHD" class="java.math.BigDecimal">
+		<initialValueExpression><![CDATA[$F{CURRENCY_CODE}=='BHD'?"#,##0.000":"#,##0.00"]]></initialValueExpression>
+	</variable>
+	<background>
+		<band splitType="Stretch"/>
+	</background>
+	<title>
+		<band splitType="Stretch"/>
+	</title>
+	<pageHeader>
+		<band height="231" splitType="Stretch">
+			<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+			<subreport runToBottom="false">
+				<reportElement x="1" y="0" width="549" height="69" isPrintInFirstWholeBand="true" uuid="0963e3a5-1cc9-4a7e-bafc-22719ade8bb1"/>
+				<subreportParameter name="LOGIN_DIV_POID">
+					<subreportParameterExpression><![CDATA[$F{PRINT_DIVISION_POID}]]></subreportParameterExpression>
+				</subreportParameter>
+				<subreportParameter name="LOGIN_COMP_POID">
+					<subreportParameterExpression><![CDATA[$F{COMPANY_POID}]]></subreportParameterExpression>
+				</subreportParameter>
+				<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+				<subreportExpression><![CDATA[$P{SUB_HEADER}]]></subreportExpression>
+			</subreport>
+			<rectangle radius="10">
+				<reportElement stretchType="RelativeToBandHeight" mode="Transparent" x="321" y="106" width="230" height="122" uuid="a2b1312c-3b51-42f1-b2be-dd2d412bc3ef">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<graphicElement>
+					<pen lineStyle="Double" lineColor="#999999"/>
+				</graphicElement>
+			</rectangle>
+			<rectangle radius="10">
+				<reportElement stretchType="RelativeToBandHeight" mode="Transparent" x="2" y="106" width="317" height="122" uuid="9a159741-033b-4270-a783-3c81f238be95">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<graphicElement>
+					<pen lineStyle="Double" lineColor="#999999"/>
+				</graphicElement>
+			</rectangle>
+			<textField isBlankWhenNull="true">
+				<reportElement x="432" y="110" width="115" height="18" uuid="6e09fe70-57bf-47b4-b0bd-034d7e0280a0">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="10" isBold="false"/>
+					<paragraph leftIndent="3"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{DOC_REF}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="323" y="110" width="102" height="18" uuid="de1f0bae-f435-4cd5-8b75-2f569d1122f9">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="10" isBold="true"/>
+					<paragraph leftIndent="3"/>
+				</textElement>
+				<text><![CDATA[Invoice Number]]></text>
+			</staticText>
+			<textField pattern="" isBlankWhenNull="true">
+				<reportElement x="432" y="127" width="115" height="18" uuid="c1ac8595-c26e-4501-a41e-87ae00b8fb35">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font isBold="false"/>
+					<paragraph leftIndent="3"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{TRANSACTION_DATE}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="323" y="127" width="102" height="18" uuid="d0b501de-4d14-458f-b870-7060620e432c">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="10" isBold="true"/>
+					<paragraph leftIndent="3"/>
+				</textElement>
+				<text><![CDATA[Invoice Date]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement x="432" y="144" width="115" height="18" uuid="c969272c-6fd0-4c37-a300-766ce64093ac">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font isBold="false"/>
+					<paragraph leftIndent="3"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{QUOTATION_DTL}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="323" y="144" width="102" height="18" uuid="0e9bd60e-c78a-4e6b-b225-7670e8e8ed5e">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="10" isBold="true"/>
+					<paragraph leftIndent="3"/>
+				</textElement>
+				<text><![CDATA[Quotation Ref]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement x="432" y="161" width="115" height="18" uuid="27cbd7cf-5fa6-487d-9592-fd3dc16a72ba">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font isBold="false"/>
+					<paragraph leftIndent="3"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{PAYMENT_MODE}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="323" y="161" width="102" height="18" uuid="2edc70f4-115d-41c0-a019-ac5a107d7a1e">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font isBold="true"/>
+					<paragraph leftIndent="3"/>
+				</textElement>
+				<text><![CDATA[Payment Mode]]></text>
+			</staticText>
+			<textField>
+				<reportElement x="1" y="73" width="548" height="30" uuid="f76a033a-b0d3-4997-8929-644f4fd0ec56"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font size="20" isBold="true" isUnderline="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{INVOICE_HEADING}]]></textFieldExpression>
+			</textField>
+			<textField isBlankWhenNull="true">
+				<reportElement stretchType="RelativeToBandHeight" x="90" y="207" width="219" height="15" uuid="0beb25da-5e12-4f8f-9cba-98fb3e88b1d4">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y"]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Bottom">
+					<font size="9" isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{CUSTOMER_TIN_NUMBER}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement stretchType="RelativeToBandHeight" x="9" y="207" width="80" height="15" uuid="e66cf8d1-043f-4eb9-bb80-5656f966fa96">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y"]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Bottom">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[VAT Number  :]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement x="432" y="206" width="115" height="18" uuid="a9a33203-a61d-497a-aa47-d1cb53fa0735">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y"]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Left" verticalAlignment="Middle">
+					<font size="9" isBold="false"/>
+					<paragraph leftIndent="3"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{COMPANY_TIN_NUMBER}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="323" y="206" width="102" height="18" uuid="974c1d4a-9986-4f88-ba18-ff52e8fbd064">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="9" isBold="true"/>
+					<paragraph leftIndent="3"/>
+				</textElement>
+				<text><![CDATA[Our VAT Number]]></text>
+			</staticText>
+			<textField isStretchWithOverflow="true" isBlankWhenNull="true">
+				<reportElement positionType="Float" stretchType="RelativeToBandHeight" x="9" y="110" width="300" height="86" uuid="535be07e-4f14-44f4-8ef0-1879dbd9b575"/>
+				<textFieldExpression><![CDATA[$F{CUSTOMER_ADDRESS}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="425" y="110" width="7" height="18" uuid="db0b3686-3ba8-495c-b277-cd3cd80e20cd"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[ :]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="425" y="127" width="7" height="18" uuid="e6a7eaa0-4b6e-4702-8720-8c483717fe7c"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[ :]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="425" y="144" width="7" height="18" uuid="76be22eb-5e91-486f-b095-8c1f3b015691"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[ :]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="425" y="161" width="7" height="18" uuid="4eaec8d8-6b66-4049-ad7f-48579552b124"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[ :]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="425" y="206" width="7" height="18" uuid="57e9c1a2-5d5c-4a62-9181-84abfc7d8d20"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[ :]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="323" y="178" width="122" height="15" uuid="8dc08ddc-21d9-4e37-b564-cc3d221db756">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1 && $F{CUSTOMER_CONDITION}.contains("TRUE")]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="9" isBold="true"/>
+					<paragraph leftIndent="3"/>
+				</textElement>
+				<text><![CDATA[Contract Ref Number]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="323" y="192" width="102" height="15" uuid="7082c6ab-62fb-4c13-b912-f3047ba70eaa">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1 && $F{CUSTOMER_CONDITION}.contains("TRUE")]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="9" isBold="true"/>
+					<paragraph leftIndent="3"/>
+				</textElement>
+				<text><![CDATA[Cost Ref Number]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="425" y="178" width="7" height="15" uuid="efecd935-f085-44d7-be29-789accf451b8">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1 && $F{CUSTOMER_CONDITION}.contains("TRUE")]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[ :]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="425" y="192" width="7" height="15" uuid="ed9cb8e5-c6ba-4f34-8795-9c6ac91cfe18">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1 && $F{CUSTOMER_CONDITION}.contains("TRUE")]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[ :]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement x="432" y="178" width="115" height="15" uuid="78be01d2-b93c-45ea-b8cb-94bf78aeef44">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1 && $F{CUSTOMER_CONDITION}.contains("TRUE")]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{CONTRACT_REF_NUMBER}]]></textFieldExpression>
+			</textField>
+			<textField isBlankWhenNull="true">
+				<reportElement x="432" y="192" width="115" height="15" uuid="16fe5c16-19b2-465b-a5d5-e3037d6ad6d7">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1 && $F{CUSTOMER_CONDITION}.contains("TRUE")]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{COST_REF_NUMBER}]]></textFieldExpression>
+			</textField>
+		</band>
+	</pageHeader>
+	<columnHeader>
+		<band height="17" splitType="Stretch">
+			<printWhenExpression><![CDATA[$V{PAGE_NUMBER}>1]]></printWhenExpression>
+			<textField isBlankWhenNull="true">
+				<reportElement x="5" y="0" width="542" height="16" uuid="e8c8fca1-ddb3-4e0a-b6e7-d431bacafafb">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}> 1]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Continuation of Invoice :"+ $F{DOC_REF} + " -"+ $F{CUSTOMER}]]></textFieldExpression>
+			</textField>
+		</band>
+	</columnHeader>
+	<detail>
+		<band height="34" splitType="Stretch">
+			<printWhenExpression><![CDATA[$F{VESSEL_NAME} != null]]></printWhenExpression>
+			<rectangle radius="10">
+				<reportElement stretchType="RelativeToBandHeight" mode="Transparent" x="2" y="1" width="547" height="30" uuid="8ecec506-3ddc-4852-837c-a218bc15d6c4">
+					<printWhenExpression><![CDATA[$F{VESSEL_NAME} != null]]></printWhenExpression>
+				</reportElement>
+				<graphicElement>
+					<pen lineStyle="Double" lineColor="#999999"/>
+				</graphicElement>
+			</rectangle>
+			<staticText>
+				<reportElement x="10" y="10" width="80" height="18" uuid="adbf14f9-0b03-46be-a73f-97dd7adcb83b">
+					<printWhenExpression><![CDATA[$F{VESSEL_NAME} != null]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle"/>
+				<text><![CDATA[Vessel Name  :  ]]></text>
+			</staticText>
+			<textField isStretchWithOverflow="true" isBlankWhenNull="true">
+				<reportElement x="90" y="10" width="229" height="18" uuid="577c0ca0-6203-4520-8879-ae9b14336e03"/>
+				<textElement verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{VESSEL_NAME}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="328" y="10" width="63" height="18" uuid="7ba224d6-cfc6-470b-b7cb-6fefd9bff1b2">
+					<printWhenExpression><![CDATA[$F{PORT_NAME} != null]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle"/>
+				<text><![CDATA[Port Name  :  ]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement x="391" y="10" width="154" height="18" uuid="47d8d95c-4c03-485c-9e71-2cabfddea72b"/>
+				<textElement verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{PORT_NAME}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="10" y="1" width="100" height="12" uuid="36b60ab1-cbf6-437d-b631-c09bf2324a59">
+					<printWhenExpression><![CDATA[$F{VESSEL_NAME} != null]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="7" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Delivery to,]]></text>
+			</staticText>
+		</band>
+		<band height="21">
+			<subreport>
+				<reportElement positionType="Float" x="110" y="1" width="209" height="19" isRemoveLineWhenBlank="true" uuid="93095bca-775f-4aaa-b3aa-2787bdfc4c8b">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<subreportParameter name="DOC_KEY_POID">
+					<subreportParameterExpression><![CDATA[$P{DOC_KEY_POID}]]></subreportParameterExpression>
+				</subreportParameter>
+				<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+				<subreportExpression><![CDATA[$P{SUB_RFQ_DTL}]]></subreportExpression>
+			</subreport>
+			<staticText>
+				<reportElement positionType="Float" x="10" y="1" width="100" height="20" uuid="ac1e04cf-1d73-4cca-9b19-92cf9d97df61">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle"/>
+				<text><![CDATA[DN Ref Number  : ]]></text>
+			</staticText>
+			<staticText>
+				<reportElement positionType="Float" x="328" y="1" width="92" height="20" uuid="8c3ba781-03f3-4fc1-b445-79d5606d7519">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle"/>
+				<text><![CDATA[PO Ref Number  : ]]></text>
+			</staticText>
+			<textField isStretchWithOverflow="true" isBlankWhenNull="true">
+				<reportElement positionType="Float" x="420" y="1" width="129" height="20" uuid="e65a5abf-381d-417f-ba10-9ebd91226d15">
+					<printWhenExpression><![CDATA[$V{PAGE_NUMBER}==1]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{LPO_DETAILS}]]></textFieldExpression>
+			</textField>
+			<line>
+				<reportElement x="2" y="0" width="545" height="1" forecolor="#999999" uuid="9ee49f38-830d-4849-a783-86fb95ced07a"/>
+				<graphicElement>
+					<pen lineStyle="Solid"/>
+				</graphicElement>
+			</line>
+		</band>
+		<band height="44">
+			<subreport>
+				<reportElement x="2" y="1" width="547" height="42" isRemoveLineWhenBlank="true" uuid="4ab41e32-9b91-4c5d-a5d0-0c62690c700a"/>
+				<subreportParameter name="DOC_KEY_POID">
+					<subreportParameterExpression><![CDATA[$P{DOC_KEY_POID}]]></subreportParameterExpression>
+				</subreportParameter>
+				<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+				<returnValue subreportVariable="TOTAL_AMOUNT" toVariable="TOTAL_AMOUNT"/>
+				<returnValue subreportVariable="TOTAL_VAT_AMOUNT" toVariable="TOTAL_VAT_AMOUNT"/>
+				<returnValue subreportVariable="TOTAL_BASE_AMOUNT" toVariable="TOTAL_BASE_AMOUNT"/>
+				<returnValue subreportVariable="TOTAL_BASE_AMT_BHD" toVariable="TOTAL_BASE_AMT_BHD"/>
+				<returnValue subreportVariable="TOTAL_VAT_AMT_BHD" toVariable="TOTAL_VAT_AMT_BHD"/>
+				<returnValue subreportVariable="TOTAL_AMOUNT_BHD" toVariable="TOTAL_AMOUNT_BHD"/>
+				<subreportExpression><![CDATA[$P{SUB_RFQ_DTL}]]></subreportExpression>
+			</subreport>
+		</band>
+	</detail>
+	<columnFooter>
+		<band splitType="Stretch"/>
+	</columnFooter>
+	<pageFooter>
+		<band height="20" splitType="Stretch">
+			<textField>
+				<reportElement x="5" y="0" width="100" height="15" forecolor="#999999" uuid="b9c0747c-4320-4e17-b5f5-371fed0fd3b7"/>
+				<textElement>
+					<font size="8"/>
+				</textElement>
+				<textFieldExpression><![CDATA["ISO "+$P{DOC_ID}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="416" y="1" width="80" height="15" forecolor="#999999" uuid="4a3b9a1b-6af1-4854-965f-7d0e6511a67d"/>
+				<textElement textAlignment="Right">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Page "+$V{PAGE_NUMBER}+" of"]]></textFieldExpression>
+			</textField>
+			<textField evaluationTime="Report">
+				<reportElement x="496" y="1" width="40" height="15" forecolor="#999999" uuid="6768a889-28f6-4b3a-a0d5-d89f36bb2b8c"/>
+				<textElement>
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[" " + $V{PAGE_NUMBER}]]></textFieldExpression>
+			</textField>
+		</band>
+	</pageFooter>
+	<lastPageFooter>
+		<band height="255">
+			<staticText>
+				<reportElement x="359" y="228" width="188" height="17" uuid="5977298f-0d79-4baa-9279-9efacfa1f4ef">
+					<printWhenExpression><![CDATA[$F{VESSEL_NAME} != null]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font fontName="SansSerif" size="11" isBold="false"/>
+				</textElement>
+				<text><![CDATA[Master / Officer in Charge]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="8" y="228" width="184" height="17" uuid="c964748c-6ec2-4db0-8b6c-095b9939d182"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font size="11" isBold="false"/>
+				</textElement>
+				<text><![CDATA[Authorized signatory]]></text>
+			</staticText>
+			<line>
+				<reportElement x="359" y="227" width="188" height="1" uuid="271e7f06-c2f8-4a02-ba25-61356a96e2ad">
+					<printWhenExpression><![CDATA[$F{VESSEL_NAME} != null]]></printWhenExpression>
+				</reportElement>
+				<graphicElement>
+					<pen lineWidth="0.5" lineColor="#999999"/>
+				</graphicElement>
+			</line>
+			<line>
+				<reportElement x="8" y="227" width="184" height="1" uuid="c3584589-cf22-4c2f-ba11-29dc6168be74"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineColor="#999999"/>
+				</graphicElement>
+			</line>
+			<textField isBlankWhenNull="true">
+				<reportElement x="336" y="28" width="130" height="15" uuid="6a81a164-b75a-41be-8904-7fdfb15fdab1"/>
+				<textElement verticalAlignment="Middle">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Total Amount(" + $F{CURRENCY_CODE} + ") : "]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0.000" isBlankWhenNull="true">
+				<reportElement x="467" y="28" width="78" height="15" uuid="1bb28fb9-095b-4552-80bb-0dc9f908cd3b"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{TOTAL_AMOUNT}]]></textFieldExpression>
+				<patternExpression><![CDATA[$F{CURRENCY_CODE}=='BHD'?"#,##0.000":"#,##0.00"]]></patternExpression>
+			</textField>
+			<line>
+				<reportElement x="5" y="66" width="547" height="1" uuid="58b6ac06-0919-48f7-ada1-0bafe5b8a366"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineStyle="Solid" lineColor="#999999"/>
+				</graphicElement>
+			</line>
+			<textField>
+				<reportElement x="201" y="221" width="89" height="12" forecolor="#999999" uuid="5686be3f-bc89-4072-a8c4-33c5c79bc652"/>
+				<textElement textAlignment="Right" verticalAlignment="Bottom">
+					<font size="8"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Page "+$V{PAGE_NUMBER}+" of"]]></textFieldExpression>
+			</textField>
+			<textField evaluationTime="Report">
+				<reportElement x="290" y="221" width="40" height="12" forecolor="#999999" uuid="8991972a-95c0-47da-b024-18ca012e07b2"/>
+				<textElement verticalAlignment="Bottom">
+					<font size="8"/>
+				</textElement>
+				<textFieldExpression><![CDATA[" " + $V{PAGE_NUMBER}]]></textFieldExpression>
+			</textField>
+			<line>
+				<reportElement x="4" y="0" width="549" height="1" uuid="b58f8e6f-9f4a-4139-8daa-ceaf5adfde36"/>
+				<graphicElement>
+					<pen lineWidth="0.75" lineStyle="Dashed" lineColor="#999999"/>
+				</graphicElement>
+			</line>
+			<componentElement>
+				<reportElement key="table" x="95" y="47" width="450" height="20" uuid="fa96fde0-3a2b-42b9-bc29-69470c82580e"/>
+				<jr:table xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd">
+					<datasetRun subDataset="Amt_words" uuid="f244403a-4fc2-45c4-a5e8-25d1c2f0d208">
+						<datasetParameter name="Total_amount">
+							<datasetParameterExpression><![CDATA[$V{TOTAL_AMOUNT}]]></datasetParameterExpression>
+						</datasetParameter>
+						<datasetParameter name="Total_discount">
+							<datasetParameterExpression><![CDATA[$F{TOTAL_DISCOUNT1}]]></datasetParameterExpression>
+						</datasetParameter>
+						<datasetParameter name="Currency">
+							<datasetParameterExpression><![CDATA[$F{CURRENCY_CODE}]]></datasetParameterExpression>
+						</datasetParameter>
+						<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+					</datasetRun>
+					<jr:column width="384" uuid="2d4a1447-b533-4df5-a106-d0009d1667b4">
+						<jr:detailCell height="30" rowSpan="1">
+							<textField isStretchWithOverflow="true" isBlankWhenNull="true">
+								<reportElement stretchType="RelativeToTallestObject" x="28" y="0" width="346" height="30" uuid="e04ba3b4-9c8c-403b-b948-53fe32e69897"/>
+								<textElement verticalAlignment="Top">
+									<font isBold="false"/>
+								</textElement>
+								<textFieldExpression><![CDATA[$F{AMOUNT_WORD}]]></textFieldExpression>
+							</textField>
+							<textField>
+								<reportElement x="0" y="0" width="28" height="30" uuid="0aa5ec2e-cf32-419b-a1cd-4cdbd50cde0b"/>
+								<textElement>
+									<font isBold="false"/>
+								</textElement>
+								<textFieldExpression><![CDATA[$F{CURR}]]></textFieldExpression>
+							</textField>
+						</jr:detailCell>
+					</jr:column>
+				</jr:table>
+			</componentElement>
+			<staticText>
+				<reportElement x="5" y="47" width="90" height="20" uuid="f228f929-f1ab-42f1-815c-47477e6f67fe"/>
+				<textElement>
+					<font size="10" isBold="false"/>
+				</textElement>
+				<text><![CDATA[Amount in Words : ]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement x="5" y="67" width="272" height="64" uuid="806dc39d-84a8-438a-bae2-108cdb48edcd"/>
+				<textFieldExpression><![CDATA[$F{REMARKS}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="105" y="15" width="127" height="13" uuid="68a6d462-eb47-4593-838c-a9b6570190d3">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y" && $F{CURRENCY_CODE}!="BHD"]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="10" isBold="false"/>
+				</textElement>
+				<text><![CDATA[Total VAT(BHD) : ]]></text>
+			</staticText>
+			<textField pattern="#,##0.000;-#,##0.000" isBlankWhenNull="true">
+				<reportElement x="232" y="15" width="70" height="13" uuid="d7ad8585-5471-4f0b-859a-9403e8b394a3">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y" && $F{CURRENCY_CODE}!="BHD"]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9" isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[($V{TOTAL_VAT_AMOUNT}.multiply( $F{CURRENCY_RATE} )).setScale( 3, RoundingMode.HALF_UP )]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="5" y="1" width="47" height="20" uuid="d0fae984-6d37-4fea-97ef-4366afeaab42">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y" && $F{CURRENCY_CODE}!="BHD"]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font isBold="false"/>
+				</textElement>
+				<text><![CDATA[Ex Rate]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement x="52" y="1" width="38" height="20" uuid="31d8858a-06c5-4c65-a9d1-f8cdd3c95ea5">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y" && $F{CURRENCY_CODE}!="BHD"]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{CURRENCY_RATE}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="105" y="1" width="127" height="14" uuid="732fa91b-2545-4aec-8351-5ff9a3389864">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y" && $F{CURRENCY_CODE}!="BHD"]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="10" isBold="false"/>
+				</textElement>
+				<text><![CDATA[Total excl. VAT (BHD): ]]></text>
+			</staticText>
+			<textField pattern="#,##0.000;-#,##0.000" isBlankWhenNull="true">
+				<reportElement x="232" y="1" width="70" height="14" uuid="de3686ef-cad2-4397-9692-c3b979c98378">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y" && $F{CURRENCY_CODE}!="BHD"]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9" isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[($V{TOTAL_BASE_AMOUNT}.multiply( $F{CURRENCY_RATE} )).setScale( 3, RoundingMode.HALF_UP )]]></textFieldExpression>
+			</textField>
+			<line>
+				<reportElement x="105" y="28" width="197" height="1" uuid="b18a4c7f-3d66-4412-85cc-997020dfed8c">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y" && $F{CURRENCY_CODE}!="BHD"]]></printWhenExpression>
+				</reportElement>
+				<graphicElement>
+					<pen lineWidth="0.5" lineStyle="Solid" lineColor="#999999"/>
+				</graphicElement>
+			</line>
+			<staticText>
+				<reportElement x="105" y="28" width="127" height="15" uuid="0e245765-4470-4408-91da-743c283ada0e">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y" && $F{CURRENCY_CODE}!="BHD"]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Total Amount(BHD) : ]]></text>
+			</staticText>
+			<textField pattern="#,##0.000;-#,##0.000" isBlankWhenNull="true">
+				<reportElement x="232" y="28" width="70" height="15" uuid="4a9d58d1-756b-4cf5-8954-1e525935d47c">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y" && $F{CURRENCY_CODE}!="BHD"]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[($V{TOTAL_AMOUNT}.multiply( $F{CURRENCY_RATE} )).setScale( 3, RoundingMode.HALF_UP )]]></textFieldExpression>
+			</textField>
+			<textField isBlankWhenNull="true">
+				<reportElement x="467" y="15" width="78" height="13" uuid="a3bf1c90-d777-4fa7-8882-9cb1a5592ef0"/>
+				<textElement textAlignment="Right">
+					<font isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{TOTAL_VAT_AMOUNT}]]></textFieldExpression>
+				<patternExpression><![CDATA[$F{CURRENCY_CODE}=='BHD'?"#,##0.000":"#,##0.00"]]></patternExpression>
+			</textField>
+			<textField isBlankWhenNull="true">
+				<reportElement x="467" y="1" width="78" height="14" uuid="361b4a1e-615a-46b4-b922-e1e6ecb42815"/>
+				<textElement textAlignment="Right">
+					<font isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{TOTAL_BASE_AMOUNT}]]></textFieldExpression>
+				<patternExpression><![CDATA[$F{CURRENCY_CODE}=='BHD'?"#,##0.000":"#,##0.00"]]></patternExpression>
+			</textField>
+			<textField isBlankWhenNull="true">
+				<reportElement x="336" y="15" width="130" height="13" uuid="ea21c1e4-5b02-40d5-a4d6-aeecd00f3fed"/>
+				<textElement>
+					<font isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Total VAT(" + $F{CURRENCY_CODE} + ") : "]]></textFieldExpression>
+			</textField>
+			<textField isBlankWhenNull="true">
+				<reportElement x="336" y="1" width="130" height="14" uuid="65e9d784-5f8c-4fe2-8043-1d4f057e401a"/>
+				<textElement>
+					<font isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Total excl. VAT(" + $F{CURRENCY_CODE} + ") : "]]></textFieldExpression>
+			</textField>
+			<line>
+				<reportElement x="337" y="28" width="208" height="1" uuid="d6c44bf7-c8b3-4e34-94a7-2329577d2d99"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineStyle="Solid" lineColor="#999999"/>
+				</graphicElement>
+			</line>
+			<line>
+				<reportElement x="5" y="46" width="547" height="1" uuid="39b09bba-462d-4020-b49e-29aef19765ce"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineStyle="Solid" lineColor="#999999"/>
+				</graphicElement>
+			</line>
+			<textField>
+				<reportElement x="0" y="240" width="72" height="13" forecolor="#999999" uuid="9d6c614c-4be1-4268-9d94-13ec66c68e65"/>
+				<textElement verticalAlignment="Middle">
+					<font size="6"/>
+				</textElement>
+				<textFieldExpression><![CDATA["ISO "+$P{DOC_ID}]]></textFieldExpression>
+			</textField>
+			<textField isStretchWithOverflow="true" isBlankWhenNull="true">
+				<reportElement x="387" y="171" width="169" height="16" isPrintWhenDetailOverflows="true" uuid="a8a08552-7688-41a1-934e-57ec8e1b4ff0">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement>
+					<font size="9" isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{IBAN}]]></textFieldExpression>
+			</textField>
+			<textField isStretchWithOverflow="true" isBlankWhenNull="true">
+				<reportElement x="387" y="100" width="167" height="41" uuid="7c6a3b31-3a21-45d0-86b4-4e970fea34e3">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement>
+					<font size="9" isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{BANK_ADDRESS}]]></textFieldExpression>
+			</textField>
+			<textField isStretchWithOverflow="true" isBlankWhenNull="true">
+				<reportElement x="387" y="156" width="167" height="14" isPrintWhenDetailOverflows="true" uuid="5aef640e-00c6-4e5b-b190-27c166f724f2">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement>
+					<font size="9" isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{SWIFT_CODE}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="282" y="100" width="98" height="20" uuid="b69b99ca-894f-40b7-9f21-3f7147284047">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Top">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Bank Name]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="380" y="171" width="3" height="15" uuid="d952118c-9505-4880-a2cd-68407736f1b8">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Center" verticalAlignment="Top">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[:]]></text>
+			</staticText>
+			<textField isStretchWithOverflow="true" isBlankWhenNull="true">
+				<reportElement x="387" y="141" width="167" height="15" isPrintWhenDetailOverflows="true" uuid="c12cc016-7d9f-4b62-83b7-669ddcde240e">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement>
+					<font size="9" isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{BANK_ACCOUNT_NO}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="282" y="156" width="98" height="14" uuid="f1e58f67-13b7-4b82-8002-1d4a74c04d5f">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Top">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Swift Code]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="380" y="100" width="3" height="20" uuid="9f437213-1cc0-45a0-985d-397286f031f5">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Center" verticalAlignment="Top">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[:]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="380" y="141" width="3" height="15" uuid="68fdd89a-fc53-41f8-b10d-b3720b5976f2">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Center" verticalAlignment="Top">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[:]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="380" y="80" width="3" height="20" uuid="cbffa3e4-8952-4a6f-9b95-583711ff2379">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Center" verticalAlignment="Top">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[:]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="380" y="156" width="3" height="15" uuid="0dbbb6f1-1638-4fc0-a2c0-4a07d931ae68">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Center" verticalAlignment="Top">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[:]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="282" y="68" width="100" height="12" uuid="4976fa65-ef6c-4827-949f-c9f51e548f60">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement>
+					<font size="9" isBold="true" isUnderline="true"/>
+				</textElement>
+				<text><![CDATA[Our Bank Details:]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="282" y="80" width="98" height="20" uuid="b7fd4780-8508-4be5-aeb1-b2a1e86494a4">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Top">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Beneficiary Name]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="282" y="141" width="98" height="15" uuid="2bf4f580-9a9e-4b65-9ea3-55c2a02ae8ad">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Top">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Account Number]]></text>
+			</staticText>
+			<textField isStretchWithOverflow="true" isBlankWhenNull="true">
+				<reportElement mode="Transparent" x="387" y="80" width="167" height="20" uuid="8cc8a35f-00a2-43fa-8981-781c9e93e3fd">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement>
+					<font size="9" isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{BANK_BEF_NAME}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="282" y="171" width="98" height="16" uuid="76df574a-4e29-45a5-a711-1a6f7bb6360e">
+					<printWhenExpression><![CDATA[$F{PRINT_BANK_POID}!=null]]></printWhenExpression>
+				</reportElement>
+				<textElement verticalAlignment="Top">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<text><![CDATA[IBAN Number]]></text>
+			</staticText>
+		</band>
+	</lastPageFooter>
+	<summary>
+		<band splitType="Stretch"/>
+	</summary>
+</jasperReport>

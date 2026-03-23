@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -13,9 +15,9 @@ public class CreateSalesQuotationSchItemDtlRequest {
     
     private Long stockPoid;
     
-    private Long quantity;
+    private BigDecimal quantity;
     
-    private Long price;
+    private BigDecimal price;
     
     private Long discount;
     
@@ -28,7 +30,7 @@ public class CreateSalesQuotationSchItemDtlRequest {
     
     private Long adjQuantity;
     
-    private Long cost;
+    private BigDecimal cost;
     
     private Long lastRate1;
     

@@ -3,7 +3,10 @@ package com.asg.shipchandling.salesquotationsch.spec;
 import com.asg.shipchandling.salesquotationsch.entity.SalesQuotationSchHdr;
 import org.springframework.data.jpa.domain.Specification;
 
-import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+
 
 public final class SalesQuotationSchSpecifications {
 
@@ -43,23 +46,25 @@ public final class SalesQuotationSchSpecifications {
                 cb.like(cb.upper(root.get("docRef")), "%" + docRef.trim().toUpperCase() + "%");
     }
 
-    public static Specification<SalesQuotationSchHdr> transactionDateFrom(Timestamp fromDate) {
+    public static Specification<SalesQuotationSchHdr> transactionDateFrom(LocalDateTime fromDate) {
         return fromDate == null ? null : (root, query, cb) -> cb.greaterThanOrEqualTo(root.get("transactionDate"), fromDate);
     }
 
-    public static Specification<SalesQuotationSchHdr> transactionDateTo(Timestamp toDate) {
+    public static Specification<SalesQuotationSchHdr> transactionDateTo(LocalDateTime toDate) {
         return toDate == null ? null : (root, query, cb) -> cb.lessThanOrEqualTo(root.get("transactionDate"), toDate);
     }
     
-    public static Specification<SalesQuotationSchHdr> validityFromDate(Timestamp validityFromDate) {
+    public static Specification<SalesQuotationSchHdr> validityFromDate(LocalDate validityFromDate) {
         return validityFromDate == null ? null : (root, query, cb) -> 
                 cb.greaterThanOrEqualTo(root.get("validityFromDate"), validityFromDate);
     }
+
     
-    public static Specification<SalesQuotationSchHdr> validityToDate(Timestamp validityToDate) {
+    public static Specification<SalesQuotationSchHdr> validityToDate(LocalDate validityToDate) {
         return validityToDate == null ? null : (root, query, cb) -> 
                 cb.lessThanOrEqualTo(root.get("validityToDate"), validityToDate);
     }
+
     
     /**
      * Search across multiple fields: DocRef, CustomerRef, Details

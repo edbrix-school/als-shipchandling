@@ -1,15 +1,13 @@
 package com.asg.shipchandling.StockMaster.entity;
 
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.sql.Date;
-import java.sql.Timestamp;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "STOCK_MASTER_WAREHOUSE_DTL")
@@ -17,7 +15,7 @@ import java.sql.Timestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 @IdClass(StockMasterWarehouseDtlId.class)
-public class StockMasterWarehouseDtl {
+public class StockMasterWarehouseDtl extends BaseEntity {
      @Id
     @Column(name = "STOCK_POID", nullable = false)
     private Long stockPoid;
@@ -27,7 +25,7 @@ public class StockMasterWarehouseDtl {
     private Long detRowId;
 
     @Column(name = "TRANSACTION_DATE")
-    private Date transactionDate;
+    private LocalDate transactionDate;
 
     @Column(name = "LOCATION_POID")
     private Long locationPoid;
@@ -49,18 +47,4 @@ public class StockMasterWarehouseDtl {
 
     @Column(name = "REORDER_QTY")
     private BigDecimal reorderQty;
-
-    @Column(name = "CREATED_BY", length = 20)
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    private Timestamp createdDate;
-
-    @Column(name = "LAST_MODIFIED_BY", length = 20)
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LAST_MODIFIED_DATE")
-    private Timestamp lastmodifiedDate;
 }

@@ -3,6 +3,8 @@ package com.asg.shipchandling.deliverynote.dto;
 import com.asg.shipchandling.commonlov.dto.LovItem;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -13,7 +15,7 @@ public class QuotationItemDto {
     private Long stockUnitPoid;
     private LovItem stockUnitDet;
     private Long quantity;
-    private Long price;
+    private BigDecimal price;
     private Long discount;
     private Long amount;
     private String remarks;

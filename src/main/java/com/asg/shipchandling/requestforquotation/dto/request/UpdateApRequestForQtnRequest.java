@@ -7,7 +7,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -16,12 +17,12 @@ import java.util.List;
 public class UpdateApRequestForQtnRequest {
     
     @NotNull(message = "Transaction date is required")
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
 
     @Size(max = 500, message = "Description must not exceed 500 characters")
     private String description;
 
-    private Timestamp expectedDate;
+    private LocalDate expectedDate;
 
     @Size(max = 500, message = "Remarks must not exceed 500 characters")
     private String remarks;

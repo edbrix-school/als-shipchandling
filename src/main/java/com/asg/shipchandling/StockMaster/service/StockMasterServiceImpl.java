@@ -1,10 +1,16 @@
 package com.asg.shipchandling.StockMaster.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.utility.PaginationUtil;
+import com.asg.shipchandling.deliverynote.entity.SalesDeliveryNoteItemDtl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +23,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -46,6 +53,10 @@ import com.asg.shipchandling.exceptions.ResourceAlreadyExistsException;
 import com.asg.shipchandling.StockMaster.dto.StockMasterViewResponse.LovDetailDto;
 
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,6 +69,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.sql.CallableStatement;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Types;
 
 @Service
 @RequiredArgsConstructor
@@ -77,6 +92,13 @@ public class StockMasterServiceImpl implements StockMasterService {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private LoggingService loggingService;
+
+    @Autowired
+    private DocumentDeleteService documentDeleteService;
+
     
     @PersistenceContext
     private EntityManager entityManager;
@@ -156,8 +178,8 @@ public class StockMasterServiceImpl implements StockMasterService {
         response.setGroupPoid(entity.getGroupPoid());
         response.setCreatedBy(entity.getCreatedBy());
         response.setCreatedDate(entity.getCreatedDate());
-        response.setLastmodifiedBy(entity.getLastmodifiedBy());
-        response.setLastmodifiedDate(entity.getLastmodifiedDate());
+        response.setLastmodifiedBy(entity.getLastModifiedBy());
+        response.setLastmodifiedDate(entity.getLastModifiedDate());
 
         // Fetch and set category name
         if (entity.getCategoryPoid() != null) {
@@ -495,10 +517,19 @@ public class StockMasterServiceImpl implements StockMasterService {
 
     @Override
     @Transactional
-    public void deleteStockMaster(Long stockPoid, Long groupPoid) {
+    public void deleteStockMaster(Long stockPoid, Long groupPoid, DeleteReasonDto deleteReasonDto) {
+
         StockMasterEntity stock = stockMasterRepository
                 .findByStockPoidAndGroupPoid(stockPoid, groupPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Stock Master", "stockPoid", stockPoid));
+
+        documentDeleteService.deleteDocument(
+                stockPoid,
+                "STOCK_MASTER",
+                "STOCK_POID",
+                deleteReasonDto,
+                LocalDate.now()
+        );
 
         // TODO: Check dependencies (stock balance, transactions, etc.)
 
@@ -530,9 +561,27 @@ public class StockMasterServiceImpl implements StockMasterService {
     }
 
     private void callAfterSaveProcedure(Long stockPoid) {
-        // TODO: Implement stored procedure call using CallableStatement
-        // String sql = "BEGIN PROC_STOCK_MASTER_AFTER_SAVE(?,?); END;";
-        // Check result for "ERROR" and log warning if found
+        if (stockPoid == null) {
+            throw new IllegalArgumentException("stockPoid cannot be null");
+        }
+
+        String proc = "{call PROC_STOCK_MASTER_AFTER_SAVE(?, ?)}";
+        jdbcTemplate.execute((Connection con) -> {
+            try (CallableStatement cs = con.prepareCall(proc)) {
+                cs.setBigDecimal(1, BigDecimal.valueOf(stockPoid));
+                cs.registerOutParameter(2, Types.VARCHAR);
+                cs.execute();
+
+                String result = cs.getString(2);
+                if (result != null && result.contains("ERROR")) {
+                    logger.warn("PROC_STOCK_MASTER_AFTER_SAVE returned error for stockPoid {}: {}", stockPoid, result);
+                }
+                return null;
+            } catch (SQLException ex) {
+                logger.error("Error calling PROC_STOCK_MASTER_AFTER_SAVE for stockPoid {}: {}", stockPoid, ex.getMessage(), ex);
+                throw new RuntimeException("Error calling PROC_STOCK_MASTER_AFTER_SAVE: " + ex.getMessage(), ex);
+            }
+        });
     }
 
     private StockMasterDto convertToDto(StockMasterEntity stock, boolean includeDetails) {
@@ -671,8 +720,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         BeanUtils.copyProperties(request, stock, "stockPoid", "stockCode", "createdBy", "createdDate");
         // stock.setStockPoid(request.getStockPoid());
         stock.setGroupPoid(groupPoid);
-        stock.setCreatedBy(userId);
-        stock.setLastmodifiedBy(userId);
         stock.setActive(request.getActive() != null ? request.getActive() : "Y");
         stock.setDeleted("N");
         stock.setServiceItem(request.getServiceItem() != null ? request.getServiceItem() : "N");
@@ -705,19 +752,25 @@ public class StockMasterServiceImpl implements StockMasterService {
             processWarehouseDetails(stockPoid, request.getWarehouseDetails(), userId);
         }
 
+        StockMasterDto response = convertToDto(savedStock, true);
+
         // just call the function
-        callAfterSaveProcedure(stockPoid);
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                callAfterSaveProcedure(stockPoid);
+                entityManager.clear();
+                StockMasterEntity refreshedStock = stockMasterRepository.findByStockPoid(stockPoid)
+                        .orElseThrow(() -> new RuntimeException("Stock not found after save"));
+                StockMasterDto refreshedDto = convertToDto(refreshedStock, true);
+                BeanUtils.copyProperties(refreshedDto, response);
+            }
+        });
 
-        // Clear persistence context and fetch fresh entity to get database-generated values (like stockCode)
-        // The stock code is generated by database trigger/stored procedure after insert
-        entityManager.flush();
-        entityManager.clear();
-        
-        // Fetch fresh entity to ensure we have the latest data including generated stockCode
-        StockMasterEntity refreshedStock = stockMasterRepository.findByStockPoid(stockPoid)
-                .orElseThrow(() -> new RuntimeException("Stock not found after save"));
-
-        return convertToDto(refreshedStock, true);
+        String key = stockPoid.toString();
+        String documentId = UserContext.getDocumentId();
+        loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
+        return response;
     }
 
     @Override
@@ -727,6 +780,9 @@ public class StockMasterServiceImpl implements StockMasterService {
         StockMasterEntity stock = stockMasterRepository
                 .findByStockPoidAndGroupPoid(stockPoid, groupPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Stock Master", "stockPoid", stockPoid));
+
+        StockMasterEntity oldEntity = new StockMasterEntity();
+        BeanUtils.copyProperties(stock, oldEntity);
 
         if ("Y".equals(stock.getDeleted())) {
             throw new IllegalStateException("Cannot update a deleted stock item");
@@ -740,7 +796,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         }
 
         BeanUtils.copyProperties(request, stock, "stockPoid", "stockCode", "createdBy", "createdDate");
-        stock.setLastmodifiedBy(userId);
 
         // just call the function
         callBeforeSaveProcedure(groupPoid, companyPoid, userId, stockPoid, stock.getServiceItem());
@@ -756,10 +811,27 @@ public class StockMasterServiceImpl implements StockMasterService {
         // Save
         StockMasterEntity savedStock = stockMasterRepository.save(stock);
 
-        // just call the function
-        callAfterSaveProcedure(stockPoid);
+        StockMasterDto response = convertToDto(savedStock, true);
 
-        return convertToDto(savedStock, true);
+        // just call the function
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                callAfterSaveProcedure(stockPoid);
+                entityManager.clear();
+                StockMasterEntity refreshedStock = stockMasterRepository.findByStockPoid(stockPoid)
+                        .orElseThrow(() -> new RuntimeException("Stock not found after save"));
+                StockMasterDto refreshedDto = convertToDto(refreshedStock, true);
+                BeanUtils.copyProperties(refreshedDto, response);
+            }
+        });
+
+        // Log the update
+        String key = savedStock.getStockPoid().toString();
+        loggingService.logChanges(oldEntity, savedStock, StockMasterEntity.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "STOCK_POID");
+
+        return response;
     }
 
     private void processSupplierDetails(Long stockPoid, List<CreateStockMasterDtlRequest> details, String userId) {
@@ -804,6 +876,18 @@ public class StockMasterServiceImpl implements StockMasterService {
         
         if (!entitiesToSaveFiltered.isEmpty()) {
             dtlRepository.saveAll(entitiesToSaveFiltered);
+            entitiesToSaveFiltered.forEach(e -> {
+                String logDetail = String.format(
+                        "Row Created on Stock Supplier Detail with detRowId: %s",
+                        e.getDetRowId()
+                );
+
+                loggingService.createLogSummaryEntry(
+                        UserContext.getDocumentId(),
+                        stockPoid.toString(),
+                        logDetail
+                );
+            });
         }
     }
 
@@ -812,7 +896,17 @@ public class StockMasterServiceImpl implements StockMasterService {
             // Use detRowId to identify the specific record to delete
             dtlRepository.findById(new StockMasterDtlId(stockPoid, dto.getDetRowId()))
                     .ifPresentOrElse(
-                            entitiesToDelete::add,
+                            entity -> {
+                                // existing behavior
+                                entitiesToDelete.add(entity);
+
+                                // ✅ ADD DELETE LOGGING
+                                loggingService.logDelete(
+                                        entity,
+                                        UserContext.getDocumentId(),
+                                        stockPoid.toString()
+                                );
+                            },
                             () -> logger.warn("No StockMasterDTLEntity found for stockPoid={} and detRowId={}, skipping delete.",
                                     stockPoid, dto.getDetRowId())
                     );
@@ -822,7 +916,17 @@ public class StockMasterServiceImpl implements StockMasterService {
                     .filter(entity -> entity.getSupplierPoid() != null && entity.getSupplierPoid().equals(dto.getSupplierPoid()))
                     .findFirst()
                     .ifPresentOrElse(
-                            entitiesToDelete::add,
+                            entity -> {
+                                // existing behavior
+                                entitiesToDelete.add(entity);
+
+                                // ✅ ADD DELETE LOGGING
+                                loggingService.logDelete(
+                                        entity,
+                                        UserContext.getDocumentId(),
+                                        stockPoid.toString()
+                                );
+                            },
                             () -> logger.warn("No StockMasterDTLEntity found for stockPoid={} and supplierPoid={}, skipping delete.",
                                     stockPoid, dto.getSupplierPoid())
                     );
@@ -837,7 +941,7 @@ public class StockMasterServiceImpl implements StockMasterService {
             logger.warn("Skipping create/update for detRowId={} as it is marked for deletion", dto.getDetRowId());
             return;
         }
-        
+
         if (dto.getDetRowId() != null) {
             // Use detRowId to identify the specific record to update
             dtlRepository.findById(new StockMasterDtlId(stockPoid, dto.getDetRowId()))
@@ -871,6 +975,10 @@ public class StockMasterServiceImpl implements StockMasterService {
     }
 
     private void updateExistingSupplierEntity(StockMasterDTLEntity entity, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToSave, String userId) {
+        // Create a copy of the existing entity for logging
+        StockMasterDTLEntity oldEntity = new StockMasterDTLEntity();
+        BeanUtils.copyProperties(entity, oldEntity);
+        
         // Update fields only if provided
         if (dto.getSupplierPoid() != null) {
             entity.setSupplierPoid(dto.getSupplierPoid());
@@ -881,9 +989,15 @@ public class StockMasterServiceImpl implements StockMasterService {
         if (dto.getRemarks() != null) {
             entity.setRemarks(dto.getRemarks());
         }
-        entity.setLastmodifiedBy(userId);
-        entity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
         entitiesToSave.add(entity);
+
+        String logDetail = String.format("KeyId = STOCK_POID %s: DET_ROW_ID %s", entity.getStockPoid(),entity.getDetRowId());
+
+        // Log the changes
+        loggingService.createLog(oldEntity, entity, StockMasterDTLEntity.class,
+                UserContext.getDocumentId(),entity.getStockPoid().toString(),
+                logDetail);
+
     }
 
     private void createNewSupplierEntity(Long stockPoid, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToSave, String userId) {
@@ -909,11 +1023,12 @@ public class StockMasterServiceImpl implements StockMasterService {
         newEntity.setSupplierPoid(dto.getSupplierPoid());
         newEntity.setSupplierStockCode(dto.getSupplierStockCode());
         newEntity.setRemarks(dto.getRemarks());
-        newEntity.setCreatedBy(userId);
-        newEntity.setCreatedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
-        newEntity.setLastmodifiedBy(userId);
-        newEntity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
         entitiesToSave.add(newEntity);
+        
+        // Log the creation
+        loggingService.createLog(null, newEntity, StockMasterDTLEntity.class, 
+                UserContext.getDocumentId(), stockPoid.toString(), 
+                String.format("Supplier detail created - DetRowId: %d", detRowId));
     }
 
     private void processWarehouseDetails(Long stockPoid, List<CreateStockMasterWarehouseDtlRequest> details, String userId) {
@@ -970,6 +1085,10 @@ public class StockMasterServiceImpl implements StockMasterService {
     }
 
     private void updateExistingWarehouseEntity(StockMasterWarehouseDtl entity, CreateStockMasterWarehouseDtlRequest dto, List<StockMasterWarehouseDtl> entitiesToSave, String userId) {
+        // Create a copy of the existing entity for logging
+        StockMasterWarehouseDtl oldEntity = new StockMasterWarehouseDtl();
+        BeanUtils.copyProperties(entity, oldEntity);
+        
         entity.setTransactionDate(dto.getTransactionDate());
         entity.setAisleNo(dto.getAisleNo());
         entity.setBayNo(dto.getBayNo());
@@ -977,9 +1096,14 @@ public class StockMasterServiceImpl implements StockMasterService {
         entity.setBinNo(dto.getBinNo());
         entity.setReorderLevel(dto.getReorderLevel());
         entity.setReorderQty(dto.getReorderQty());
-        entity.setLastmodifiedBy(userId);
-        entity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
         entitiesToSave.add(entity);
+
+        String logDetail = String.format("KeyId = STOCK_POID %s: DET_ROW_ID %s", entity.getStockPoid(), entity.getDetRowId());
+
+        // Log the changes
+        loggingService.createLog(oldEntity, entity, StockMasterWarehouseDtl.class,
+                UserContext.getDocumentId(), entity.getStockPoid().toString(),
+                logDetail);
     }
 
     private void createNewWarehouseEntity(Long stockPoid, CreateStockMasterWarehouseDtlRequest dto, List<StockMasterWarehouseDtl> entitiesToSave, String userId) {
@@ -997,10 +1121,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         newEntity.setBinNo(dto.getBinNo());
         newEntity.setReorderLevel(dto.getReorderLevel());
         newEntity.setReorderQty(dto.getReorderQty());
-        newEntity.setCreatedBy(userId);
-        newEntity.setCreatedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
-        newEntity.setLastmodifiedBy(userId);
-        newEntity.setLastmodifiedDate(java.sql.Timestamp.valueOf(LocalDateTime.now()));
         entitiesToSave.add(newEntity);
     }
 
@@ -1038,8 +1158,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         dtl.setSupplierPoid(request.getSupplierPoid());
         dtl.setSupplierStockCode(request.getSupplierStockCode());
         dtl.setRemarks(request.getRemarks());
-        dtl.setCreatedBy(userId);
-        dtl.setLastmodifiedBy(userId);
 
         // Save entity
         StockMasterDTLEntity savedDtl = dtlRepository.save(dtl);
@@ -1069,7 +1187,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         dtl.setSupplierPoid(request.getSupplierPoid());
         dtl.setSupplierStockCode(request.getSupplierStockCode());
         dtl.setRemarks(request.getRemarks());
-        dtl.setLastmodifiedBy(userId);
 
         StockMasterDTLEntity savedDtl = dtlRepository.save(dtl);
         return convertDtlToDto(savedDtl);
@@ -1138,8 +1255,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         dtl.setBinNo(request.getBinNo());
         dtl.setReorderLevel(request.getReorderLevel());
         dtl.setReorderQty(request.getReorderQty());
-        dtl.setCreatedBy(userId);
-        dtl.setLastmodifiedBy(userId);
 
         StockMasterWarehouseDtl savedDtl = warehouseRepository.save(dtl);
         return convertWarehouseDtlToDto(savedDtl);
@@ -1173,7 +1288,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         dtl.setBinNo(request.getBinNo());
         dtl.setReorderLevel(request.getReorderLevel());
         dtl.setReorderQty(request.getReorderQty());
-        dtl.setLastmodifiedBy(userId);
 
         StockMasterWarehouseDtl savedDtl = warehouseRepository.save(dtl);
         return convertWarehouseDtlToDto(savedDtl);
@@ -1423,8 +1537,8 @@ public class StockMasterServiceImpl implements StockMasterService {
         item.put("groupPoid", stock.getGroupPoid());
         item.put("createdBy", stock.getCreatedBy());
         item.put("createdDate", stock.getCreatedDate());
-        item.put("lastmodifiedBy", stock.getLastmodifiedBy());
-        item.put("lastmodifiedDate", stock.getLastmodifiedDate());
+        item.put("lastmodifiedBy", stock.getLastModifiedBy());
+        item.put("lastmodifiedDate", stock.getLastModifiedDate());
         
         // Convert Y/N/null to boolean (Y=true, N/null=false)
         item.put("active", stock.getActive() != null && "Y".equalsIgnoreCase(stock.getActive()));
@@ -1591,7 +1705,7 @@ public class StockMasterServiceImpl implements StockMasterService {
         
         // Add metadata fields
         node.put("id", "row-" + category.getCategoryPoid());
-        node.put("isExpanded", false);
+        node.put("isExpanded", true);
         node.put("isRowGroup", true);
         
         // Add companyPoid and userPoid for tracking (if provided)
@@ -1691,7 +1805,7 @@ public class StockMasterServiceImpl implements StockMasterService {
         
         // Add metadata fields
         item.put("id", "row-" + stock.getStockPoid());
-        item.put("isExpanded", false);
+        item.put("isExpanded", true);
         item.put("isRowGroup", true);
         // Add companyPoid and userPoid for tracking (if provided)
         if (companyPoid != null) {
@@ -1787,21 +1901,102 @@ public class StockMasterServiceImpl implements StockMasterService {
     @Override
     @Transactional(readOnly = true)
     public StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid) {
-        logger.info("getStockDetails started for stockPoid={} companyPoid={}", stockPoid, companyPoid);
+        return getStockDetails(stockPoid, companyPoid, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid, Long customerPoid, Long transactionPoid) {
+        logger.info("getStockDetails started for stockPoid={} companyPoid={} customerPoid={} transactionPoid={}", 
+                stockPoid, companyPoid, customerPoid, transactionPoid);
         
         // Fetch stock details with category, tax, and unit in a single query
         List<Object[]> results = stockMasterRepository.findStockDetailsWithCategoryAndTax(stockPoid);
-        
-        if (results.isEmpty()) {
-            logger.warn("Stock not found for stockPoid={}", stockPoid);
-            throw new ResourceNotFoundException("Stock", "stockPoid", stockPoid);
+
+        // If no stock details are found, log a warning and return an empty response
+        // instead of throwing an exception. This prevents callers (like quotation
+        // LOV population) from failing or marking transactions for rollback when
+        // a stock record is missing.
+        if (results == null || results.isEmpty()) {
+            logger.warn("Stock not found for stockPoid={}, returning empty response", stockPoid);
+            return new StockDetailsResponse();
         }
-        
+
         Object[] row = results.get(0);
         StockDetailsResponse response = populateStockDetailsFromQueryResult(row);
         
+        // Call stored procedure to get lastPrice if customerPoid and transactionPoid are provided
+        if (customerPoid != null && transactionPoid != null && response.getStockUnitPoid() != null) {
+            try {
+                BigDecimal lastPrice = callGetLastPriceProc(customerPoid, stockPoid, transactionPoid, response.getStockUnitPoid());
+                response.setLastPrice(lastPrice);
+                logger.info("Last price retrieved: {} for stockPoid={} customerPoid={}", lastPrice, stockPoid, customerPoid);
+            } catch (Exception e) {
+                logger.warn("Failed to retrieve last price for stockPoid={} customerPoid={}: {}", 
+                        stockPoid, customerPoid, e.getMessage());
+                // Don't fail the entire request if lastPrice retrieval fails
+                response.setLastPrice(null);
+            }
+        }
+        
         logger.info("getStockDetails completed for stockPoid={}", stockPoid);
         return response;
+    }
+    
+    /**
+     * Call PROC_SALES_SCQTN_SET_DFLT_DTL to get last price
+     * @param customerPoid Customer POID
+     * @param stockPoid Stock POID
+     * @param transactionPoid Transaction POID
+     * @param stockUnitPoid Stock Unit POID (IN OUT parameter)
+     * @return Last price (BigDecimal) or null if not found
+     */
+    private BigDecimal callGetLastPriceProc(Long customerPoid, Long stockPoid, Long transactionPoid, Long stockUnitPoid) {
+        // Validate all parameters are non-null before conversion
+        if (customerPoid == null) {
+            throw new IllegalArgumentException("customerPoid cannot be null");
+        }
+        if (stockPoid == null) {
+            throw new IllegalArgumentException("stockPoid cannot be null");
+        }
+        if (transactionPoid == null) {
+            throw new IllegalArgumentException("transactionPoid cannot be null");
+        }
+        if (stockUnitPoid == null) {
+            throw new IllegalArgumentException("stockUnitPoid cannot be null");
+        }
+        
+        String proc = "{call PROC_SALES_SCQTN_SET_DFLT_DTL(?, ?, ?, ?, ?)}";
+        return jdbcTemplate.execute((Connection con) -> {
+            try (CallableStatement cs = con.prepareCall(proc)) {
+                // Set input parameters
+                cs.setBigDecimal(1, BigDecimal.valueOf(customerPoid));        // P_CUSTOMER_POID (IN)
+                cs.setBigDecimal(2, BigDecimal.valueOf(stockPoid));           // P_STOCK_POID (IN)
+                cs.setBigDecimal(3, BigDecimal.valueOf(transactionPoid));       // P_TRANSACTION_POID (IN)
+                
+                // Register IN OUT parameter and set input value
+                cs.registerOutParameter(4, Types.NUMERIC); // P_STOCK_UNIT_POID (IN OUT)
+                cs.setBigDecimal(4, BigDecimal.valueOf(stockUnitPoid)); // Set the input value for IN OUT parameter
+                
+                // Register OUT parameter
+                cs.registerOutParameter(5, Types.NUMERIC); // P_LAST_PRICE (OUT)
+                
+                cs.execute();
+                
+                // Get the updated stockUnitPoid (if changed by procedure)
+                BigDecimal updatedStockUnitPoid = cs.getBigDecimal(4);
+                if (updatedStockUnitPoid != null && !updatedStockUnitPoid.equals(BigDecimal.valueOf(stockUnitPoid))) {
+                    logger.debug("Stock unit POID updated from {} to {}", stockUnitPoid, updatedStockUnitPoid);
+                }
+                
+                // Get last price
+                BigDecimal lastPrice = cs.getBigDecimal(5);
+                return lastPrice;
+            } catch (SQLException ex) {
+                logger.error("Error calling PROC_SALES_SCQTN_SET_DFLT_DTL: {}", ex.getMessage(), ex);
+                throw new RuntimeException("Error calling PROC_SALES_SCQTN_SET_DFLT_DTL: " + ex.getMessage(), ex);
+            }
+        });
     }
     
     /**

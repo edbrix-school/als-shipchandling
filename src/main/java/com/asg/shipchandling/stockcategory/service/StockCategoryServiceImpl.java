@@ -1,10 +1,16 @@
 package com.asg.shipchandling.stockcategory.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.utility.PaginationUtil;
+import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
 import com.asg.shipchandling.exceptions.CustomException;
 import com.asg.shipchandling.exceptions.ResourceAlreadyExistsException;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
@@ -20,12 +26,14 @@ import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -36,6 +44,8 @@ public class StockCategoryServiceImpl implements StockCategoryService {
 
     private final StockCategoryRepository stockCategoryRepository;
     private final DocumentSearchService documentService;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
     
     @PersistenceContext
     private EntityManager entityManager;
@@ -81,8 +91,6 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         BeanUtils.copyProperties(request, category);
         category.setCategoryCode(categoryCode);  // Set auto-generated code
         category.setGroupPoid(groupPoid);
-        category.setCreatedBy(userId);
-        category.setLastmodifiedBy(userId);
         category.setActive(request.getActive() != null ? request.getActive() : "Y");
         category.setDeleted("N");
         category.setCategoryType(request.getCategoryType() != null ? request.getCategoryType() : "GROUP");
@@ -94,6 +102,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         
         // Save
         StockCategoryMaster savedCategory = stockCategoryRepository.save(category);
+        Long categoryPoid = savedCategory.getCategoryPoid();
         log.info("createStockCategory persisted categoryPoid={} categoryCode={} stockGlPoid={} salesGlPoid={} costOfSalesGlPoid={}", 
                 savedCategory.getCategoryPoid(), savedCategory.getCategoryCode(),
                 savedCategory.getStockGlPoid(), savedCategory.getSalesGlPoid(), savedCategory.getCostOfSalesGlPoid());
@@ -102,6 +111,9 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         StockCategoryMasterDto dto = convertToDto(savedCategory);
         log.info("createStockCategory completed for categoryPoid={} with stockGlPoid={} salesGlPoid={} costOfSalesGlPoid={}",
                 dto.getCategoryPoid(), dto.getStockGlPoid(), dto.getSalesGlPoid(), dto.getCostOfSalesGlPoid());
+        String key = categoryPoid.toString();
+        String documentId = UserContext.getDocumentId();
+        loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
         return dto;
     }
 
@@ -133,6 +145,9 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         StockCategoryMaster category = stockCategoryRepository
                 .findByCategoryPoidAndGroupPoid(categoryPoid, groupPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Stock Category", "categoryPoid", categoryPoid));
+
+        StockCategoryMaster oldEntity = new StockCategoryMaster();
+        BeanUtils.copyProperties(category, oldEntity);
 
         // Check if deleted
         if ("Y".equals(category.getDeleted())) {
@@ -209,10 +224,13 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         category.setCostCenterPoid(request.getCostCenterPoid());
         category.setSeqno(request.getSeqno());
         category.setActive(request.getActive() != null ? request.getActive() : category.getActive());
-        category.setLastmodifiedBy(userId);
 
         // Save the entity
         StockCategoryMaster savedCategory = stockCategoryRepository.save(category);
+
+        String key = savedCategory.getCategoryPoid().toString();
+        loggingService.logChanges(oldEntity, savedCategory, StockCategoryMaster.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "CATEGORY_POID");
         log.info("updateStockCategory saved - stockGlPoid={} salesGlPoid={} costOfSalesGlPoid={}",
                 savedCategory.getStockGlPoid(), savedCategory.getSalesGlPoid(), savedCategory.getCostOfSalesGlPoid());
 
@@ -224,7 +242,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
 
     @Override
     @Transactional
-    public void deleteStockCategory(Long categoryPoid, Long groupPoid) {
+    public void deleteStockCategory(Long categoryPoid, Long groupPoid, DeleteReasonDto deleteReasonDto) {
         log.info("deleteStockCategory service started for categoryPoid={} groupPoid={}", categoryPoid, groupPoid);
         StockCategoryMaster category = stockCategoryRepository
                 .findByCategoryPoidAndGroupPoid(categoryPoid, groupPoid)
@@ -242,6 +260,13 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                             childCount, stockItemCount));
         }
 
+        documentDeleteService.deleteDocument(
+                categoryPoid,
+                "STOCK_CATEGORY_MASTER",
+                "CATEGORY_POID",
+                deleteReasonDto,
+                LocalDate.now()
+        );
         // Soft delete
         category.setDeleted("Y");
         stockCategoryRepository.save(category);
@@ -507,17 +532,17 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         }
          if (category.getStockGlPoid() != null) {
              dto.setStockGlPoidDetails(fetchPoidDetails(
-                     "SELECT GL_POID, GL_CODE, GL_DESCRIPTION FROM GL_MASTER WHERE GL_POID = :poid",
+                     "SELECT GL_POID, GL_CODE, TRIM(GL_DESCRIPTION) || ' (' || GL_AC_TYPE || ')' AS DESCRIPTION FROM GL_MASTER WHERE GL_POID = :poid",
                      category.getStockGlPoid()));
          }
          if (category.getSalesGlPoid() != null) {
              dto.setSalesGlPoidDetails(fetchPoidDetails(
-                     "SELECT GL_POID, GL_CODE, GL_DESCRIPTION FROM GL_MASTER WHERE GL_POID = :poid",
+                     "SELECT GL_POID, GL_CODE, TRIM(GL_DESCRIPTION) || ' (' || GL_AC_TYPE || ')' AS DESCRIPTION FROM GL_MASTER WHERE GL_POID = :poid",
                      category.getSalesGlPoid()));
          }
          if (category.getCostOfSalesGlPoid() != null) {
              dto.setCostOfSalesGlPoidDetails(fetchPoidDetails(
-                     "SELECT GL_POID, GL_CODE, GL_DESCRIPTION FROM GL_MASTER WHERE GL_POID = :poid",
+                     "SELECT GL_POID, GL_CODE, TRIM(GL_DESCRIPTION) || ' (' || GL_AC_TYPE || ')' AS DESCRIPTION FROM GL_MASTER WHERE GL_POID = :poid",
                      category.getCostOfSalesGlPoid()));
          }
         if (category.getOutputTaxPoid() != null) {
@@ -575,6 +600,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         // Check if has children
         Long childCount = stockCategoryRepository.countChildrenByParentCategoryPoid(category.getCategoryPoid());
         dto.setHasChildren(childCount > 0);
+        dto.setIsExpanded(true);
 
         return dto;
     }
@@ -614,7 +640,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                 Long childCount = stockCategoryRepository.countChildrenByParentCategoryPoid(category.getCategoryPoid());
                 
                 String type = (childCount > 0) ? "MAIN_GROUP" : "LEDGER";
-                Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, 0, includeDeleted);
+                Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, 0, includeDeleted, tree);
                 
                 if (tree && childCount > 0) {
                     // Add children for tree structure only if it has children
@@ -656,7 +682,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
                     Long childCount = stockCategoryRepository.countChildrenByParentCategoryPoid(category.getCategoryPoid());
                     
                     String type = (childCount > 0) ? "SUB_GROUP" : "LEDGER";
-                    Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, level, includeDeleted);
+                    Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, level, includeDeleted, tree);
                     
                     if (tree && childCount > 0) {
                         // Add children for tree structure only if it has children
@@ -699,7 +725,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
             Long childCount = stockCategoryRepository.countChildrenByParentCategoryPoid(category.getCategoryPoid());
             
             String type = (childCount > 0) ? "SUB_GROUP" : "LEDGER";
-            Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, level, includeDeleted);
+            Map<String, Object> item = convertCategoryToHierarchicalItem(category, type, level, includeDeleted, tree);
             
             if (tree && childCount > 0) {
                 // Recursively add children only if it has children
@@ -745,7 +771,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         return 0;
     }
     
-    private Map<String, Object> convertCategoryToHierarchicalItem(StockCategoryMaster category, String type, int level, boolean includeDeleted) {
+    private Map<String, Object> convertCategoryToHierarchicalItem(StockCategoryMaster category, String type, int level, boolean includeDeleted, boolean tree) {
         Map<String, Object> item = new HashMap<>();
         item.put("categoryPoid", category.getCategoryPoid());
         item.put("categoryCode", category.getCategoryCode());
@@ -756,6 +782,7 @@ public class StockCategoryServiceImpl implements StockCategoryService {
         item.put("active", category.getActive() != null && "Y".equalsIgnoreCase(category.getActive()));
         item.put("deleted", category.getDeleted() != null && "Y".equalsIgnoreCase(category.getDeleted()));
         item.put("groupPoid", category.getGroupPoid());
+        item.put("isExpanded", tree);
         
         // Set parentPoid from PARENT_CATEGORY_POID
         // For MAIN_GROUP: parentPoid will be null (root categories)

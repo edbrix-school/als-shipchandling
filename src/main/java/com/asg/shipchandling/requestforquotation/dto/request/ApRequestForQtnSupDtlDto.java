@@ -3,7 +3,8 @@ package com.asg.shipchandling.requestforquotation.dto.request;
 import com.asg.shipchandling.commonlov.dto.LovItem;
 import lombok.*;
 
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
+
 
 @Data
 @NoArgsConstructor
@@ -15,7 +16,7 @@ public class ApRequestForQtnSupDtlDto {
     private LovItem supplierPoidDetails;
     private String remarks;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
 }

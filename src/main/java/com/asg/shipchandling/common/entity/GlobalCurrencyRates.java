@@ -6,7 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.util.Date;
+import java.time.LocalDate;
+
 
 @Entity
 @Table(name = "GLOBAL_CURRENCY_RATES")
@@ -23,7 +24,7 @@ public class GlobalCurrencyRates {
     @Id
     @Column(name = "RATE_DATE", nullable = false)
     @Temporal(TemporalType.DATE)
-    private Date rateDate;
+    private LocalDate rateDate;
 
     @Column(name = "GROUP_POID")
     private BigDecimal groupPoid;

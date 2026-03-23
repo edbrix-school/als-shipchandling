@@ -5,7 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
+
 
 @Data
 @NoArgsConstructor
@@ -14,7 +15,7 @@ public class SalesInvoiceListDto {
     @JsonProperty("TRANSACTION_POID")
     private Long transactionPoid;
     @JsonProperty("DATE")
-    private Timestamp date; // transactionDate
+    private LocalDateTime date; // transactionDate
     @JsonProperty("DOC_REF")
     private String docRef;
     @JsonProperty("QTN_REF")
@@ -30,8 +31,8 @@ public class SalesInvoiceListDto {
     @JsonProperty("UPDATED_BY")
     private String updatedBy; // lastmodifiedBy
     @JsonProperty("CREATED_DATE")
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     @JsonProperty("UPDATED_DATE")
-    private Timestamp updatedDate; // lastmodifiedDate
+    private LocalDateTime updatedDate; // lastmodifiedDate
 }
 

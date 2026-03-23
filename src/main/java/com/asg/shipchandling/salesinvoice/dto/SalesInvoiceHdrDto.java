@@ -5,8 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-
-import java.sql.Timestamp;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -15,7 +15,7 @@ import java.util.List;
 public class SalesInvoiceHdrDto {
     private Long transactionPoid;
     private String docRef;
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
     private Long groupPoid;
     private Long companyPoid;
     private String partyType;
@@ -25,26 +25,26 @@ public class SalesInvoiceHdrDto {
     private Long customerAddrPoid;
     private String currencyCode;
     private Long currencyRate;
-    private Long invAmount;
+    private BigDecimal invAmount;
     private Long creditDays;
-    private Timestamp dueDate;
-    private String qtnPoid;
+    private LocalDateTime dueDate;
+    private Long qtnPoid;
     private String status;
     private String invStatus;
-    private Long discountPercent;
-    private Long discountAmt;
-    private Long invDiscount;
-    private Long incentivePercent;
-    private Long incentiveAmt;
+    private BigDecimal discountPercent;
+    private BigDecimal discountAmt;
+    private BigDecimal invDiscount;
+    private BigDecimal incentivePercent;
+    private BigDecimal incentiveAmt;
     private String incentiveTo;
-    private Long incentivePercent2;
-    private Long incentiveAmt2;
+    private BigDecimal incentivePercent2;
+    private BigDecimal incentiveAmt2;
     private String incentiveTo2;
-    private Long incentivePercent3;
-    private Long incentiveAmt3;
+    private BigDecimal incentivePercent3;
+    private BigDecimal incentiveAmt3;
     private String incentiveTo3;
-    private Long totalGpAmt;
-    private Long totalGpPercent;
+    private BigDecimal totalGpAmt;
+    private BigDecimal totalGpPercent;
     private Long totalCost;
     private String paymentMode;
     private String dataLoadType;
@@ -67,9 +67,9 @@ public class SalesInvoiceHdrDto {
     private String authorizedId;
     private String deleted;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
     
     // Detail tables
     private List<SalesInvoiceDtlDto> invoiceDetails;

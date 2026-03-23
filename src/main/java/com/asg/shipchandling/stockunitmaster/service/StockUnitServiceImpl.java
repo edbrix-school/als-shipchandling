@@ -1,11 +1,17 @@
 package com.asg.shipchandling.stockunitmaster.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
 import com.asg.common.lib.repository.GroupRepository;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.common.lib.utility.PaginationUtil;
+import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
 import com.asg.shipchandling.exceptions.ResourceAlreadyExistsException;
 import com.asg.shipchandling.exceptions.ResourceNotFoundException;
 import com.asg.shipchandling.stockunitmaster.dto.CreateStockUnitMasterRequest;
@@ -17,6 +23,7 @@ import com.asg.shipchandling.stockunitmaster.util.StockUnitConstraintErrorHandle
 import com.asg.shipchandling.stockunitmaster.exception.StockUnitConstraintViolationException;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +35,10 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -40,6 +50,8 @@ public class StockUnitServiceImpl implements StockUnitService {
     private final StockUnitRepository stockUnitRepository;
     private final DocumentSearchService documentService;
     private final GroupRepository groupRepository;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
 
     private static final Logger log = LoggerFactory.getLogger(StockUnitServiceImpl.class);
 
@@ -51,8 +63,7 @@ public class StockUnitServiceImpl implements StockUnitService {
         StockUnitMasterDto stockUnitMasterDto = new StockUnitMasterDto();
 
         StockUnitMaster stockUnitMaster = stockUnitRepository.findByStockUnitPoid(stockUnitPoid);
-        BeanUtils.copyProperties(stockUnitMaster, stockUnitMasterDto);
-        return stockUnitMasterDto;
+        return entityToDtoWithAuditDates(stockUnitMaster);
     }
 
     @Override
@@ -73,7 +84,17 @@ public class StockUnitServiceImpl implements StockUnitService {
 
         try {
             StockUnitMaster responseEntity = stockUnitRepository.save(entity);
+            Long stockUnitPoid = responseEntity.getStockUnitPoid();
             BeanUtils.copyProperties(responseEntity, responseDto);
+            responseDto.setCreatedDate(responseEntity.getCreatedDate() != null
+                    ? responseEntity.getCreatedDate().atOffset(java.time.ZoneOffset.UTC)
+                    : null);
+            responseDto.setLastModifiedDate(responseEntity.getLastModifiedDate() != null
+                    ? responseEntity.getLastModifiedDate().atOffset(java.time.ZoneOffset.UTC)
+                    : null);
+            String key = stockUnitPoid.toString();
+            String documentId = UserContext.getDocumentId();
+            loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
             return responseDto;
         } catch (DataIntegrityViolationException ex) {
             StockUnitConstraintErrorHandler.handleConstraintViolation(ex);
@@ -99,8 +120,6 @@ public class StockUnitServiceImpl implements StockUnitService {
         entity.setStockUnitName(request.getStockUnitName());
         entity.setStockUnitName2(request.getStockUnitName2());
         entity.setGroupPoid(request.getGroupPoid());
-        entity.setCreatedBy(request.getCreatedBy());
-        entity.setCreatedDate(LocalDateTime.now());
         entity.setActive(request.getActive() != null ? request.getActive() : "Y");
         entity.setSeqNo(request.getSeqNo());
         entity.setDeleted("N");
@@ -113,6 +132,10 @@ public class StockUnitServiceImpl implements StockUnitService {
     @Transactional
     public StockUnitMasterDto updateStockUnit(Long stockUnitPoid, StockUnitMasterDto stockUnitMasterDto) {
         StockUnitMaster existingStockUnit = stockUnitRepository.findByStockUnitPoid(stockUnitPoid);
+
+        StockUnitMaster oldEntity = new StockUnitMaster();
+        BeanUtils.copyProperties(existingStockUnit, oldEntity);
+
         if (!stockUnitRepository.existsByStockUnitPoid(stockUnitPoid)) {
             throw new ResourceNotFoundException("Unit", "UnitPoid", stockUnitPoid);
         }
@@ -173,6 +196,12 @@ public class StockUnitServiceImpl implements StockUnitService {
                     ? updatedStockUnit.getLastModifiedDate().atOffset(java.time.ZoneOffset.UTC)
                     : null);
 
+
+            // Log the update
+            String key = updatedStockUnit.getStockUnitPoid().toString();
+            loggingService.logChanges(oldEntity, updatedStockUnit, StockUnitMaster.class,
+                    UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "STOCK_UNIT_POID");
+
             return responseDto;
         } catch (DataIntegrityViolationException ex) {
             StockUnitConstraintErrorHandler.handleConstraintViolation(ex);
@@ -187,21 +216,26 @@ public class StockUnitServiceImpl implements StockUnitService {
             if ("FK_PARENT".equals(ex.getViolationType())) {
                 throw new ResourceNotFoundException(ex.getMessage());
             }
-            // For other cases, throw as ResourceAlreadyExistsException
             throw new ResourceAlreadyExistsException(ex.getMessage(), null);
         }
     }
 
     @Override
-    public void softDeleteStockUnit(Long stockUnitPoid) {
+    public void softDeleteStockUnit(Long stockUnitPoid, DeleteReasonDto deleteReasonDto) {
         StockUnitMaster existingStockunit = stockUnitRepository.findByStockUnitPoid(stockUnitPoid);
         if (!stockUnitRepository.existsByStockUnitPoid(stockUnitPoid)) {
             throw new ResourceNotFoundException("Unit", "UnitPoid", stockUnitPoid);
         }
+
+        documentDeleteService.deleteDocument(
+                stockUnitPoid,
+                "STOCK_UNIT_MASTER",
+                "STOCK_UNIT_POID",
+                deleteReasonDto,
+                LocalDate.now()
+        );
         existingStockunit.setDeleted("Y");
         existingStockunit.setActive("N");
-        existingStockunit.setLastModifiedDate(LocalDateTime.now());
-        existingStockunit.setLastModifiedBy(existingStockunit.getLastModifiedBy());
         
         try {
             stockUnitRepository.save(existingStockunit);
@@ -273,11 +307,7 @@ public Page<StockUnitMasterDto> listStockUnitsUsingParams(
 
     Page<StockUnitMaster> page = stockUnitRepository.findAll(spec, pageable);
 
-    List<StockUnitMasterDto> dtoList = page.getContent().stream().map(entity -> {
-        StockUnitMasterDto dto = new StockUnitMasterDto();
-        BeanUtils.copyProperties(entity, dto);
-        return dto;
-    }).toList();
+    List<StockUnitMasterDto> dtoList = page.getContent().stream().map(this::entityToDtoWithAuditDates).toList();
 
     return new PageImpl<>(dtoList, pageable, page.getTotalElements());
 }
@@ -393,6 +423,22 @@ public Page<StockUnitMasterDto> listStockUnitsUsingParams(
         return dto;
     }
 
+    /**
+     * Maps entity to DTO and sets audit date fields. Entity uses LocalDateTime while DTO uses
+     * OffsetDateTime; BeanUtils skips incompatible types, so dates are set explicitly.
+     */
+    private StockUnitMasterDto entityToDtoWithAuditDates(StockUnitMaster entity) {
+        StockUnitMasterDto dto = new StockUnitMasterDto();
+        BeanUtils.copyProperties(entity, dto);
+        dto.setCreatedDate(entity.getCreatedDate() != null
+                ? entity.getCreatedDate().atOffset(java.time.ZoneOffset.UTC)
+                : null);
+        dto.setLastModifiedDate(entity.getLastModifiedDate() != null
+                ? entity.getLastModifiedDate().atOffset(java.time.ZoneOffset.UTC)
+                : null);
+        return dto;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Map<String, Object> listStockUnits(String docId, FilterRequestDto request, Pageable pageable) {
@@ -476,11 +522,7 @@ public Page<StockUnitMasterDto> listStockUnitsUsingParams(
         List<StockUnitMaster> units = stockUnitRepository.findByStockUnitCodeContains(codePattern);
 
         List<StockUnitMasterDto> dtoList = units.stream()
-                .map(entity -> {
-                    StockUnitMasterDto dto = new StockUnitMasterDto();
-                    BeanUtils.copyProperties(entity, dto);
-                    return dto;
-                })
+                .map(this::entityToDtoWithAuditDates)
                 .collect(Collectors.toList());
 
         log.info("getStockUnitsByCode completed for stockUnitCode={}, found {} units", stockUnitCode, dtoList.size());

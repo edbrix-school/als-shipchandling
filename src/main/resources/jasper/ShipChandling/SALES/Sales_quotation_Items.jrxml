@@ -1,0 +1,312 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="Sales_quatation_subreport1" language="groovy" pageWidth="555" pageHeight="350" columnWidth="535" leftMargin="0" rightMargin="0" topMargin="0" bottomMargin="0" uuid="51f26c1c-332c-43f0-beb9-5722768520c7">
+	<property name="ireport.zoom" value="2.657341500000001"/>
+	<property name="ireport.x" value="217"/>
+	<property name="ireport.y" value="0"/>
+	<style name="Title" fontName="Times New Roman" fontSize="50" isBold="true" pdfFontName="Times-Bold"/>
+	<style name="SubTitle" forecolor="#736343" fontName="Arial" fontSize="18"/>
+	<style name="Column header" forecolor="#666666" fontName="Arial" fontSize="12" isBold="true"/>
+	<style name="Detail" fontName="Arial" fontSize="12"/>
+	<style name="Row" mode="Transparent">
+		<conditionalStyle>
+			<conditionExpression><![CDATA[$V{REPORT_COUNT}%2 == 0]]></conditionExpression>
+			<style backcolor="#E6DAC3"/>
+		</conditionalStyle>
+	</style>
+	<parameter name="LOGIN_GROUP_POID" class="java.lang.String">
+		<defaultValueExpression><![CDATA[1]]></defaultValueExpression>
+	</parameter>
+	<parameter name="LOGIN_COMP_POID" class="java.lang.String">
+		<defaultValueExpression><![CDATA[1]]></defaultValueExpression>
+	</parameter>
+	<parameter name="LOGIN_USER_POID" class="java.lang.String"/>
+	<parameter name="DOC_ID" class="java.lang.String"/>
+	<parameter name="DOC_KEY_POID" class="java.lang.String"/>
+	<parameter name="SUBREPORT_DIR" class="java.lang.String" isForPrompting="false">
+		<defaultValueExpression><![CDATA["\\\\shippingbahrain.com\\data\\ERP_REPORTS\\Reports\\"]]></defaultValueExpression>
+	</parameter>
+	<queryString>
+		<![CDATA[SELECT
+C.TRANSACTION_POID,
+decode(DESCRIPTION_PRINT_YN,'Y',(SM.STOCK_NAME||' '||C.REMARKS),C.REMARKS) as STOCK_NAME,
+C.QUANTITY,
+ROUND(NVL(C.PRICE,0)/NVL(SH.CURRENCY_RATE,1),CURRENCY_DECIMALS) as PRICE,
+ROUND(NVL(C.DISCOUNT,NULL)/NVL(SH.CURRENCY_RATE,1),CURRENCY_DECIMALS) AS DISCOUNT,
+SH.CURRENCY_RATE,
+SH.CURRENCY_CODE,
+ST.STOCK_UNIT_CODE AS UNIT,
+ROUND(NVL(C.PRICE,0)/NVL(SH.CURRENCY_RATE,1),CURRENCY_DECIMALS)*NVL(C.QUANTITY,0)- ROUND(NVL(C.DISCOUNT,0)/NVL(SH.CURRENCY_RATE,1),CURRENCY_DECIMALS) + (NVL(C.TAX_AMOUNT,0)/NVL(SH.CURRENCY_RATE,1)) AS AMOUNT,
+C.TAX_PERCENTAGE AS TAX_PERCENTAGE,
+ROUND(NVL(C.TAX_AMOUNT,0)/NVL(SH.CURRENCY_RATE,1),CURRENCY_DECIMALS) as TAX_AMOUNT,
+CASE WHEN GTM.TAX_CATEGORY = 'E' THEN
+    'E'
+    ELSE
+    TO_CHAR(NVL(C.TAX_PERCENTAGE,0))
+    END AS TAX_PERCENTAGE_FORMAT,
+RTN_GLOBAL_PARAMETER( 1,'GLOBAL_TAX_APPLICABLE','TAX','1',NULL) AS TAX_APPLICABLE
+FROM SALES_QUOTATION_ITEM_DTL C
+LEFT JOIN GLOBAL_TAX_MASTER GTM
+ON C.TAX_POID = GTM.TAX_POID
+LEFT JOIN STOCK_MASTER SM
+ON C.STOCK_POID = SM.STOCK_POID
+LEFT JOIN STOCK_UNIT_MASTER ST
+ON C.STOCK_UNIT_POID = ST.STOCK_UNIT_POID
+LEFT JOIN SALES_QUOTATION_HDR SH
+ON C.TRANSACTION_POID = SH.TRANSACTION_POID
+LEFT JOIN GLOBAL_CURRENCY_MASTER GLOBCURCY
+ON SH.CURRENCY_CODE=GLOBCURCY.CURRENCY_CODE
+WHERE C.TRANSACTION_POID = $P{DOC_KEY_POID}
+AND nvl(ITEM_TYPE,'BILLABLE') = 'BILLABLE'
+order by det_row_id asc]]>
+	</queryString>
+	<field name="TRANSACTION_POID" class="java.math.BigDecimal"/>
+	<field name="STOCK_NAME" class="java.lang.String"/>
+	<field name="QUANTITY" class="java.math.BigDecimal"/>
+	<field name="PRICE" class="java.math.BigDecimal"/>
+	<field name="DISCOUNT" class="java.math.BigDecimal"/>
+	<field name="CURRENCY_RATE" class="java.math.BigDecimal"/>
+	<field name="CURRENCY_CODE" class="java.lang.String"/>
+	<field name="UNIT" class="java.lang.String"/>
+	<field name="AMOUNT" class="java.math.BigDecimal"/>
+	<field name="TAX_PERCENTAGE" class="java.math.BigDecimal"/>
+	<field name="TAX_AMOUNT" class="java.math.BigDecimal"/>
+	<field name="TAX_PERCENTAGE_FORMAT" class="java.lang.String"/>
+	<field name="TAX_APPLICABLE" class="java.lang.String"/>
+	<variable name="DISCOUNT_1" class="java.math.BigDecimal" calculation="Sum">
+		<variableExpression><![CDATA[$F{DISCOUNT}]]></variableExpression>
+	</variable>
+	<variable name="QUANTITY_1" class="java.math.BigDecimal" calculation="Sum">
+		<variableExpression><![CDATA[$F{QUANTITY}]]></variableExpression>
+	</variable>
+	<variable name="AMOUNT_2" class="java.math.BigDecimal" calculation="Sum">
+		<variableExpression><![CDATA[$F{AMOUNT}]]></variableExpression>
+	</variable>
+	<variable name="AMOUNT_3" class="java.math.BigDecimal" calculation="Sum">
+		<variableExpression><![CDATA[$F{AMOUNT}]]></variableExpression>
+	</variable>
+	<variable name="TOTAL_TAX" class="java.math.BigDecimal" calculation="Sum">
+		<variableExpression><![CDATA[$F{TAX_AMOUNT}]]></variableExpression>
+	</variable>
+	<background>
+		<band splitType="Stretch"/>
+	</background>
+	<columnHeader>
+		<band height="41" splitType="Stretch">
+			<line>
+				<reportElement positionType="FixRelativeToBottom" x="0" y="40" width="542" height="1" uuid="9ec55f57-eda0-48ce-a06e-ffab81edbcc6"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineColor="#999999"/>
+				</graphicElement>
+			</line>
+			<staticText>
+				<reportElement x="28" y="2" width="125" height="15" backcolor="#F0F0F0" uuid="1e8f8103-3ff6-4ebd-b04f-fce3f289fc5f"/>
+				<textElement>
+					<font size="11" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Description]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="161" y="2" width="63" height="15" backcolor="#0033FF" uuid="7feda378-1601-4e8f-bd8c-c78d743a5b52"/>
+				<textElement textAlignment="Right">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Quantity]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="286" y="2" width="43" height="15" uuid="c464c994-d068-4647-a0a3-009e93efa701"/>
+				<textElement textAlignment="Right">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Rate]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="461" y="1" width="80" height="15" uuid="283eab04-32a0-45c8-82e2-1b250f71d887"/>
+				<textElement textAlignment="Right">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Total Amount]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="231" y="2" width="45" height="15" uuid="8614c1a6-501a-4d86-9d43-eca204216af1"/>
+				<textElement textAlignment="Center">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Unit]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="0" y="2" width="27" height="15" uuid="0ef510e0-0bb0-400b-8bfc-83b5ec9b8c10"/>
+				<textElement>
+					<font size="11" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Sn.]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="296" y="15" width="4" height="15" uuid="30f23720-1523-4350-b548-dd333b5c0b77"/>
+				<textElement>
+					<font size="11"/>
+				</textElement>
+				<text><![CDATA[(]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="329" y="14" width="4" height="15" uuid="9358464e-aa23-46c4-af34-a96c7f45545c"/>
+				<textElement>
+					<font size="11"/>
+				</textElement>
+				<text><![CDATA[)]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement x="300" y="15" width="30" height="15" uuid="1be12e4a-f932-49d3-802b-c98075ab8319"/>
+				<textElement textAlignment="Center" verticalAlignment="Top">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{CURRENCY_CODE}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="537" y="15" width="4" height="15" uuid="fd646b24-9a41-4db5-93ac-4d111d569b28"/>
+				<textElement>
+					<font size="11"/>
+				</textElement>
+				<text><![CDATA[)]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="503" y="15" width="4" height="15" uuid="7a380fbc-4cb3-4a3c-b7e0-56d123d7fc0e"/>
+				<textElement>
+					<font size="11"/>
+				</textElement>
+				<text><![CDATA[(]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement x="507" y="17" width="30" height="15" uuid="38b514d7-3889-40d6-b7af-ba43eb2196be"/>
+				<textElement textAlignment="Center" verticalAlignment="Top">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{CURRENCY_CODE}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="338" y="2" width="45" height="15" uuid="75dfb310-a155-4b9d-92b6-eb8ff72593fd">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y"]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Right">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<text><![CDATA[VAT %]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="388" y="2" width="66" height="15" uuid="7d5b8829-3c4b-4960-8b0c-8a32133c66c7">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y"]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Right">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<text><![CDATA[VAT Amt]]></text>
+			</staticText>
+			<line>
+				<reportElement positionType="FixRelativeToBottom" x="0" y="0" width="542" height="1" uuid="e68c6c77-570a-4102-aa47-edaca7d316e2"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineColor="#999999"/>
+				</graphicElement>
+			</line>
+		</band>
+	</columnHeader>
+	<detail>
+		<band height="22" splitType="Stretch">
+			<textField isStretchWithOverflow="true" isBlankWhenNull="true">
+				<reportElement stretchType="RelativeToBandHeight" x="28" y="2" width="125" height="15" uuid="139595ce-20f0-469f-bc08-77e9a2a7424d"/>
+				<textElement>
+					<font size="11"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{STOCK_NAME}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0.000" isBlankWhenNull="true">
+				<reportElement x="161" y="2" width="63" height="15" uuid="6f0d1455-2b7e-40ef-9fa2-6ab77d0c2696"/>
+				<textElement textAlignment="Right">
+					<font size="11"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{QUANTITY}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="0" y="2" width="27" height="15" uuid="80ef0716-2ffc-469c-b103-ad0f5334f3e5"/>
+				<textElement>
+					<font size="11"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{REPORT_COUNT}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0.000;-#,##0.000" isBlankWhenNull="true">
+				<reportElement x="463" y="2" width="80" height="15" uuid="78c01697-2532-458c-95f5-c4745c131084"/>
+				<textElement textAlignment="Right">
+					<font size="11"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{AMOUNT}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0.000;-#,##0.000" isBlankWhenNull="true">
+				<reportElement x="286" y="2" width="43" height="15" uuid="5f3983ba-0083-47a2-8511-b53eff2b581a"/>
+				<textElement textAlignment="Right">
+					<font size="11"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{PRICE}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0.000;-#,##0.000" isBlankWhenNull="true">
+				<reportElement x="388" y="2" width="66" height="15" uuid="4b95bc1e-c609-4184-a03d-882ff5545102">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y"]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Right"/>
+				<textFieldExpression><![CDATA[$F{TAX_AMOUNT}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0.00;-#,##0.00" isBlankWhenNull="true">
+				<reportElement isPrintRepeatedValues="false" x="338" y="2" width="45" height="15" uuid="706aff5e-18fb-47cd-8d27-a67dfcaa2e5b">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y"]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Right"/>
+				<textFieldExpression><![CDATA[$F{TAX_PERCENTAGE_FORMAT}]]></textFieldExpression>
+			</textField>
+			<line>
+				<reportElement positionType="FixRelativeToBottom" x="1" y="21" width="542" height="1" uuid="cb735bdd-ddd2-485d-b6f5-1b2685f1846e"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineStyle="Dashed" lineColor="#999999"/>
+				</graphicElement>
+			</line>
+			<textField isBlankWhenNull="true">
+				<reportElement x="231" y="2" width="45" height="15" uuid="4e09a6db-a043-435d-a6a6-79bc6a2955fc"/>
+				<textElement textAlignment="Center">
+					<font size="10"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{UNIT}]]></textFieldExpression>
+			</textField>
+		</band>
+	</detail>
+	<columnFooter>
+		<band height="20" splitType="Stretch">
+			<line>
+				<reportElement positionType="FixRelativeToBottom" x="0" y="19" width="542" height="1" uuid="616dda15-0317-4565-b56d-eb30b256e95d"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineColor="#999999"/>
+				</graphicElement>
+			</line>
+			<textField pattern="#,##0.000" isBlankWhenNull="true">
+				<reportElement x="463" y="0" width="78" height="15" uuid="1cdee186-439d-479b-8ae3-d1a5311f6b13"/>
+				<textElement textAlignment="Right">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{AMOUNT_2}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0.000" isBlankWhenNull="true">
+				<reportElement x="388" y="0" width="66" height="15" uuid="b48709e6-ba60-4431-a994-270644358263">
+					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y"]]></printWhenExpression>
+				</reportElement>
+				<textElement textAlignment="Right">
+					<font size="11" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{TOTAL_TAX}]]></textFieldExpression>
+			</textField>
+		</band>
+	</columnFooter>
+	<pageFooter>
+		<band/>
+	</pageFooter>
+	<lastPageFooter>
+		<band/>
+	</lastPageFooter>
+	<summary>
+		<band splitType="Stretch"/>
+	</summary>
+</jasperReport>

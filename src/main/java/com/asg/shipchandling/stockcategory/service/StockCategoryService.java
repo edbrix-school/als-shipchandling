@@ -1,6 +1,7 @@
 package com.asg.shipchandling.stockcategory.service;
 
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.shipchandling.stockcategory.dto.*;
 import com.asg.shipchandling.stockcategory.dto.request.CreateStockCategoryRequest;
@@ -20,7 +21,7 @@ public interface StockCategoryService {
     StockCategoryMasterDto updateStockCategory(Long categoryPoid, UpdateStockCategoryRequest request,
                                                Long groupPoid, String userId);
 
-    void deleteStockCategory(Long categoryPoid, Long groupPoid);
+    void deleteStockCategory(Long categoryPoid, Long groupPoid, DeleteReasonDto deleteReasonDto);
 
     List<StockCategoryTreeDto> getStockCategoryTree(Long groupPoid, String categoryType, String active, String sortBy, String sortOrder);
 

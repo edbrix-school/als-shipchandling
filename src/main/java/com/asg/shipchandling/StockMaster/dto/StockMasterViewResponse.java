@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -67,9 +67,9 @@ public class StockMasterViewResponse {
     private String productTags;
     private Long groupPoid;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
 
     // Supplier and Warehouse details using DTOs
     private List<StockMasterDtlDto> supplierDetails;

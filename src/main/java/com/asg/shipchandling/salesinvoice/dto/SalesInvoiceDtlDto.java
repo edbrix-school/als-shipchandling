@@ -5,7 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
+
 
 // Invoice Details DTO
 @Data
@@ -27,12 +28,6 @@ public class SalesInvoiceDtlDto {
     private Long netSales;
     private Long netDiscount;
     private Long incentive;
-    private Long incentivePercent;
-    private Long incentiveAmt;
-    private Long incentivePercent2;
-    private Long incentiveAmt2;
-    private Long incentivePercent3;
-    private Long incentiveAmt3;
     private Long itemGp;
     private Long itemGpPer;
     private Long costAmt;
@@ -47,9 +42,9 @@ public class SalesInvoiceDtlDto {
     private Long quotationDetRowId;
     private String remarks;
     private String createdBy;
-    private Timestamp createdDate;
+    private LocalDateTime createdDate;
     private String lastmodifiedBy;
-    private Timestamp lastmodifiedDate;
+    private LocalDateTime lastmodifiedDate;
     
     // LOV Details
     private LovDetailDto stockDetails;

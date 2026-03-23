@@ -1,5 +1,7 @@
 package com.asg.shipchandling.deliverynote.entity;
 
+import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -9,7 +11,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import com.asg.shipchandling.deliverynote.dto.SalesDeliveryNoteItemDtlId;
 
-import java.sql.Timestamp;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "SALES_DELIVERY_NOTE_ITEM_DTL")
@@ -17,29 +19,34 @@ import java.sql.Timestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 @IdClass(SalesDeliveryNoteItemDtlId.class)
-public class SalesDeliveryNoteItemDtl {
+public class SalesDeliveryNoteItemDtl extends BaseEntity {
 
     @Id
     @Column(name = "TRANSACTION_POID", nullable = false)
+    @AuditIgnore
     private Long transactionPoid;
 
     @Id
     @Column(name = "DET_ROW_ID", nullable = false)
+    @AuditIgnore
     private Long detRowId;
 
     @Column(name = "STOCK_POID")
+    @AuditIgnore
     private Long stockPoid;
 
     @Column(name = "QUANTITY")
     private Long quantity;
 
     @Column(name = "PRICE")
-    private Long price;
+    private BigDecimal price;
 
     @Column(name = "DISCOUNT")
+    @AuditIgnore
     private Long discount;
 
     @Column(name = "AMOUNT")
+    @AuditIgnore
     private Long amount;
 
     @Column(name = "REMARKS", length = 4000)
@@ -48,24 +55,12 @@ public class SalesDeliveryNoteItemDtl {
     @Column(name = "STOCK_UNIT_POID")
     private Long stockUnitPoid;
 
-    @Column(name = "CREATED_BY", length = 20)
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    private Timestamp lastmodifiedDate;
-    
     @Column(name = "QTN_DET_ROW_ID")
+    @AuditIgnore
     private Long qtnDetRowId; // Links to quotation detail if loaded from quotation
 
     @Column(name = "TOT_COST")
+    @AuditIgnore
     private Long totCost;
 
     @Column(name = "ITEM_TYPE", length = 20)

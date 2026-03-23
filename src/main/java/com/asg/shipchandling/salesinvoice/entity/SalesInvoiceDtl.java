@@ -1,5 +1,7 @@
 package com.asg.shipchandling.salesinvoice.entity;
 
+import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -12,7 +14,7 @@ import org.hibernate.type.SqlTypes;
 import com.asg.shipchandling.salesinvoice.converter.BigDecimalConverter;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "AR_SCH_SALES_INVOICE_DTL")
@@ -20,20 +22,24 @@ import java.sql.Timestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 @IdClass(SalesInvoiceDtlId.class)
-public class SalesInvoiceDtl {
+public class SalesInvoiceDtl extends BaseEntity {
 
     @Id
     @Column(name = "TRANSACTION_POID", nullable = false)
+    @AuditIgnore
     private Long transactionPoid;
 
     @Id
     @Column(name = "DET_ROW_ID", nullable = false)
+    @AuditIgnore
     private Long detRowId;
 
     @Column(name = "DN_POID_LINK_FK")
+    @AuditIgnore
     private Long dnPoidLinkFk;
 
     @Column(name = "DET_ROW_ID_CHRG_FK")
+    @AuditIgnore
     private Long detRowIdChrgFk;
 
     @Column(name = "STOCK_POID")
@@ -59,20 +65,6 @@ public class SalesInvoiceDtl {
     @Column(name = "STOCK_UNIT_POID")
     private Long stockUnitPoid;
 
-    @Column(name = "CREATED_BY", length = 20)
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    private Timestamp lastmodifiedDate;
-
     @Column(name = "QUOTATION_POID")
     private Long quotationPoid;
 
@@ -80,6 +72,7 @@ public class SalesInvoiceDtl {
     private Long costAmt;
 
     @Column(name = "QTN_DET_ROW_ID")
+    @AuditIgnore
     private Long quotationDetRowId;
 
     @Column(name = "PURCHASE_PRICE")
@@ -92,6 +85,7 @@ public class SalesInvoiceDtl {
     private Long netSales;
 
     @Column(name = "NET_DISCOUNT")
+    @AuditIgnore
     private Long netDiscount;
 
     @Column(name = "ITEM_GP")
@@ -113,6 +107,7 @@ public class SalesInvoiceDtl {
     private Long taxPoid;
 
     @Column(name = "BASE_AMT")
+    @AuditIgnore
     private Long baseAmt;
 
     @Column(name = "INCENTIVE")

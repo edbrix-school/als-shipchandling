@@ -1,9 +1,15 @@
 package com.asg.shipchandling.salesinvoice.service;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.dto.RawSearchResult;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDeleteService;
 import com.asg.common.lib.service.DocumentSearchService;
+import com.asg.common.lib.service.LoggingService;
+import com.asg.common.lib.service.PrintService;
 import com.asg.common.lib.utility.PaginationUtil;
 import com.asg.shipchandling.salesinvoice.dto.*;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
@@ -16,13 +22,13 @@ import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesDnDtlRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceDtlRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.UpdateSalesInvoiceRequest;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDiscountCommissionResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateDueDateResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateGpResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadCostBookingsResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadDeliveryNoteResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationCurrencyResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationAndCostBookingsResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationSummaryResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationItemsResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.VerifyInvoiceResponse;
@@ -39,15 +45,22 @@ import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.sf.jasperreports.engine.JasperReport;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.sql.DataSource;
 import java.math.BigDecimal;
-import java.sql.Timestamp;
 import java.time.LocalDate;
-import java.util.*;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -65,6 +78,11 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
     private final StockMasterRepository stockMasterRepository;
     private final SalesDeliveryNoteHdrRepository deliveryNoteHdrRepository;
     private final DocumentSearchService documentService;
+    private final LoggingService loggingService;
+    private final DocumentDeleteService documentDeleteService;
+    private final PrintService printService;
+    @Autowired
+    private DataSource dataSource;
     
     @PersistenceContext
     private EntityManager entityManager;
@@ -88,133 +106,113 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         if ("PRINCIPAL".equalsIgnoreCase(request.getPartyType()) && request.getPrincipalPoid() == null) {
             throw new CustomException("Principal is required when party type is PRINCIPAL");
         }
-        // ValidationResponse validCustomer = callCustomerValidateProc(
-        // "CUSTOMER".equalsIgnoreCase(request.getPartyType()) ?
-        // request.getCustomerPoid()
-        // : request.getPrincipalPoid(),
-        // request.getCreditType(), request.getAuthorizedId());
+        if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            ValidationResponse validation = salesInvoiceStoredProcRepository.callCustomerValidateProc(
+                    request.getCustomerPoid(),
+                    "",
+                    request.getAuthorizedId());
+            if (validation != null
+                    && (isStopMessage(validation.getMessage())
+                    || (validation.getSuccess() != null && !validation.getSuccess()))) {
+                throw new CustomException(validation.getMessage());
+            }
+        }
 
         // Create entity
         SalesInvoiceHdr invoice = new SalesInvoiceHdr();
-        BeanUtils.copyProperties(request, invoice);
+        BeanUtils.copyProperties(request, invoice, "transactionDate");
+        LocalDateTime resolvedTransactionDate = request.getTransactionDate() != null
+                ? request.getTransactionDate()
+                : LocalDateTime.now();
+        invoice.setTransactionDate(resolvedTransactionDate);
         invoice.setGroupPoid(groupPoid);
         invoice.setCompanyPoid(companyPoid);
-        invoice.setCreatedBy(userId);
-        invoice.setLastmodifiedBy(userId);
         invoice.setInvStatus("IN_PROGRESS");
-        invoice.setVerified("N");
+        invoice.setVerified(normalizeVerified(request.getVerified()));
         invoice.setDeleted("N");
 
         // Save to get transactionPoid
         SalesInvoiceHdr savedInvoice = invoiceHdrRepository.save(invoice);
         invoiceHdrRepository.flush();
 
-        // Call stored procedure BEFORE SAVE for validation
-        Boolean validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
-                savedInvoice.getTransactionPoid(),
-                request.getCustomerPoid());
-
-        if (validCustomer) {
-            // Save detail tables
-            if (request.getInvoiceDetails() != null && !request.getInvoiceDetails().isEmpty()) {
-                for (CreateSalesInvoiceDtlRequest createSalesInvoiceDtlRequest : request.getInvoiceDetails()) {
-                    // Skip if actionType is "isDeleted" or "delRowId" (should not create deleted items)
-                    String actionType = createSalesInvoiceDtlRequest.getActionType();
-                    if ("isDeleted".equalsIgnoreCase(actionType) || "delRowId".equalsIgnoreCase(actionType)) {
-                        log.debug("Skipping invoice detail with actionType: {}", actionType);
-                        continue;
-                    }
-                    
-                    // Create invoice detail (actionType is "isCreated" or null/empty)
-                    // Get next DetRowId
-                    Long maxDetRowId = invoiceDtlRepository
-                            .findMaxDetRowIdByTransactionPoid(savedInvoice.getTransactionPoid());
-                    Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
-                    // Create invoice detail
-                    SalesInvoiceDtl dtl = new SalesInvoiceDtl();
-                    dtl.setTransactionPoid(savedInvoice.getTransactionPoid());
-                    dtl.setDetRowId(detRowId);
-                    dtl.setStockPoid(createSalesInvoiceDtlRequest.getStockPoid());
-                    dtl.setStockUnitPoid(createSalesInvoiceDtlRequest.getStockUnitPoid());
-                    dtl.setQuantity(createSalesInvoiceDtlRequest.getQuantity());
-                    dtl.setPrice(createSalesInvoiceDtlRequest.getPrice());
-                    dtl.setDiscount(createSalesInvoiceDtlRequest.getDiscount());
-                    dtl.setBaseAmt(createSalesInvoiceDtlRequest.getBaseAmt());
-                    dtl.setTaxPoid(createSalesInvoiceDtlRequest.getTaxPoid());
-                    dtl.setCostPoid(createSalesInvoiceDtlRequest.getCostCenterPoid());
-                    dtl.setRemarks(createSalesInvoiceDtlRequest.getRemarks());
-                    dtl.setCreatedBy(userId);
-                    dtl.setLastmodifiedBy(userId);
-
-                    // Calculate amount
-                    if (dtl.getQuantity() != null && dtl.getPrice() != null) {
-                        BigDecimal quantity = BigDecimal.valueOf(dtl.getQuantity());
-                        BigDecimal amount = quantity.multiply(dtl.getPrice());
-                        if (dtl.getDiscount() != null) {
-                            amount = amount.subtract(BigDecimal.valueOf(dtl.getDiscount()));
-                        }
-                        dtl.setAmount(amount.longValue());
-                    }
-
-                    // Get tax percentage if tax is selected
-                    if (createSalesInvoiceDtlRequest.getTaxPoid() != null) {
-                        // Calculate tax amount: taxAmount = baseAmt * taxPercentage / 100
-                    }
-
-                    SalesInvoiceDtl savedDtl = invoiceDtlRepository.save(dtl);
-                }
-            }
-
-            if (request.getDeliveryNoteDetails() != null && !request.getDeliveryNoteDetails().isEmpty()) {
-                for (CreateSalesDnDtlRequest dnDtl : request.getDeliveryNoteDetails()) {
-                    // Skip if actionType is "isDeleted" or "delRowId" (should not create deleted items)
-                    String actionType = dnDtl.getActionType();
-                    if ("isDeleted".equalsIgnoreCase(actionType) || "delRowId".equalsIgnoreCase(actionType)) {
-                        log.debug("Skipping delivery note detail with actionType: {}", actionType);
-                        continue;
-                    }
-                    
-                    // Create delivery note detail (actionType is "isCreated" or null/empty)
-                    // Get next DetRowId
-                    Long maxDetRowId = dnDtlRepository
-                            .findMaxDetRowIdByTransactionPoid(savedInvoice.getTransactionPoid());
-                    Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
-
-                    // Create delivery note detail
-                    SalesDnDtl dtl = new SalesDnDtl();
-                    dtl.setTransactionPoid(savedInvoice.getTransactionPoid());
-                    dtl.setDetRowId(detRowId);
-                    dtl.setDnPoidFk(dnDtl.getDnPoidFk());
-                    dtl.setQuotationPoidFk(dnDtl.getQuotationPoidFk());
-                    dtl.setRemarks(dnDtl.getRemarks());
-                    dtl.setCreatedBy(userId);
-                    dtl.setLastmodifiedBy(userId);
-
-                    log.debug("Creating delivery note detail with detRowId: {}, remarks: {}", detRowId, dnDtl.getRemarks());
-                    SalesDnDtl savedDtl = dnDtlRepository.save(dtl);
-                }
-                // Flush to ensure all delivery note detail changes are persisted
-                dnDtlRepository.flush();
-            }
-
-            // Call stored procedure AFTER SAVE for authorization
-            salesInvoiceStoredProcRepository.callAuthorizationProc(savedInvoice.getTransactionPoid(),
-                    savedInvoice.getAuthorizedId(), userId);
-
-            // Refresh to get auto-generated DocRef
-            invoiceHdrRepository.flush();
+        // Invoice details are not processed during creation
+        // Invoice details should always be empty or null during create call
+        // They are populated later from quotation through stored procedure
+        if (request.getInvoiceDetails() != null && !request.getInvoiceDetails().isEmpty()) {
+            log.debug("Invoice details provided during creation, but will be ignored. Invoice details should be empty or null during create.");
         }
+
+        if (request.getDeliveryNoteDetails() != null && !request.getDeliveryNoteDetails().isEmpty()) {
+            for (CreateSalesDnDtlRequest dnDtl : request.getDeliveryNoteDetails()) {
+                // Skip if actionType is "isDeleted" or "delRowId" (should not create deleted items)
+                String actionType = dnDtl.getActionType();
+                if ("isDeleted".equalsIgnoreCase(actionType) || "delRowId".equalsIgnoreCase(actionType)) {
+                    log.debug("Skipping delivery note detail with actionType: {}", actionType);
+                    continue;
+                }
+
+                // Create delivery note detail (actionType is "isCreated" or null/empty)
+                // Get next DetRowId
+                Long maxDetRowId = dnDtlRepository
+                        .findMaxDetRowIdByTransactionPoid(savedInvoice.getTransactionPoid());
+                Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
+
+                // Create delivery note detail
+                SalesDnDtl dtl = new SalesDnDtl();
+                dtl.setTransactionPoid(savedInvoice.getTransactionPoid());
+                dtl.setDetRowId(detRowId);
+                dtl.setDnPoidFk(dnDtl.getDnPoidFk());
+                dtl.setQuotationPoidFk(dnDtl.getQuotationPoidFk());
+                dtl.setRemarks(dnDtl.getRemarks());
+
+                log.debug("Creating delivery note detail with detRowId: {}, remarks: {}", detRowId, dnDtl.getRemarks());
+                SalesDnDtl savedDtl = dnDtlRepository.save(dtl);
+
+                String logDetail = String.format(
+                        "Row Created on Sales Delivery Note Detail with detRowId: %s",
+                        savedDtl.getDetRowId()
+                );
+
+                loggingService.createLogSummaryEntry(
+                        UserContext.getDocumentId(),
+                        savedInvoice.getTransactionPoid().toString(),
+                        logDetail
+                );
+            }
+            // Flush to ensure all delivery note detail changes are persisted
+            dnDtlRepository.flush();
+        }
+
+        // Call stored procedure AFTER SAVE for authorization
+        salesInvoiceStoredProcRepository.callAuthorizationProc(savedInvoice.getTransactionPoid(),
+                savedInvoice.getAuthorizedId(), userId);
+
+        // Refresh to get auto-generated DocRef
+        invoiceHdrRepository.flush();
         SalesInvoiceHdr refreshedInvoice = invoiceHdrRepository.findByTransactionPoid(
                 savedInvoice.getTransactionPoid()).orElse(savedInvoice);
+
+        String key = refreshedInvoice.getTransactionPoid().toString();
+        String documentId = UserContext.getDocumentId();
+        loggingService.createLogSummaryEntry(LogDetailsEnum.CREATED, documentId, key);
 
         // Convert to DTO
         SalesInvoiceHdrDto dto = convertToDto(refreshedInvoice, true);
         return dto;
     }
 
+    /** Normalises verified to "Y" or "N". "Y"/"y" (trimmed) → "Y"; null, empty or other → "N". */
+    private static String normalizeVerified(String value) {
+        return (value != null && "Y".equalsIgnoreCase(value.trim())) ? "Y" : "N";
+    }
+
     private SalesInvoiceHdrDto convertToDto(SalesInvoiceHdr invoice, boolean includeDetails) {
         SalesInvoiceHdrDto dto = new SalesInvoiceHdrDto();
         BeanUtils.copyProperties(invoice, dto);
+
+        if (invoice.getTransactionDate() != null) {
+            dto.setTransactionDate(invoice.getTransactionDate());
+        }
 
         if (includeDetails) {
             // Use native query to avoid Hibernate type mapping issues with PRICE column
@@ -271,6 +269,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         
         SalesInvoiceHdrDto dto = new SalesInvoiceHdrDto();
         BeanUtils.copyProperties(invoice, dto);
+
+        if (invoice.getTransactionDate() != null) {
+            dto.setTransactionDate(invoice.getTransactionDate());
+        }
         
         // Populate header LOV details from query result
         if (!queryResults.isEmpty()) {
@@ -553,9 +555,9 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dto.setRemarks(toStringSafe(row[9]));
         dto.setStockUnitPoid(row[10] != null ? ((Number) row[10]).longValue() : null);
         dto.setCreatedBy(toStringSafe(row[11]));
-        dto.setCreatedDate(row[12] != null ? (Timestamp) row[12] : null);
+        dto.setCreatedDate(getLocalDateTimeValue(row[12]));
         dto.setLastmodifiedBy(toStringSafe(row[13]));
-        dto.setLastmodifiedDate(row[14] != null ? (Timestamp) row[14] : null);
+        dto.setLastmodifiedDate(getLocalDateTimeValue(row[14]));
         dto.setQuotationPoid(row[15] != null ? ((Number) row[15]).longValue() : null);
         dto.setCostAmt(row[16] != null ? ((Number) row[16]).longValue() : null);
         dto.setQuotationDetRowId(row[17] != null ? ((Number) row[17]).longValue() : null);
@@ -607,6 +609,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         }
         
         // Populate cost center details (from GL_COST_CENTER_MASTER.MIS_GROUP)
+        // LOV query: SELECT ROWNUM AS POID, MIS_GROUP AS CODE, '' AS DESCRIPTION
         if (dto.getCostCenterPoid() != null) {
             try {
                 String misGroup = getCostCenterMisGroup(dto.getCostCenterPoid());
@@ -668,7 +671,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             Optional<SalesDeliveryNoteHdr> dn = deliveryNoteHdrRepository.findByTransactionPoid(dtl.getDnPoidFk());
             if (dn.isPresent()) {
                 SalesDeliveryNoteHdr dnEntity = dn.get();
-                String description = "VOY:-" + (dnEntity.getVoyageRef() != null ? dnEntity.getVoyageRef() : "") + 
+                String description = dnEntity.getDocRef() + " - VOY:-" + (dnEntity.getVoyageRef() != null ? dnEntity.getVoyageRef() : "") +
                         " CUST:" + getCustomerName(dnEntity.getCustomerPoid());
                 dto.setDnDetails(new SalesDnDtlDto.LovDetailDto(
                         dnEntity.getTransactionPoid(),
@@ -728,6 +731,9 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             throw new CustomException("Cannot update verified invoice. Invoice must be unverified first.");
         }
 
+        SalesInvoiceHdr oldEntity = new SalesInvoiceHdr();
+        BeanUtils.copyProperties(invoice, oldEntity);
+
         // Validate party type
         // if (request.getPartyType() != null) {
         // if (!"CUSTOMER".equalsIgnoreCase(request.getPartyType()) &&
@@ -736,124 +742,110 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // }
         // }
 
-        // Update fields
+        // Update fields (verified can be set via update; normalised to Y/N)
         BeanUtils.copyProperties(request, invoice, "transactionPoid", "docRef", "createdBy",
-                "createdDate", "invStatus", "verified", "invAmount", "totalGpAmt", "totalGpPercent",
-                "totalCost", "discountAmt", "discountPercent", "invDiscount", "costRefNumber",
-                "contractRefNumber", "lpoDetails", "creditDays", "fdaRef", "authorizedId", "vesselName", "portName",
-                "deliveryToAddress", "incentiveAmt", "incentivePercent", "incentiveAmt2", "incentivePercent2",
-                "incentiveAmt3", "incentivePercent3", "paymentMode", "dueDate");
-        invoice.setLastmodifiedBy(userId);
+                "createdDate", "transactionDate", "invStatus", "invAmount", "totalGpAmt", "totalGpPercent",
+                "totalCost", "discountAmt", "discountPercent", "invDiscount", "paymentMode");
+
+        if (request.getTransactionDate() != null) {
+            invoice.setTransactionDate(request.getTransactionDate());
+        }
+
+        if (request.getVerified() != null) {
+            invoice.setVerified(normalizeVerified(request.getVerified()));
+        }
+
+        if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            ValidationResponse validation = salesInvoiceStoredProcRepository.callCustomerValidateProc(
+                    request.getCustomerPoid(),
+                    "",
+                    request.getAuthorizedId());
+            if (validation != null
+                    && (isStopMessage(validation.getMessage())
+                            || (validation.getSuccess() != null && !validation.getSuccess()))) {
+                throw new CustomException(validation.getMessage());
+            }
+        }
 
         // Call stored procedure BEFORE SAVE for validation
-        Boolean validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
-                invoice.getTransactionPoid(),
-                request.getCustomerPoid());
+        if ("CUSTOMER".equalsIgnoreCase(request.getPartyType())) {
+            boolean validCustomer = salesInvoiceStoredProcRepository.callCustomerEditValidateProc(
+                    invoice.getTransactionPoid(),
+                    request.getCustomerPoid());
+            if (!validCustomer) {
+                throw new CustomException("You can't change the Customer,DN Data already selected ...");
+            }
+        }
 
         // Update detail tables
+        // In edit mode: Only updates to remarks and costPoid are allowed
+        // Creation and deletion are not permitted
         if (request.getInvoiceDetails() != null && !request.getInvoiceDetails().isEmpty()) {
             for (UpdateSalesInvoiceDtlRequest invDetail : request.getInvoiceDetails()) {
                 String actionType = invDetail.getActionType();
                 
-                // Handle deletion
+                // Reject deletion - not allowed in edit mode
                 if ("isDeleted".equalsIgnoreCase(actionType) || "delRowId".equalsIgnoreCase(actionType)) {
-                    // Delete the invoice detail
-                    if (invDetail.getDetRowId() != null) {
-                        try {
-                            invoiceDtlRepository.deleteById(new SalesInvoiceDtlId(transactionPoid, invDetail.getDetRowId()));
-                            log.debug("Deleted invoice detail with detRowId: {}", invDetail.getDetRowId());
-                        } catch (Exception e) {
-                            log.warn("Failed to delete invoice detail with detRowId: {}", invDetail.getDetRowId(), e);
-                        }
-                    }
-                    continue;
+                    log.warn("Deletion of invoice details is not allowed in edit mode. detRowId: {}", invDetail.getDetRowId());
+                    throw new CustomException("Deletion of invoice details is not allowed. Invoice details are read-only except for Remarks and Cost Center.");
                 }
                 
-                // Handle creation of new record
+                // Reject creation - not allowed in edit mode
                 if ("isCreated".equalsIgnoreCase(actionType)) {
-                    // Get next DetRowId
-                    Long maxDetRowId = invoiceDtlRepository
-                            .findMaxDetRowIdByTransactionPoid(transactionPoid);
-                    Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
-                    
-                    // Create new invoice detail
-                    SalesInvoiceDtl newDtl = new SalesInvoiceDtl();
-                    newDtl.setTransactionPoid(transactionPoid);
-                    newDtl.setDetRowId(detRowId);
-                    newDtl.setStockPoid(invDetail.getStockPoid());
-                    newDtl.setStockUnitPoid(invDetail.getStockUnitPoid());
-                    newDtl.setQuantity(invDetail.getQuantity());
-                    newDtl.setPrice(invDetail.getPrice());
-                    newDtl.setDiscount(invDetail.getDiscount());
-                    newDtl.setBaseAmt(invDetail.getBaseAmt());
-                    newDtl.setTaxPoid(invDetail.getTaxPoid());
-                    newDtl.setCostPoid(invDetail.getCostCenterPoid());
-                    newDtl.setRemarks(invDetail.getRemarks());
-                    newDtl.setCreatedBy(userId);
-                    newDtl.setLastmodifiedBy(userId);
-                    
-                    // Calculate amount
-                    if (newDtl.getQuantity() != null && newDtl.getPrice() != null) {
-                        BigDecimal quantity = BigDecimal.valueOf(newDtl.getQuantity());
-                        BigDecimal amount = quantity.multiply(newDtl.getPrice());
-                        if (newDtl.getDiscount() != null) {
-                            amount = amount.subtract(BigDecimal.valueOf(newDtl.getDiscount()));
-                        }
-                        newDtl.setAmount(amount.longValue());
-                    }
-                    
-                    invoiceDtlRepository.save(newDtl);
-                    log.debug("Created new invoice detail with detRowId: {}", detRowId);
-                    continue;
+                    log.warn("Creation of new invoice details is not allowed in edit mode");
+                    throw new CustomException("Creation of new invoice details is not allowed. Invoice details are read-only except for Remarks and Cost Center.");
                 }
                 
                 // Handle no changes - skip processing
-                if ("noChanges".equalsIgnoreCase(actionType)) {
-                    log.debug("Skipping invoice detail with actionType 'noChanges' for detRowId: {}", invDetail.getDetRowId());
+                if ("noChange".equalsIgnoreCase(actionType)) {
+                    log.debug("Skipping invoice detail with actionType 'noChange' for detRowId: {}", invDetail.getDetRowId());
                     continue;
                 }
                 
-                // Handle update of existing record (actionType = "isUpdated" or null/empty)
-                if (invDetail.getDetRowId() == null) {
-                    log.warn("Skipping invoice detail update - detRowId is null and actionType is not 'isCreated'");
-                    continue;
-                }
-                
-                // Find existing invoice detail
-                SalesInvoiceDtl dtl = invoiceDtlRepository
-                        .findById(new SalesInvoiceDtlId(transactionPoid, invDetail.getDetRowId()))
-                        .orElseThrow(
-                                () -> new ResourceNotFoundException("Invoice Detail", "detRowId", invDetail.getDetRowId()));
-
-                // Update fields (only editable fields)
-                dtl.setStockPoid(invDetail.getStockPoid());
-                dtl.setStockUnitPoid(invDetail.getStockUnitPoid());
-                dtl.setQuantity(invDetail.getQuantity());
-                dtl.setPrice(invDetail.getPrice());
-                dtl.setDiscount(invDetail.getDiscount());
-                dtl.setBaseAmt(invDetail.getBaseAmt());
-                dtl.setTaxPoid(invDetail.getTaxPoid());
-                dtl.setCostPoid(invDetail.getCostCenterPoid());
-                dtl.setRemarks(invDetail.getRemarks());
-                dtl.setLastmodifiedBy(userId);
-
-                // Recalculate amount
-                if (dtl.getQuantity() != null && dtl.getPrice() != null) {
-                    BigDecimal quantity = BigDecimal.valueOf(dtl.getQuantity());
-                    BigDecimal amount = quantity.multiply(dtl.getPrice());
-                    if (dtl.getDiscount() != null) {
-                        amount = amount.subtract(BigDecimal.valueOf(dtl.getDiscount()));
+                // Handle update of existing record - only if actionType is "isUpdated"
+                if ("isUpdated".equalsIgnoreCase(actionType)) {
+                    // Validate detRowId - must not be null or 0
+                    if (invDetail.getDetRowId() == null || invDetail.getDetRowId() == 0) {
+                        log.error("Invalid detRowId for invoice detail update - detRowId is null or 0");
+                        throw new CustomException("Invalid invoice detail: detRowId is required and must be greater than 0 for updates.");
                     }
-                    dtl.setAmount(amount.longValue());
+                    
+                    // Find existing invoice detail
+                    SalesInvoiceDtl dtl = invoiceDtlRepository
+                            .findById(new SalesInvoiceDtlId(transactionPoid, invDetail.getDetRowId()))
+                            .orElseThrow(
+                                    () -> new ResourceNotFoundException("Invoice Detail", "detRowId", invDetail.getDetRowId()));
+                    SalesInvoiceDtl oldDtl = new SalesInvoiceDtl();
+                    BeanUtils.copyProperties(dtl, oldDtl);
+
+                    // Update only editable fields: Remarks and CostPoid
+                    // All other fields are read-only (populated from quotation)
+                    dtl.setCostPoid(invDetail.getCostCenterPoid());
+                    dtl.setRemarks(invDetail.getRemarks());
+
+
+                    invoiceDtlRepository.save(dtl);
+
+                    String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", dtl.getTransactionPoid(),dtl.getDetRowId());
+
+                    // Log the changes
+                    loggingService.createLog(oldDtl, dtl, SalesInvoiceDtl.class,
+                            UserContext.getDocumentId(),transactionPoid.toString(),
+                            logDetail);
+                    
+                    log.debug("Updated invoice detail with detRowId: {}", invDetail.getDetRowId());
+
+                    loggingService.logChanges(
+                            oldDtl,
+                            dtl,
+                            SalesInvoiceDtl.class,
+                            UserContext.getDocumentId(),
+                            transactionPoid.toString(),
+                            LogDetailsEnum.MODIFIED,
+                            "KeyId = TRANSACTION_POID: " + transactionPoid +
+                                    " DET_ROW_ID: " + invDetail.getDetRowId()
+                    );
                 }
-
-                // Recalculate tax if tax is selected
-                // if (invDetail.getTaxPoid() != null) {
-
-                // }
-
-                invoiceDtlRepository.save(dtl);
-                log.debug("Updated invoice detail with detRowId: {}", invDetail.getDetRowId());
             }
         }
 
@@ -867,6 +859,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     if (dnDtlRequest.getDetRowId() != null) {
                         try {
                             dnDtlRepository.deleteById(new SalesDnDtlId(transactionPoid, dnDtlRequest.getDetRowId()));
+                            loggingService.logDelete(dnDtlRequest,  UserContext.getDocumentId(), transactionPoid.toString());
                             log.debug("Deleted delivery note detail with detRowId: {}", dnDtlRequest.getDetRowId());
                         } catch (Exception e) {
                             log.warn("Failed to delete delivery note detail with detRowId: {}", dnDtlRequest.getDetRowId(), e);
@@ -893,11 +886,14 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     newDtl.setDnPoidFk(dnDtlRequest.getDnPoidFk());
                     newDtl.setQuotationPoidFk(dnDtlRequest.getQuotationPoidFk());
                     newDtl.setRemarks(dnDtlRequest.getRemarks());
-                    newDtl.setCreatedBy(userId);
-                    newDtl.setLastmodifiedBy(userId);
                     
                     dnDtlRepository.save(newDtl);
                     log.debug("Successfully created new delivery note detail with detRowId: {}", detRowId);
+                    loggingService.createLogSummaryEntry(
+                            UserContext.getDocumentId(),
+                            transactionPoid.toString(),
+                            "Row Created on Sales Delivery Note Detail with detRowId: " + detRowId
+                    );
                     continue;
                 }
                 
@@ -919,18 +915,40 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                         .orElseThrow(() -> new ResourceNotFoundException("Delivery Note Detail", "detRowId",
                                 dnDtlRequest.getDetRowId()));
 
+                SalesDnDtl oldDtl = new SalesDnDtl();
+                BeanUtils.copyProperties(dtl, oldDtl);
+
                 log.debug("Updating delivery note detail with detRowId: {}, old remarks: {}, new remarks: {}", 
                         dnDtlRequest.getDetRowId(), dtl.getRemarks(), dnDtlRequest.getRemarks());
+
+                // Create a copy of the existing detail for logging
 
                 // Update fields
                 dtl.setDnPoidFk(dnDtlRequest.getDnPoidFk());
                 dtl.setQuotationPoidFk(dnDtlRequest.getQuotationPoidFk());
                 dtl.setRemarks(dnDtlRequest.getRemarks());
-                dtl.setLastmodifiedBy(userId);
 
                 dnDtlRepository.save(dtl);
+
+                String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", dtl.getTransactionPoid(), dtl.getDetRowId());
+
+                // Log the changes
+                loggingService.createLog(oldDtl, dtl, SalesDnDtl.class,
+                        UserContext.getDocumentId(), transactionPoid.toString(),
+                        logDetail);
+
                 log.debug("Updated delivery note detail with detRowId: {}, remarks: {}", 
                         dnDtlRequest.getDetRowId(), dnDtlRequest.getRemarks());
+                loggingService.logChanges(
+                        oldDtl,
+                        dtl,
+                        SalesDnDtl.class,
+                        UserContext.getDocumentId(),
+                        transactionPoid.toString(),
+                        LogDetailsEnum.MODIFIED,
+                        "KeyId = TRANSACTION_POID: " + transactionPoid +
+                                " DET_ROW_ID: " + dnDtlRequest.getDetRowId()
+                );
             }
             // Flush to ensure all delivery note detail changes are persisted
             dnDtlRepository.flush();
@@ -941,12 +959,16 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // Call stored procedure AFTER SAVE for authorization
         salesInvoiceStoredProcRepository.callAuthorizationProc(transactionPoid, savedInvoice.getAuthorizedId(), userId);
 
+        String key = savedInvoice.getTransactionPoid().toString();
+        loggingService.logChanges(oldEntity, savedInvoice, SalesInvoiceHdr.class,
+                UserContext.getDocumentId(), key, LogDetailsEnum.MODIFIED, "TRANSACTION_POID");
+
         return convertToDto(savedInvoice, true);
     }
 
     @Override
     @Transactional
-    public void deleteSalesInvoice(Long transactionPoid, Long groupPoid, Long companyPoid) {
+    public void deleteSalesInvoice(Long transactionPoid, Long groupPoid, Long companyPoid, DeleteReasonDto deleteReasonDto) {
         SalesInvoiceHdr invoice = invoiceHdrRepository
                 .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
@@ -954,6 +976,13 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         if ("Y".equals(invoice.getVerified())) {
             throw new CustomException("Cannot delete verified invoice. Invoice must be unverified first.");
         }
+        documentDeleteService.deleteDocument(
+                transactionPoid,
+                "AR_SCH_SALES_INVOICE_HDR",
+                "TRANSACTION_POID",
+                deleteReasonDto,
+                LocalDate.now()
+        );
 
         // Check dependencies
         SalesInvoiceDependenciesDto dependencies = checkSalesInvoiceDependencies(transactionPoid, groupPoid,
@@ -1059,8 +1088,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dtl.setTaxPoid(request.getTaxPoid());
         dtl.setCostPoid(request.getCostCenterPoid());
         dtl.setRemarks(request.getRemarks());
-        dtl.setCreatedBy(userId);
-        dtl.setLastmodifiedBy(userId);
+
 
         // Calculate amount
         if (dtl.getQuantity() != null && dtl.getPrice() != null) {
@@ -1104,6 +1132,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 .findById(new SalesInvoiceDtlId(transactionPoid, detRowId))
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice Detail", "detRowId", detRowId));
 
+        // Create a copy of the existing detail for logging
+        SalesInvoiceDtl oldDtl = new SalesInvoiceDtl();
+        BeanUtils.copyProperties(dtl, oldDtl);
+
         // Update fields (only editable fields)
         dtl.setStockPoid(request.getStockPoid());
         dtl.setStockUnitPoid(request.getStockUnitPoid());
@@ -1114,7 +1146,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dtl.setTaxPoid(request.getTaxPoid());
         dtl.setCostPoid(request.getCostCenterPoid());
         dtl.setRemarks(request.getRemarks());
-        dtl.setLastmodifiedBy(userId);
+
 
         // Recalculate amount
         if (dtl.getQuantity() != null && dtl.getPrice() != null) {
@@ -1132,6 +1164,14 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         }
 
         SalesInvoiceDtl savedDtl = invoiceDtlRepository.save(dtl);
+
+        String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", dtl.getTransactionPoid(), dtl.getDetRowId());
+
+        // Log the changes
+        loggingService.createLog(oldDtl, savedDtl, SalesInvoiceDtl.class,
+                UserContext.getDocumentId(), transactionPoid.toString(),
+                logDetail);
+
         return convertInvoiceDtlToDto(savedDtl);
     }
 
@@ -1197,8 +1237,6 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dtl.setDnPoidFk(request.getDnPoidFk());
         dtl.setQuotationPoidFk(request.getQuotationPoidFk());
         dtl.setRemarks(request.getRemarks());
-        dtl.setCreatedBy(userId);
-        dtl.setLastmodifiedBy(userId);
 
         log.debug("Creating delivery note detail with detRowId: {}, remarks: {}", detRowId, request.getRemarks());
         SalesDnDtl savedDtl = dnDtlRepository.save(dtl);
@@ -1233,14 +1271,25 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         log.debug("Updating delivery note detail with detRowId: {}, old remarks: {}, new remarks: {}", 
                 detRowId, dtl.getRemarks(), request.getRemarks());
 
+        // Create a copy of the existing detail for logging
+        SalesDnDtl oldDtl = new SalesDnDtl();
+        BeanUtils.copyProperties(dtl, oldDtl);
+
         // Update fields
         dtl.setDnPoidFk(request.getDnPoidFk());
         dtl.setQuotationPoidFk(request.getQuotationPoidFk());
         dtl.setRemarks(request.getRemarks());
-        dtl.setLastmodifiedBy(userId);
 
         SalesDnDtl savedDtl = dnDtlRepository.save(dtl);
         dnDtlRepository.flush();
+
+        String logDetail = String.format("KeyId = TRANSACTION_POID %s: DET_ROW_ID %s", dtl.getTransactionPoid(), dtl.getDetRowId());
+
+        // Log the changes
+        loggingService.createLog(oldDtl, savedDtl, SalesDnDtl.class,
+                UserContext.getDocumentId(), transactionPoid.toString(),
+                logDetail);
+
         log.debug("Successfully updated delivery note detail with detRowId: {}, remarks: {}", detRowId, savedDtl.getRemarks());
         return convertDnDtlToDto(savedDtl);
     }
@@ -1309,6 +1358,78 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             throw new CustomException("Cannot load quotation. Invoice is verified");
         }
 
+        LoadQuotationItemsResponse response = loadQuotationItemsProc(transactionPoid, request);
+
+        // Update invoice with quotation reference
+        invoice.setQtnPoid(request.getQtnPoid());
+        invoice.setIncentiveAmt(request.getIncentiveAmt());
+        invoice.setIncentiveAmt2(request.getIncentiveAmt2());
+        invoice.setIncentiveAmt3(request.getIncentiveAmt3());
+        invoiceHdrRepository.save(invoice);
+
+        return response;
+    }
+
+    @Override
+    public LoadQuotationAndCostBookingsResponse loadQuotationAndCostBookings(Long transactionPoid,
+            LoadQuotationItemsRequest request, Long groupPoid, Long companyPoid, String userId) {
+        // Validate invoice exists
+        SalesInvoiceHdr invoice = invoiceHdrRepository
+                .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
+                .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
+
+        if (request.getQtnPoid() == null) {
+            throw new CustomException("Please Select a Quotation");
+        }
+
+        if ("Y".equals(invoice.getDeleted())) {
+            throw new CustomException("Cannot load quotation. Invoice is deleted");
+        }
+
+        if ("Y".equals(invoice.getVerified())) {
+            throw new CustomException("Cannot load quotation. Invoice is verified");
+        }
+
+        List<String> messages = new ArrayList<>();
+        Long unloadQtnPoid = request.getQtnPoid() != null ? request.getQtnPoid() : invoice.getQtnPoid();
+        if (unloadQtnPoid != null) {
+            UnloadQuotationResponse unloadResponse = salesInvoiceStoredProcRepository
+                    .callUnloadQuotationProc(transactionPoid, unloadQtnPoid);
+            if (unloadResponse.getMessage() != null && !unloadResponse.getMessage().isBlank()) {
+                messages.add(unloadResponse.getMessage());
+            }
+        }
+
+        LoadQuotationItemsResponse loadResponse = loadQuotationItemsProc(transactionPoid, request);
+        if (loadResponse.getMessage() != null && !loadResponse.getMessage().isBlank()) {
+            messages.add(loadResponse.getMessage());
+        }
+
+        LoadCostBookingsResponse costBookingsResponse = loadCostBookingsByQuotation(transactionPoid,
+                request.getQtnPoid());
+        if (costBookingsResponse.getMessage() != null && !costBookingsResponse.getMessage().isBlank()) {
+            messages.add(costBookingsResponse.getMessage());
+        }
+
+        // Refresh invoice header after load/unload actions
+        invoiceHdrRepository.flush();
+        // Stored procedures may update header fields (e.g. vesselName) directly in the database.
+        // Clear persistence context so that a fresh SELECT is executed.
+        entityManager.clear();
+        SalesInvoiceHdr refreshedInvoice = invoiceHdrRepository.findByTransactionPoid(transactionPoid)
+                .orElse(invoice);
+
+        LoadQuotationAndCostBookingsResponse response = new LoadQuotationAndCostBookingsResponse();
+        response.setSuccess(true);
+        response.setMessages(messages);
+        response.setQuotationItems(loadResponse.getItems());
+        response.setCostBookings(costBookingsResponse.getCostBookings());
+        response.setInvoice(convertToDtoWithLov(refreshedInvoice, true));
+        return response;
+    }
+
+    private LoadQuotationItemsResponse loadQuotationItemsProc(Long transactionPoid,
+            LoadQuotationItemsRequest request) {
         // Check if invoice details table is not empty
         List<SalesInvoiceDtl> existingDetails = invoiceDtlRepository.findByTransactionPoid(transactionPoid);
         if (!existingDetails.isEmpty()) {
@@ -1316,24 +1437,12 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                     "Cannot load quotation. Invoice details table is not empty. Please clear items first.");
         }
 
-        // Call stored procedure to load quotation
-        LoadQuotationItemsResponse response = salesInvoiceStoredProcRepository
-                .callLoadQuotationItemsProc(transactionPoid, request);
-
-        // Update invoice with quotation reference
-        invoice.setQtnPoid(request.getQtnPoid());
-        invoice.setIncentiveAmt(request.getIncentiveAmt());
-        invoice.setIncentiveAmt2(request.getIncentiveAmt2());
-        invoice.setIncentiveAmt3(request.getIncentiveAmt3());
-        invoice.setLastmodifiedBy(userId);
-        invoiceHdrRepository.save(invoice);
-
-        return response;
+        return salesInvoiceStoredProcRepository.callLoadQuotationItemsProc(transactionPoid, request);
     }
 
     @Override
     @Transactional
-    public UnloadQuotationResponse unloadQuotation(Long transactionPoid,
+    public UnloadQuotationResponse unloadQuotation(Long transactionPoid, Long qtnPoid,
             Long groupPoid, Long companyPoid, String userId) {
         // Validate invoice exists
         SalesInvoiceHdr invoice = invoiceHdrRepository
@@ -1341,16 +1450,24 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
 
         if ("Y".equals(invoice.getDeleted())) {
-            throw new CustomException("Cannot load quotation. Invoice is deleted");
+            throw new CustomException("Cannot unload quotation. Invoice is deleted");
         }
 
         if ("Y".equals(invoice.getVerified())) {
-            throw new CustomException("Cannot load quotation. Invoice isn't in EDIT mode");
+            throw new CustomException("Cannot unload quotation. Invoice is already verified");
         }
 
         // Call stored procedure to load quotation
         UnloadQuotationResponse response = salesInvoiceStoredProcRepository.callUnloadQuotationProc(transactionPoid,
-                invoice.getQtnPoid());
+                qtnPoid);
+
+        // Refresh invoice header after load/unload actions
+        invoiceHdrRepository.flush();
+        SalesInvoiceHdr refreshedInvoice = invoiceHdrRepository.findByTransactionPoid(transactionPoid)
+                .orElse(invoice);
+
+        response.setInvoice(convertToDtoWithLov(refreshedInvoice, true));
+
         return response;
     }
 
@@ -1379,7 +1496,6 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // Update verified status
         invoice.setVerified("Y");
         invoice.setAuthorizedId(invoice.getAuthorizedId());
-        invoice.setLastmodifiedBy(userId);
         invoiceHdrRepository.save(invoice);
 
         VerifyInvoiceResponse response = new VerifyInvoiceResponse();
@@ -1391,7 +1507,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional
-    public CalculateGpResponse calculateGp(Long transactionPoid, Long groupPoid, Long companyPoid, String userId) {
+    public RefreshGpProcResponse calculateGp(Long transactionPoid, CalculateDiscountCommissionRequest request, Long groupPoid, Long companyPoid, Long userPoid) {
         // Validate invoice exists
         SalesInvoiceHdr invoice = invoiceHdrRepository
                 .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
@@ -1401,26 +1517,34 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             throw new CustomException("Cannot calculate GP. Invoice is verified.");
         }
 
-        // Call stored procedure to calculate GP
-        ValidationResponse response = salesInvoiceStoredProcRepository.callCalculateGpProc(transactionPoid,
-                invoice.getQtnPoid());
+        if (invoice.getQtnPoid() == null) {
+            throw new CustomException("Quotation POID is required for this operation");
+        }
+
+        if (userPoid == null) {
+            throw new CustomException("User Poid is required for GP calculation");
+        }
+
+        // Call stored procedure to calculate discount/commission/GP (legacy refresh GP behavior)
+        RefreshGpProcResponse response = salesInvoiceStoredProcRepository.callRefreshGpProc(
+                userPoid,
+                transactionPoid,
+                invoice.getQtnPoid(),
+                request);
 
         if (response.getMessage() != null && response.getMessage().contains("ERROR")) {
             throw new CustomException("Error calculating GP: " + response.getMessage());
         }
 
-        // Refresh invoice to get calculated GP values
+        // Refresh invoice header
         invoiceHdrRepository.flush();
         SalesInvoiceHdr refreshedInvoice = invoiceHdrRepository.findByTransactionPoid(transactionPoid)
                 .orElse(invoice);
 
-        CalculateGpResponse calculateGpResponse = new CalculateGpResponse();
-        calculateGpResponse.setSuccess(true);
-        calculateGpResponse
-                .setMessage(response.getMessage() != null ? response.getMessage() : "GP calculated successfully");
-        calculateGpResponse.setTotalGpAmt(refreshedInvoice.getTotalGpAmt());
-        calculateGpResponse.setTotalGpPercent(refreshedInvoice.getTotalGpPercent());
-        return calculateGpResponse;
+        response.setSuccess(true);
+        response.setMessage(response.getMessage() != null ? response.getMessage() : "GP calculated successfully");
+        response.setInvoice(convertToDtoWithLov(refreshedInvoice, true));
+        return response;
     }
 
     @Override
@@ -1432,43 +1556,55 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
                 .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
                 .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
 
-        // Call stored procedure to load cost bookings
-        ValidationResponse result = salesInvoiceStoredProcRepository.callLoadCostBookingsProc(transactionPoid,
-                invoice.getQtnPoid());
+        return loadCostBookingsByQuotation(transactionPoid, invoice.getQtnPoid());
+    }
 
-        if (result.getMessage() != null && result.getMessage().contains("ERROR")) {
-            throw new CustomException("Error loading cost bookings: " + result.getMessage());
+    private LoadCostBookingsResponse loadCostBookingsByQuotation(Long transactionPoid, Long qtnPoid) {
+        if (qtnPoid == null) {
+            throw new CustomException("Quotation POID is required for this operation");
         }
 
-        // Query cost booked details (read-only)
+        ValidationResponse result = salesInvoiceStoredProcRepository.callLoadCostBookingsProc(transactionPoid, qtnPoid);
+
         List<SalesInvCostbkdDtl> costBookings = costbkdDtlRepository.findByTransactionPoid(transactionPoid);
         List<SalesInvCostbkdDtlDto> costBookingDtos = costBookings.stream()
                 .map(this::convertCostbkdDtlToDto)
                 .collect(Collectors.toList());
 
         LoadCostBookingsResponse response = new LoadCostBookingsResponse();
-        response.setSuccess(true);
+        response.setSuccess(result.getSuccess() != null ? result.getSuccess() : false);
         response.setMessage(result.getMessage() != null ? result.getMessage() : "Cost bookings loaded successfully");
         response.setCostBookings(costBookingDtos);
         response.setCount(costBookingDtos.size());
         return response;
     }
 
+    private boolean isStopMessage(String message) {
+        if (message == null) {
+            return false;
+        }
+        String upperMessage = message.toUpperCase(Locale.ROOT);
+        return upperMessage.contains("WARNING") || upperMessage.contains("ERROR")
+                || upperMessage.contains("NO_DATA") || upperMessage.contains("NO DATA");
+    }
+
     @Override
     @Transactional(readOnly = true)
-    public CalculateDueDateResponse calculateDueDate(Long transactionPoid, Timestamp transactionDate, Long creditDays,
-            Long groupPoid, Long companyPoid) {
-        if (transactionDate == null || creditDays == null) {
+    public CreditDetailsResponse calculateDueDate(Long customerPoid, java.time.LocalDate docDate, Long creditDays) {
+
+        if (customerPoid == null) {
+            throw new CustomException("Customer POID is required");
+        }
+
+        if (docDate == null || creditDays == null) {
             throw new CustomException("Transaction date and credit days are required");
         }
-        SalesInvoiceHdr invoice = invoiceHdrRepository
-                .findByTransactionPoidAndGroupPoidAndCompanyPoid(transactionPoid, groupPoid, companyPoid)
-                .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
+
+        // Convert LocalDate to java.sql.Date for Oracle DATE type
+        //java.sql.Date sqlDocDate = Date.valueOf(docDate);
 
         // Call stored procedure
-        CalculateDueDateResponse response = salesInvoiceStoredProcRepository.callCalculateDueDateProc(groupPoid,
-                companyPoid, transactionDate,
-                invoice.getDueDate(), creditDays, "DAYS", invoice.getCustomerPoid());
+        CreditDetailsResponse response = salesInvoiceStoredProcRepository.callCalculateDueDateProc(docDate, creditDays, "DAYS", customerPoid);
 
         return response;
     }
@@ -1496,7 +1632,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // Call stored procedure
         CalculateDiscountCommissionResponse response = salesInvoiceStoredProcRepository
                 .callCalculateItemDiscountCommissionProc(
-                        transactionPoid, request, detRowId, invoice.getQtnPoid(), userId);
+                        transactionPoid, request, invoice.getQtnPoid(), userId);
 
         if (!response.getSuccess() || response.getMessage().contains("ERROR")) {
             throw new CustomException("Error calculating discount/commission: " + response.getMessage());
@@ -1597,46 +1733,42 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
     @Override
     @Transactional(readOnly = true)
-    public CreditDetailsResponse loadCreditDetails(Long customerPoid, Long groupPoid, Long companyPoid,
-            CreditDetailsRequest request) {
-        if (customerPoid == null) {
-            throw new CustomException("Customer POID is required");
+    public CreditDetailsResponse loadCreditDetails(Long groupPoid, Long companyPoid,
+            String docId, CreditDetailsRequest request) {
+        if (request.getPartyPoid() == null) {
+            throw new CustomException("Party POID is required");
         }
+
+        // Convert LocalDate to java.sql.Date for Oracle DATE type
+        LocalDate docDate = request.getDocDate();
 
         // Call stored procedure
         CreditDetailsResponse response = salesInvoiceStoredProcRepository.callLoadCreditDetailsProc(groupPoid,
-                companyPoid, customerPoid, request.getDocId(), request.getDocKeyPoid(), request.getDocDate(),
+                companyPoid, docId, docDate,
                 request.getPartyType(), request.getPartyPoid());
-
-        if (response.getMessage() != null && response.getMessage().contains("ERROR")) {
-            throw new CustomException("Error loading credit details: " + response.getMessage());
-        }
 
         return response;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public LoadQuotationCurrencyResponse loadQuotationCurrency(Long transactionPoid, String qtnPoid) {
+    public LoadQuotationSummaryResponse loadQuotationSummary(Long transactionPoid, Long qtnPoid) {
         if (qtnPoid == null) {
             throw new CustomException("Quotation POID is required");
         }
 
         // Call stored procedure
-        LoadQuotationCurrencyResponse result = salesInvoiceStoredProcRepository
-                .callLoadQuotationCurrencyProc(transactionPoid, qtnPoid);
+        LoadQuotationSummaryResponse result = salesInvoiceStoredProcRepository
+                .callLoadQuotationSummaryProc(transactionPoid, qtnPoid);
 
-        if (result.getMessage() != null && result.getMessage().contains("ERROR")) {
-            throw new CustomException("Error loading quotation currency: " + result.getMessage());
-        }
+        // Refresh invoice header after load/unload actions
+        invoiceHdrRepository.flush();
+        SalesInvoiceHdr refreshedInvoice = invoiceHdrRepository.findByTransactionPoid(transactionPoid)
+                .orElseThrow(() -> new ResourceNotFoundException("Sales Invoice", "transactionPoid", transactionPoid));
 
-        LoadQuotationCurrencyResponse response = new LoadQuotationCurrencyResponse();
-        response.setSuccess(true);
-        response.setMessage(result.getMessage() != null ? result.getMessage() : "Currency details loaded successfully");
-        response.setCurrencyCode(result.getCurrencyCode());
-        response.setCurrencyRate(result.getCurrencyRate());
-        response.setQuotationCurrencyList(result.getQuotationCurrencyList());
-        return response;
+        result.setInvoice(convertToDtoWithLov(refreshedInvoice, true));
+
+        return result;
     }
 
     @Override
@@ -1686,20 +1818,29 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
     /**
      * Helper method to get MIS_GROUP from GL_COST_CENTER_MASTER
      * Note: costCenterPoid is ROWNUM, so we need to query by position
+     * The LOV query: SELECT ROWNUM AS POID, MIS_GROUP AS CODE, '' AS DESCRIPTION
+     * FROM (SELECT MIS_GROUP FROM GL_COST_CENTER_MASTER GROUP BY MIS_GROUP)
      */
     private String getCostCenterMisGroup(Long costCenterPoid) {
-        // Since costCenterPoid is ROWNUM, we need to use a subquery
-        // The LOV query shows: SELECT ROWNUM AS POID, MIS_GROUP AS CODE, '' AS DESCRIPTION
-        // So we need to get MIS_GROUP by ROWNUM position
+        if (costCenterPoid == null) {
+            return null;
+        }
+        
         try {
-            // Use native query to get MIS_GROUP by ROWNUM
+            // Query to get MIS_GROUP by ROWNUM position
+            // This matches the LOV query structure where ROWNUM is used as POID
             String sql = "SELECT MIS_GROUP FROM (" +
                     "SELECT ROWNUM AS RN, MIS_GROUP " +
                     "FROM (SELECT MIS_GROUP FROM GL_COST_CENTER_MASTER GROUP BY MIS_GROUP)" +
-                    ") WHERE RN = ?";
-            // Note: This requires JdbcTemplate which we don't have injected
-            // For now, return null and log a warning
-            log.warn("Cost center MIS_GROUP lookup requires JdbcTemplate. costCenterPoid={}", costCenterPoid);
+                    ") WHERE RN = :costCenterPoid";
+            
+            Query query = entityManager.createNativeQuery(sql);
+            query.setParameter("costCenterPoid", costCenterPoid);
+            
+            Object result = query.getSingleResult();
+            if (result != null) {
+                return result.toString();
+            }
             return null;
         } catch (Exception e) {
             log.warn("Failed to get cost center MIS_GROUP for costCenterPoid={}: {}", costCenterPoid, e.getMessage());
@@ -1715,14 +1856,19 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             return "";
         }
         try {
-            // Query SALES_CUSTOMER_MASTER for customer name
-            // This would require a repository method, for now return empty string
-            // In a real implementation, you'd inject SalesCustomerMasterRepository
-            log.debug("Customer name lookup for customerPoid={} requires repository", customerPoid);
-            return "";
+            String sql = "SELECT get_SALES_CUSTOMER_NAME(:customerPoid) FROM DUAL";
+            Query query = entityManager.createNativeQuery(sql);
+            query.setParameter("customerPoid", customerPoid);
+
+            @SuppressWarnings("unchecked")
+            List<Object> results = query.getResultList();
+            if (results.isEmpty() || results.get(0) == null) {
+                return "N/A";
+            }
+            return results.get(0).toString();
         } catch (Exception e) {
             log.warn("Failed to get customer name for customerPoid={}: {}", customerPoid, e.getMessage());
-            return "";
+            return "N/A";
         }
     }
     
@@ -1778,6 +1924,19 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             log.warn("Failed to query principal details for principalPoid={}: {}", principalPoid, e.getMessage());
         }
         return createEmptyLovDetail();
+    }
+
+    @Override
+    public byte[] print(Long transactionPoid) throws Exception {
+        Map<String, Object> params = printService.buildBaseParams(transactionPoid, "300-100");
+        params.put("SUB_RFQ_DTL", printService.load("ShipChandling/AR/SCH_SALES_INV_ITEM_DTLsubreport1.jrxml"));
+        JasperReport mainReport = printService.load("ShipChandling/AR/SCH_SALES_INV.jrxml");
+        return printService.fillReportToPdf(mainReport, params, dataSource);
+    }
+
+    private LocalDateTime getLocalDateTimeValue(Object obj) {
+        if (obj == null) return null;
+        return ((java.sql.Timestamp) obj).toLocalDateTime();
     }
 
 }

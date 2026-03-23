@@ -6,12 +6,16 @@ import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateSalesDeliveryNoteRequest {
-    
+
+    private LocalDateTime transactionDate;
+
     private Long customerPoid;
 
     @Size(max = 20, message = "Currency code must not exceed 20 characters")
@@ -41,6 +45,9 @@ public class CreateSalesDeliveryNoteRequest {
     @Size(max = 50, message = "Vessel POID must not exceed 50 characters")
     private String vesselPoid;
 
+    @Size(max = 50, message = "Vessel name must not exceed 50 characters")
+    private String vesselName;
+
     @Size(max = 50, message = "Vessel agent must not exceed 50 characters")
     private String vesselAgent;
 
@@ -48,9 +55,6 @@ public class CreateSalesDeliveryNoteRequest {
 
     @Size(max = 50, message = "Port description must not exceed 50 characters")
     private String portDescription;
-
-    @Size(max = 25, message = "Quotation reference must not exceed 25 characters")
-    private String qtnRefNo; // Optional - can be set to link to a quotation
 
     private Long printDivisionPoid;
 
@@ -60,7 +64,7 @@ public class CreateSalesDeliveryNoteRequest {
     private Long principalPoid;
 
     @NotNull(message = "Currency rate is required")
-    private Long currencyRate;
+    private BigDecimal currencyRate;
 
     @Size(max = 500, message = "Remarks must not exceed 500 characters")
     private String remarks;

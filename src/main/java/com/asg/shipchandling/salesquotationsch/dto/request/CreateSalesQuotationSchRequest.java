@@ -6,7 +6,10 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.sql.Timestamp;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
 import java.util.List;
 
 import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsResponse;
@@ -16,10 +19,9 @@ import com.asg.shipchandling.salesquotationsch.dto.response.AddressDetailsRespon
 @AllArgsConstructor
 public class CreateSalesQuotationSchRequest {
 
-    private Timestamp transactionDate;
+    private LocalDateTime transactionDate;
 
-    @NotNull(message = "Customer is required")
-    private Long customerPoid;
+    private BigDecimal customerPoid;
 
     private Long addressPoid;
 
@@ -28,7 +30,7 @@ public class CreateSalesQuotationSchRequest {
     @Size(max = 20, message = "Currency code must not exceed 20 characters")
     private String currencyCode;
 
-    private Long currencyRate;
+    private BigDecimal currencyRate;
 
     @Size(max = 20, message = "Quotation status must not exceed 20 characters")
     private String quotationStatus;
@@ -36,9 +38,10 @@ public class CreateSalesQuotationSchRequest {
     @NotNull(message = "Salesman is required")
     private Long salesmanPoid;
 
-    private Timestamp validityFromDate;
+    private LocalDate validityFromDate;
 
-    private Timestamp validityToDate;
+    private LocalDate validityToDate;
+
 
     @Size(max = 20, message = "Payment mode must not exceed 20 characters")
     private String paymentMode;
@@ -57,12 +60,13 @@ public class CreateSalesQuotationSchRequest {
     @Size(max = 500, message = "Remarks must not exceed 500 characters")
     private String remarks;
 
-    private Long totalDiscount;
+    private BigDecimal totalDiscount;
 
     @Size(max = 20, message = "Action status must not exceed 20 characters")
     private String actionStatus;
 
-    private Timestamp actionDueDate;
+    private LocalDate actionDueDate;
+
 
     private Long enquiryRefNumber;
 
@@ -76,7 +80,8 @@ public class CreateSalesQuotationSchRequest {
     @Size(max = 100, message = "Details must not exceed 100 characters")
     private String details;
 
-    private Timestamp expectedDeliveryDate;
+    private LocalDate expectedDeliveryDate;
+
 
     @Size(max = 50, message = "Vessel agent must not exceed 50 characters")
     private String vesselAgent;
@@ -89,7 +94,7 @@ public class CreateSalesQuotationSchRequest {
     @Size(max = 25, message = "RFQ reference number must not exceed 25 characters")
     private String rfqRefNo;
 
-    private Long percentageDisc;
+    private BigDecimal percentageDisc;
 
     @Size(max = 50, message = "Vessel name must not exceed 50 characters")
     private String vesselName;

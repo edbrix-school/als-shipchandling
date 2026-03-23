@@ -1,5 +1,7 @@
 package com.asg.shipchandling.deliverynote.entity;
 
+import com.asg.common.lib.annotation.AuditIgnore;
+import com.asg.common.lib.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -8,8 +10,9 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.Generated;
 import org.hibernate.annotations.GenerationTime;
 import org.hibernate.annotations.UpdateTimestamp;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
-import java.sql.Timestamp;
 
 @Entity
 @Table(name = "SALES_DELIVERY_NOTE_HDR")
@@ -19,23 +22,27 @@ import java.sql.Timestamp;
 // @SequenceGenerator(name = "dn_trans_seq", sequenceName =
 // "TRANSACTION_POID_SEQ", allocationSize = 1)
 
-public class SalesDeliveryNoteHdr {
+public class SalesDeliveryNoteHdr extends BaseEntity {
 
     @Id
     // @GeneratedValue(strategy = GenerationType.SEQUENCE, generator =
     // "dn_trans_seq")
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "TRANSACTION_POID", nullable = false)
+    @AuditIgnore
     private Long transactionPoid;
 
     @Column(name = "DOC_REF", length = 25, unique = true, insertable = false, updatable = false)
     @Generated(GenerationTime.INSERT)
+    @AuditIgnore
     private String docRef;
 
     @Column(name = "TRANSACTION_DATE")
-    private Timestamp transactionDate;
+    @AuditIgnore
+    private LocalDateTime transactionDate;
 
     @Column(name = "COMPANY_POID")
+    @AuditIgnore
     private Long companyPoid;
 
     @Column(name = "CUSTOMER_POID")
@@ -45,7 +52,7 @@ public class SalesDeliveryNoteHdr {
     private String currencyCode;
 
     @Column(name = "CURRENCY_RATE")
-    private Long currencyRate;
+    private BigDecimal currencyRate;
 
     @Column(name = "DELIVERY_STATUS", length = 20)
     private String deliveryStatus;
@@ -60,6 +67,7 @@ public class SalesDeliveryNoteHdr {
     private String deliveryTerms;
 
     @Column(name = "LINE_POID")
+    @AuditIgnore
     private Long linePoid;
 
     @Column(name = "VESSEL_POID", length = 50)
@@ -90,6 +98,7 @@ public class SalesDeliveryNoteHdr {
     private String descriptionPrintYn = "Y";
 
     @Column(name = "PARTY_ADDRESS_DETAILS", length = 1000)
+    @AuditIgnore
     private String partyAddressDetails;
 
     @Column(name = "PRINT_DIVISION_POID")
@@ -99,31 +108,22 @@ public class SalesDeliveryNoteHdr {
     private String partyType;
 
     @Column(name = "PRINCIPAL_POID")
+    @AuditIgnore
     private Long principalPoid;
 
     @Column(name = "TOTAL_DISCOUNT")
+    @AuditIgnore
     private Long totalDiscount;
 
     @Column(name = "TOTAL_AMOUNT")
+    @AuditIgnore
     private Long totalAmount;
 
     @Column(name = "REMARKS", length = 500)
     private String remarks;
 
     @Column(name = "DELETED", length = 1)
+    @AuditIgnore
     private String deleted = "N";
 
-    @Column(name = "CREATED_BY", length = 20)
-    private String createdBy;
-
-    @CreationTimestamp
-    @Column(name = "CREATED_DATE")
-    private Timestamp createdDate;
-
-    @Column(name = "LASTMODIFIED_BY", length = 20)
-    private String lastmodifiedBy;
-
-    @UpdateTimestamp
-    @Column(name = "LASTMODIFIED_DATE")
-    private Timestamp lastmodifiedDate;
 }

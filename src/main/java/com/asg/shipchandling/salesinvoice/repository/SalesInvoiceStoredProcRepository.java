@@ -6,24 +6,26 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import com.asg.shipchandling.exceptions.CustomException;
-import com.asg.shipchandling.salesinvoice.dto.CreditDetailsDto;
-import com.asg.shipchandling.salesinvoice.dto.QuotationCurrencyDto;
+import com.asg.shipchandling.salesinvoice.dto.QuotationSummaryDto;
 import com.asg.shipchandling.salesinvoice.dto.QuotationItemDto;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
 import com.asg.shipchandling.salesinvoice.dto.request.LoadQuotationItemsRequest;
 import com.asg.shipchandling.salesinvoice.dto.response.CalculateDiscountCommissionResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.CalculateDueDateResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.CreditDetailsResponse;
-import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationCurrencyResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationSummaryResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationItemsResponse;
+import com.asg.shipchandling.salesinvoice.dto.response.RefreshGpProcResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 
+import java.math.BigDecimal;
 import java.sql.CallableStatement;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -82,24 +84,21 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public UnloadQuotationResponse callUnloadQuotationProc(Long transactionPoid, String qtnPoid) {
+    public UnloadQuotationResponse callUnloadQuotationProc(Long transactionPoid, Long qtnPoid) {
         String proc = "{call PROC_AR_SCH_UNLOAD_QUOTATION1(?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
                 cs.setLong(1, transactionPoid);
-                cs.setString(2, qtnPoid);
+                cs.setLong(2, qtnPoid);
                 cs.registerOutParameter(3, Types.VARCHAR);
 
                 cs.execute();
                 String procResult = cs.getString(3);
 
-                if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
-                    throw new CustomException("PROC_AR_SCH_UNLOAD_QUOTATION1 failed: " + procResult);
-                }
                 UnloadQuotationResponse response = new UnloadQuotationResponse();
                 response.setMessage(procResult);
-                response.setSuccess(procResult.contains("SUCCESS"));
+                response.setSuccess(procResult != null && procResult.contains("SUCCESS"));
                 return response;
             } catch (SQLException ex) {
                 throw new CustomException("Error calling PROC_AR_SCH_UNLOAD_QUOTATION1: " + ex.getMessage());
@@ -139,67 +138,70 @@ public class SalesInvoiceStoredProcRepository {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
                 cs.setLong(1, transactionPoid);
-                cs.setString(2, request.getQtnPoid());
-                cs.setLong(3, request.getIncentiveAmt() != null ? request.getIncentiveAmt() : null);
-                cs.setLong(4, request.getIncentiveAmt2() != null ? request.getIncentiveAmt2() : null);
-                cs.setLong(5, request.getIncentiveAmt3() != null ? request.getIncentiveAmt3() : null);
+                cs.setLong(2, request.getQtnPoid() != null ? request.getQtnPoid() : null);
+                cs.setBigDecimal(3, request.getIncentiveAmt());
+                cs.setBigDecimal(4, request.getIncentiveAmt2());
+                cs.setBigDecimal(5, request.getIncentiveAmt3());
                 cs.registerOutParameter(6, Types.VARCHAR);
                 cs.registerOutParameter(7, Types.REF_CURSOR);
 
                 cs.execute();
 
                 String procResult = cs.getString(6);
+                if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
+                    LoadQuotationItemsResponse response = new LoadQuotationItemsResponse();
+                    String message = procResult;
+                    response.setMessage(message);
+                    response.setSuccess(false);
+                    response.setItems(new ArrayList<>());
+                    return response;
+                }
                 try (ResultSet rs = (ResultSet) cs.getObject(7)) {
-                    if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
-                        throw new CustomException("PROC_AR_SCH_QTN_LOAD_BUTTON failed: " + procResult);
-                    }
-
                     List<QuotationItemDto> items = new ArrayList<>();
                     if (rs != null) {
                         while (rs.next()) {
                             QuotationItemDto dto = new QuotationItemDto();
 
-                            Object discountPercent = rs.getObject("DISCOUNT_PERCENT");
-                            dto.setDiscountPercent(
-                                    discountPercent != null ? ((Number) discountPercent).longValue() : null);
+                            BigDecimal discountPercent = rs.getBigDecimal("DISCOUNT_PERCENT");
+                            dto.setDiscountPercent(discountPercent);
 
-                            Long discountAmt = rs.getLong("DISCOUNT_AMT");
+                            BigDecimal discountAmt = rs.getBigDecimal("DISCOUNT_AMT");
                             dto.setDiscountAmt(discountAmt);
 
-                            Object incentivePercent = rs.getObject("INCENTIVE_PERCENT");
-                            dto.setIncentivePercent(
-                                    incentivePercent != null ? ((Number) incentivePercent).longValue() : null);
+                            BigDecimal incentivePercent = rs.getBigDecimal("INCENTIVE_PERCENT");
+                            dto.setIncentivePercent(incentivePercent);
 
-                            Long incentivePercent2 = rs.getLong("INCENTIVE_PERCENT2");
+                            BigDecimal incentivePercent2 = rs.getBigDecimal("INCENTIVE_PERCENT2");
                             dto.setIncentivePercent2(incentivePercent2);
 
-                            Long incentivePercent3 = rs.getLong("INCENTIVE_PERCENT3");
+                            BigDecimal incentivePercent3 = rs.getBigDecimal("INCENTIVE_PERCENT3");
                             dto.setIncentivePercent3(incentivePercent3);
 
-                            Long incentiveAmt = rs.getLong("INCENTIVE_AMT");
+                            BigDecimal incentiveAmt = rs.getBigDecimal("INCENTIVE_AMT");
                             dto.setIncentiveAmt(incentiveAmt);
 
-                            Long incentiveAmt2 = rs.getLong("INCENTIVE_AMT2");
+                            BigDecimal incentiveAmt2 = rs.getBigDecimal("INCENTIVE_AMT2");
                             dto.setIncentiveAmt2(incentiveAmt2);
 
-                            Long incentiveAmt3 = rs.getLong("INCENTIVE_AMT3");
+                            BigDecimal incentiveAmt3 = rs.getBigDecimal("INCENTIVE_AMT3");
                             dto.setIncentiveAmt3(incentiveAmt3);
 
-                            Long totalGpAmt = rs.getLong("TOTAL_GP_AMT");
+                            BigDecimal totalGpAmt = rs.getBigDecimal("TOTAL_GP_AMT");
                             dto.setTotalGpAmt(totalGpAmt);
 
-                            Object totalGpPercentObj = rs.getObject("TOTAL_GP_PERCENT");
-                            dto.setTotalGpPercent(
-                                    totalGpPercentObj != null ? ((Number) totalGpPercentObj).longValue() : null);
+                            BigDecimal totalGpPercent = rs.getBigDecimal("TOTAL_GP_PERCENT");
+                            dto.setTotalGpPercent(totalGpPercent);
 
-                            Long invAmount = rs.getLong("INV_AMOUNT");
+                            BigDecimal invAmount = rs.getBigDecimal("INV_AMOUNT");
                             dto.setInvAmount(invAmount);
 
                             items.add(dto);
                         }
                     }
                     LoadQuotationItemsResponse response = new LoadQuotationItemsResponse();
-                    response.setMessage("Quotation items loaded successfully");
+                    String message = procResult != null ? procResult : "Quotation items loaded successfully";
+                    response.setMessage(message);
+                    response.setSuccess(message.toUpperCase().contains("SUCCESS"));
                     response.setItems(items);
                     log.info(
                             "loadQuotationItems: PROC_AR_SCH_QTN_LOAD_BUTTON completed successfully for transactionPoid={}",
@@ -213,13 +215,13 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public ValidationResponse callCalculateGpProc(Long transactionPoid, String qtnId) {
+    public ValidationResponse callCalculateGpProc(Long transactionPoid, Long qtnId) {
         String proc = "{call PROC_AR_SCH_GP_CALC(?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
                 cs.setLong(1, transactionPoid);
-                cs.setString(2, qtnId);
+                cs.setLong(2, qtnId);
                 cs.registerOutParameter(3, Types.VARCHAR);
 
                 cs.execute();
@@ -239,15 +241,86 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public CalculateDueDateResponse callCalculateDueDateProc(Long groupPoid, Long companyPoid,
-            java.sql.Timestamp transactionDate,
-            java.sql.Timestamp dueDate, Long creditDays, String calculationType, Long customerPoid) {
+    public RefreshGpProcResponse callRefreshGpProc(
+            Long userPoid,
+            Long transactionPoid,
+            Long qtnPoid,
+            CalculateDiscountCommissionRequest request) {
+        String proc = "{call PROC_AR_SCH_DIS_COM_CAL(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
+        return jdbcTemplate.execute((Connection con) -> {
+            try (CallableStatement cs = con.prepareCall(proc)) {
+                String type = request != null && request.getType() != null ? request.getType().toUpperCase() : "AMOUNT";
+                cs.setLong(1, userPoid);
+                cs.setLong(2, transactionPoid);
+                cs.setLong(3, qtnPoid);
+                cs.setBigDecimal(4, request != null ? request.getInvDiscount() : null);
+                cs.setBigDecimal(5, request != null ? request.getIncentiveAmt() : null);
+                cs.setBigDecimal(6, request != null ? request.getIncentiveAmt2() : null);
+                cs.setBigDecimal(7, request != null ? request.getIncentiveAmt3() : null);
+                cs.setString(8, type);
+                cs.setBigDecimal(9, request != null ? request.getIncentivePercent() : null);
+                cs.setBigDecimal(10, request != null ? request.getIncentivePercent2() : null);
+                cs.setBigDecimal(11, request != null ? request.getIncentivePercent3() : null);
+                cs.registerOutParameter(12, Types.VARCHAR);
+                cs.registerOutParameter(13, Types.REF_CURSOR);
+
+                cs.execute();
+
+                String procResult = cs.getString(12);
+                if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
+                    throw new CustomException("PROC_AR_SCH_DIS_COM_CAL failed: " + procResult);
+                }
+
+                try (ResultSet rs = (ResultSet) cs.getObject(13)) {
+                    if (rs != null && rs.next()) {
+                        BigDecimal discountPercent = rs.getBigDecimal("DISCOUNT_PERCENT");
+                        BigDecimal discountAmt = rs.getBigDecimal("DISCOUNT_AMT");
+                        BigDecimal incentivePercent = rs.getBigDecimal("INCENTIVE_PERCENT");
+                        BigDecimal incentivePercent2 = rs.getBigDecimal("INCENTIVE_PERCENT2");
+                        BigDecimal incentivePercent3 = rs.getBigDecimal("INCENTIVE_PERCENT3");
+                        BigDecimal incentiveAmount = rs.getBigDecimal("INCENTIVE_AMT");
+                        BigDecimal incentiveAmount2 = rs.getBigDecimal("INCENTIVE_AMT2");
+                        BigDecimal incentiveAmount3 = rs.getBigDecimal("INCENTIVE_AMT3");
+                        BigDecimal totalGpAmt = rs.getBigDecimal("TOTAL_GP_AMT");
+                        BigDecimal totalGpPercent = rs.getBigDecimal("TOTAL_GP_PERCENT");
+                        BigDecimal invAmount = rs.getBigDecimal("INV_AMOUNT");
+                        
+                        RefreshGpProcResponse response = new RefreshGpProcResponse();
+                        response.setMessage(procResult != null ? procResult : "Discount/Commission calculated successfully");
+                        response.setSuccess(procResult == null || !procResult.toUpperCase().contains("ERROR"));
+                        response.setDiscountPercent(discountPercent);
+                        response.setDiscountAmt(discountAmt);
+                        response.setIncentivePercent(incentivePercent);
+                        response.setIncentivePercent2(incentivePercent2);
+                        response.setIncentivePercent3(incentivePercent3);
+                        response.setIncentiveAmt(incentiveAmount);
+                        response.setIncentiveAmt2(incentiveAmount2);
+                        response.setIncentiveAmt3(incentiveAmount3);
+                        response.setTotalGpAmt(totalGpAmt);
+                        response.setTotalGpPercent(totalGpPercent);
+                        response.setInvAmount(invAmount);
+                        return response;
+                    }
+                }
+
+                RefreshGpProcResponse response = new RefreshGpProcResponse();
+                response.setMessage(procResult != null ? procResult : "Discount/Commission calculated successfully");
+                response.setSuccess(procResult == null || !procResult.toUpperCase().contains("ERROR"));
+                return response;
+            } catch (SQLException ex) {
+                throw new CustomException("Error calling PROC_AR_SCH_DIS_COM_CAL: " + ex.getMessage());
+            }
+        });
+    }
+
+    public CreditDetailsResponse callCalculateDueDateProc(LocalDate docDate,
+                                                          Long creditDays, String calculationType, Long customerPoid) {
         String proc = "{call PROC_CALC_DUEDAYS(?, ?, ?, ? ,?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
-                cs.setTimestamp(1, transactionDate);
-                cs.setTimestamp(2, dueDate);
+                cs.setDate(1, Date.valueOf(docDate));
+                cs.setNull(2, Types.VARCHAR);
                 cs.setLong(3, creditDays);
                 cs.setString(4, calculationType);
                 cs.setLong(5, customerPoid);
@@ -257,19 +330,19 @@ public class SalesInvoiceStoredProcRepository {
 
                 cs.execute();
 
-                java.sql.Timestamp resultDueDate = cs.getTimestamp(6);
+                Date resultDueDate = cs.getDate(6);
                 Long dueDays = cs.getLong(7);
                 String procResult = cs.getString(8);
 
                 if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
-                    throw new CustomException("PROC_AR_SCH_GP_CALC failed: " + procResult);
+                    throw new CustomException("PROC_CALC_DUEDAYS failed: " + procResult);
                 }
 
-                CalculateDueDateResponse response = new CalculateDueDateResponse();
+                CreditDetailsResponse response = new CreditDetailsResponse();
                 response.setMessage(procResult);
-                response.setSuccess(procResult.contains("True"));
-                response.setDueDate(resultDueDate);
-                response.setDueDays(dueDays);
+                response.setSuccess(procResult != null && procResult.contains("True"));
+                response.setDueDate(resultDueDate != null ? resultDueDate.toLocalDate() : null);
+                response.setCreditDays(dueDays);
 
                 return response;
             } catch (SQLException ex) {
@@ -280,7 +353,7 @@ public class SalesInvoiceStoredProcRepository {
     }
 
     public CalculateDiscountCommissionResponse callCalculateItemDiscountCommissionProc(
-            Long transactionPoid, CalculateDiscountCommissionRequest request, Long detRowId, String qtnPoid,
+            Long transactionPoid, CalculateDiscountCommissionRequest request, Long qtnPoid,
             Long userId) {
         String proc = "{call PROC_AR_SCH_DIS_COM_CAL(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
@@ -288,15 +361,15 @@ public class SalesInvoiceStoredProcRepository {
 
                 cs.setLong(1, userId);
                 cs.setLong(2, transactionPoid);
-                cs.setString(3, qtnPoid);
-                cs.setLong(4, request.getInvDiscount() != null ? request.getInvDiscount() : null);
-                cs.setLong(5, request.getIncentiveAmt() != null ? request.getIncentiveAmt() : null);
-                cs.setLong(6, request.getIncentiveAmt2() != null ? request.getIncentiveAmt2() : null);
-                cs.setLong(7, request.getIncentiveAmt3() != null ? request.getIncentiveAmt3() : null);
+                cs.setLong(3, qtnPoid);
+                cs.setBigDecimal(4, request.getInvDiscount());
+                cs.setBigDecimal(5, request.getIncentiveAmt());
+                cs.setBigDecimal(6, request.getIncentiveAmt2());
+                cs.setBigDecimal(7, request.getIncentiveAmt3());
                 cs.setString(8, request.getType() != null ? request.getType() : "Amount");
-                cs.setLong(9, request.getIncentivePercent() != null ? request.getIncentivePercent() : null);
-                cs.setLong(10, request.getIncentivePercent2() != null ? request.getIncentivePercent2() : null);
-                cs.setLong(11, request.getIncentivePercent3() != null ? request.getIncentivePercent3() : null);
+                cs.setBigDecimal(9, request.getIncentivePercent());
+                cs.setBigDecimal(10, request.getIncentivePercent2());
+                cs.setBigDecimal(11, request.getIncentivePercent3());
                 cs.registerOutParameter(12, Types.VARCHAR);
                 cs.registerOutParameter(13, Types.REF_CURSOR);
 
@@ -314,40 +387,37 @@ public class SalesInvoiceStoredProcRepository {
                         while (rs.next()) {
                             QuotationItemDto dto = new QuotationItemDto();
 
-                            Object discountPercent = rs.getObject("DISCOUNT_PERCENT");
-                            dto.setDiscountPercent(
-                                    discountPercent != null ? ((Number) discountPercent).longValue() : null);
+                            BigDecimal discountPercent = rs.getBigDecimal("DISCOUNT_PERCENT");
+                            dto.setDiscountPercent(discountPercent);
 
-                            Long discountAmt = rs.getLong("DISCOUNT_AMT");
+                            BigDecimal discountAmt = rs.getBigDecimal("DISCOUNT_AMT");
                             dto.setDiscountAmt(discountAmt);
 
-                            Object incentivePercent = rs.getObject("INCENTIVE_PERCENT");
-                            dto.setIncentivePercent(
-                                    incentivePercent != null ? ((Number) incentivePercent).longValue() : null);
+                            BigDecimal incentivePercent = rs.getBigDecimal("INCENTIVE_PERCENT");
+                            dto.setIncentivePercent(incentivePercent);
 
-                            Long incentivePercent2 = rs.getLong("INCENTIVE_PERCENT2");
+                            BigDecimal incentivePercent2 = rs.getBigDecimal("INCENTIVE_PERCENT2");
                             dto.setIncentivePercent2(incentivePercent2);
 
-                            Long incentivePercent3 = rs.getLong("INCENTIVE_PERCENT3");
+                            BigDecimal incentivePercent3 = rs.getBigDecimal("INCENTIVE_PERCENT3");
                             dto.setIncentivePercent3(incentivePercent3);
 
-                            Long incentiveAmt = rs.getLong("INCENTIVE_AMT");
+                            BigDecimal incentiveAmt = rs.getBigDecimal("INCENTIVE_AMT");
                             dto.setIncentiveAmt(incentiveAmt);
 
-                            Long incentiveAmt2 = rs.getLong("INCENTIVE_AMT2");
+                            BigDecimal incentiveAmt2 = rs.getBigDecimal("INCENTIVE_AMT2");
                             dto.setIncentiveAmt2(incentiveAmt2);
 
-                            Long incentiveAmt3 = rs.getLong("INCENTIVE_AMT3");
+                            BigDecimal incentiveAmt3 = rs.getBigDecimal("INCENTIVE_AMT3");
                             dto.setIncentiveAmt3(incentiveAmt3);
 
-                            Long totalGpAmt = rs.getLong("TOTAL_GP_AMT");
+                            BigDecimal totalGpAmt = rs.getBigDecimal("TOTAL_GP_AMT");
                             dto.setTotalGpAmt(totalGpAmt);
 
-                            Object totalGpPercentObj = rs.getObject("TOTAL_GP_PERCENT");
-                            dto.setTotalGpPercent(
-                                    totalGpPercentObj != null ? ((Number) totalGpPercentObj).longValue() : null);
+                            BigDecimal totalGpPercent = rs.getBigDecimal("TOTAL_GP_PERCENT");
+                            dto.setTotalGpPercent(totalGpPercent);
 
-                            Long invAmount = rs.getLong("INV_AMOUNT");
+                            BigDecimal invAmount = rs.getBigDecimal("INV_AMOUNT");
                             dto.setInvAmount(invAmount);
 
                             items.add(dto);
@@ -366,7 +436,7 @@ public class SalesInvoiceStoredProcRepository {
     }
 
     public CalculateDiscountCommissionResponse callCalculateHeaderDiscountCommissionProc(
-            Long transactionPoid, CalculateDiscountCommissionRequest request, Long detRowId, String qtnPoid,
+            Long transactionPoid, CalculateDiscountCommissionRequest request, Long detRowId, Long qtnPoid,
             Long userId) {
         String proc = "{call PROC_AR_SCH_DIS_COM_CAL_HDR(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
@@ -374,15 +444,15 @@ public class SalesInvoiceStoredProcRepository {
 
                 cs.setLong(1, userId);
                 cs.setLong(2, transactionPoid);
-                cs.setString(3, qtnPoid);
-                cs.setLong(4, request.getInvDiscount() != null ? request.getInvDiscount() : null);
-                cs.setLong(5, request.getIncentiveAmt() != null ? request.getIncentiveAmt() : null);
-                cs.setLong(6, request.getIncentiveAmt2() != null ? request.getIncentiveAmt2() : null);
-                cs.setLong(7, request.getIncentiveAmt3() != null ? request.getIncentiveAmt3() : null);
+                cs.setLong(3, qtnPoid);
+                cs.setBigDecimal(4, request.getInvDiscount());
+                cs.setBigDecimal(5, request.getIncentiveAmt());
+                cs.setBigDecimal(6, request.getIncentiveAmt2());
+                cs.setBigDecimal(7, request.getIncentiveAmt3());
                 cs.setString(8, request.getType() != null ? request.getType() : "Amount");
-                cs.setLong(9, request.getIncentivePercent() != null ? request.getIncentivePercent() : null);
-                cs.setLong(10, request.getIncentivePercent2() != null ? request.getIncentivePercent2() : null);
-                cs.setLong(11, request.getIncentivePercent3() != null ? request.getIncentivePercent3() : null);
+                cs.setBigDecimal(9, request.getIncentivePercent());
+                cs.setBigDecimal(10, request.getIncentivePercent2());
+                cs.setBigDecimal(11, request.getIncentivePercent3());
                 cs.registerOutParameter(12, Types.VARCHAR);
                 cs.registerOutParameter(13, Types.REF_CURSOR);
 
@@ -403,25 +473,21 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public ValidationResponse callLoadCostBookingsProc(Long transactionPoid, String qtnId) {
-        String proc = "{call PROC_AR_SCH_SALES_INV_PJ_LOAD1(?, ?)}";
+    public ValidationResponse callLoadCostBookingsProc(Long transactionPoid, Long qtnId) {
+        String proc = "{call PROC_AR_SCH_SALES_INV_PJ_LOAD1(?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
                 cs.setLong(1, transactionPoid);
-                cs.setString(2, qtnId);
+                cs.setLong(2, qtnId);
                 cs.registerOutParameter(3, Types.VARCHAR);
 
                 cs.execute();
                 String procResult = cs.getString(3);
 
-                if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
-                    throw new CustomException("PROC_AR_SCH_SALES_INV_PJ_LOAD1 failed: " + procResult);
-                }
-
                 ValidationResponse response = new ValidationResponse();
                 response.setMessage(procResult);
-                response.setSuccess(procResult.contains("SUCCESS"));
+                response.setSuccess(procResult != null && procResult.contains("SUCCESS"));
                 return response;
             } catch (SQLException ex) {
                 throw new CustomException("Error calling PROC_AR_SCH_SALES_INV_PJ_LOAD1: " + ex.getMessage());
@@ -429,18 +495,18 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public CreditDetailsResponse callLoadCreditDetailsProc(Long groupPoid, Long companyPoid, Long customerPoid,
-            String docId, Long docKeyPoid, java.sql.Timestamp docDate, String partyType, Long partyPoid) {
-        String proc = "{call PROC_LOAD_CREDIT_DETAILS(?, ?)}";
+    public CreditDetailsResponse callLoadCreditDetailsProc(Long groupPoid, Long companyPoid,
+            String docId, LocalDate docDate, String partyType, Long partyPoid) {
+        String proc = "{call PROC_LOAD_CREDIT_DETAILS(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
                 cs.setLong(1, groupPoid);
                 cs.setLong(2, companyPoid);
-                cs.setLong(3, customerPoid);
+                cs.setNull(3, Types.NUMERIC);
                 cs.setString(4, docId);
-                cs.setLong(5, docKeyPoid);
-                cs.setTimestamp(6, docDate);
+                cs.setNull(5, Types.NUMERIC);
+                cs.setDate(6, Date.valueOf(docDate));
                 cs.setString(7, partyType);
                 cs.setLong(8, partyPoid);
                 cs.registerOutParameter(9, Types.VARCHAR);
@@ -454,23 +520,17 @@ public class SalesInvoiceStoredProcRepository {
                         throw new CustomException("PROC_LOAD_CREDIT_DETAILS failed: " + procResult);
                     }
 
-                    List<CreditDetailsDto> items = new ArrayList<>();
-                    if (rs != null) {
-                        while (rs.next()) {
-                            CreditDetailsDto dto = new CreditDetailsDto();
-
-                            Long creditPeriod = rs.getLong("CREDIT_PERIOD");
-                            dto.setCreditPeriod(creditPeriod);
-
-                            java.sql.Timestamp dueDate = rs.getTimestamp("DISCOUNT_AMT");
-                            dto.setDueDate(dueDate);
-
-                            items.add(dto);
-                        }
-                    }
                     CreditDetailsResponse response = new CreditDetailsResponse();
-                    response.setMessage("Quotation items loaded successfully");
-                    response.setCreditDetails(items);
+                    if (rs != null && rs.next()) {
+                        Long creditDays = rs.getLong("CREDIT_PERIOD");
+                        Date dueDate = rs.getDate("DUE_DATE");
+                        
+                        response.setCreditDays(creditDays);
+                        response.setDueDate(dueDate != null ? dueDate.toLocalDate() : null);
+                    }
+                    
+                    response.setMessage("Credit Details loaded successfully");
+                    response.setSuccess(true);
                    
                     return response;
                 }
@@ -480,40 +540,49 @@ public class SalesInvoiceStoredProcRepository {
         });
     }
 
-    public LoadQuotationCurrencyResponse callLoadQuotationCurrencyProc(Long transactionId, String qtnPoId) {
-        String proc = "{call PROC_AR_SCH_QTN_LOAD_CUR1(?, ?)}";
+    public LoadQuotationSummaryResponse callLoadQuotationSummaryProc(Long transactionId, Long qtnPoId) {
+        String proc = "{call PROC_AR_SCH_QTN_LOAD_CUR1(?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
 
                 cs.setLong(1, transactionId);
-                cs.setString(2, qtnPoId);
+                cs.setLong(2, qtnPoId);
                 cs.registerOutParameter(3, Types.VARCHAR);
                 cs.registerOutParameter(4, Types.REF_CURSOR);
 
                 cs.execute();
                 String procResult = cs.getString(3);
-                 try (ResultSet rs = (ResultSet) cs.getObject(4)) {
+                try (ResultSet rs = (ResultSet) cs.getObject(4)) {
                     if (procResult != null && procResult.toUpperCase().contains("ERROR")) {
                         throw new CustomException("PROC_AR_SCH_QTN_LOAD_CUR1 failed: " + procResult);
                     }
 
-                    List<QuotationCurrencyDto> items = new ArrayList<>();
-                    if (rs != null) {
-                        while (rs.next()) {
-                            QuotationCurrencyDto dto = new QuotationCurrencyDto();
-
-                            Long currencyCode = rs.getLong("CURRENCY_CODE");
-                            dto.setCurrencyCode(currencyCode);
-
-                            Long currencyRate = rs.getLong("CURRENCY_RATE");
-                            dto.setCurrencyRate(currencyRate);
-                            items.add(dto);
-                        }
+                    QuotationSummaryDto summary = null;
+                    if (rs != null && rs.next()) {
+                        summary = new QuotationSummaryDto();
+                        summary.setStatus(rs.getString("STATUS"));
+                        summary.setDataLoadType(rs.getString("DATA_LOAD_TYPE"));
+                        summary.setPaymentMode(rs.getString("PAYMENT_MODE"));
+                        summary.setVesselName(rs.getString("VESSEL_NAME"));
+                        summary.setPortName(rs.getString("PORT_NAME"));
+                        summary.setCurrencyCode(rs.getString("CURRENCY_CODE"));
+                        summary.setCurrencyRate(rs.getBigDecimal("CURRENCY_RATE"));
+                        summary.setInvDiscount(rs.getBigDecimal("INV_DISCOUNT"));
+                        summary.setDiscountAmt(rs.getBigDecimal("DISCOUNT_AMT"));
+                        summary.setDiscountPercent(rs.getBigDecimal("DISCOUNT_PERCENT"));
+                        summary.setDetails(rs.getString("DETAILS"));
+                        summary.setInvAmount(rs.getBigDecimal("INV_AMOUNT"));
+                        summary.setTotalGpAmt(rs.getBigDecimal("TOTAL_GP_AMT"));
+                        summary.setTotalGpPercent(rs.getBigDecimal("TOTAL_GP_PERCENT"));
+                        summary.setDescriptionPrintYn(rs.getString("DESCRIPTION_PRINT_YN"));
+                        summary.setDeliveryToAddress(rs.getString("DELIVERY_TO_ADDRESS"));
                     }
-                    LoadQuotationCurrencyResponse response = new LoadQuotationCurrencyResponse();
-                    response.setMessage("Quotation currency loaded successfully");
-                    response.setQuotationCurrencyList(items);
-                   
+                    LoadQuotationSummaryResponse response = new LoadQuotationSummaryResponse();
+                    String message = procResult != null ? procResult : "Quotation summary loaded successfully";
+                    response.setMessage(message);
+                    response.setSuccess(message.toUpperCase().contains("SUCCESS"));
+                    response.setQuotationSummary(summary);
+
                     return response;
                 }
             } catch (SQLException ex) {

@@ -9,7 +9,9 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -24,8 +26,8 @@ public class SalesDeliveryNoteHdrRepositoryImpl {
             Long customerPoid,
             Long salesmanPoid,
             String qtnRefNo,
-            Timestamp fromDate,
-            Timestamp toDate,
+            LocalDateTime fromDate,
+            LocalDateTime toDate,
             String search,
             Pageable pageable) {
 
@@ -111,11 +113,13 @@ public class SalesDeliveryNoteHdrRepositoryImpl {
         SalesDeliveryNoteHdr entity = new SalesDeliveryNoteHdr();
         entity.setTransactionPoid(((Number) row[0]).longValue());
         entity.setDocRef(toStringSafe(row[1]));
-        entity.setTransactionDate((java.sql.Timestamp) row[2]);
+        entity.setTransactionDate(
+                row[2] != null ? ((Timestamp) row[2]).toLocalDateTime() : null
+        );
         entity.setCompanyPoid(((Number) row[3]).longValue());
         entity.setCustomerPoid(((Number) row[4]).longValue());
         entity.setCurrencyCode(toStringSafe(row[5]));
-        entity.setCurrencyRate(row[6] != null ? ((Number) row[6]).longValue() : null);
+        entity.setCurrencyRate(row[6] != null ? new BigDecimal(row[6].toString()) : null);
         entity.setDeliveryStatus(toStringSafe(row[7]));
         entity.setSalesmanPoid(row[8] != null ? ((Number) row[8]).longValue() : null);
         entity.setPaymentMode(toStringSafe(row[9]));
@@ -138,10 +142,6 @@ public class SalesDeliveryNoteHdrRepositoryImpl {
         entity.setTotalAmount(row[26] != null ? ((Number) row[26]).longValue() : null);
         entity.setRemarks(toStringSafe(row[27]));
         entity.setDeleted(toStringSafe(row[28]));
-        entity.setCreatedBy(toStringSafe(row[29]));
-        entity.setCreatedDate((java.sql.Timestamp) row[30]);
-        entity.setLastmodifiedBy(toStringSafe(row[31]));
-        entity.setLastmodifiedDate(row[32] != null ? (java.sql.Timestamp) row[32] : null);
         return entity;
     }
 
@@ -163,7 +163,7 @@ public class SalesDeliveryNoteHdrRepositoryImpl {
 
     private void setQueryParameters(Query query, Long companyPoid, String deliveryStatus,
                                     Long customerPoid, Long salesmanPoid, String qtnRefNo,
-                                    Timestamp fromDate, Timestamp toDate, String search) {
+                                    LocalDateTime fromDate, LocalDateTime toDate, String search) {
         query.setParameter("companyPoid", companyPoid);
         query.setParameter("deliveryStatus", deliveryStatus);
         query.setParameter("customerPoid", customerPoid);

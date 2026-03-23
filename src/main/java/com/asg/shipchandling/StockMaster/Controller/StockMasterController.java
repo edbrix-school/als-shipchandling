@@ -1,5 +1,8 @@
 package com.asg.shipchandling.StockMaster.Controller;
 
+import com.asg.common.lib.dto.DeleteReasonDto;
+import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.StockMaster.entity.StockMasterEntity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -43,6 +46,9 @@ public class StockMasterController {
     @Autowired
     private StockMasterService stockMasterService;
 
+    @Autowired
+    private LoggingService loggingService;
+
     @Operation(summary = "Get Stock Master by ID", description = "Retrieves a stock master by its POID. Supplier and warehouse details are always included in the response regardless of includeDetails parameter.")
     @GetMapping("/{stockPoid}")
     @AllowedAction(UserRolesRightsEnum.VIEW)
@@ -58,7 +64,7 @@ public class StockMasterController {
         if (response == null) {
             return ResponseEntity.notFound().build();
         }
-
+        loggingService.createLogSummaryEntry(LogDetailsEnum.VIEWED, UserContext.getDocumentId(), stockPoid.toString());
         return com.asg.shipchandling.common.ApiResponse.success("Stock master fetched successfully", response);
     }
 
@@ -169,9 +175,11 @@ public class StockMasterController {
     @DeleteMapping("/{stockPoid}")
     @AllowedAction(UserRolesRightsEnum.DELETE)
     public ResponseEntity<?> deleteStockMaster(
-            @PathVariable Long stockPoid) {
+            @PathVariable Long stockPoid,
+            @Valid @RequestBody(required = false) DeleteReasonDto deleteReasonDto
+     ) {
 
-        stockMasterService.deleteStockMaster(stockPoid, UserContext.getGroupPoid());
+        stockMasterService.deleteStockMaster(stockPoid, UserContext.getGroupPoid(),deleteReasonDto);
         return com.asg.shipchandling.common.ApiResponse.success("Stock item deleted successfully", null);
     }
 
