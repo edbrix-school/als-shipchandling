@@ -79,13 +79,13 @@ public class SalesInvoiceDtlRepositoryImpl {
         entity.setDnPoidLinkFk(row[2] != null ? ((Number) row[2]).longValue() : null);
         entity.setDetRowIdChrgFk(row[3] != null ? ((Number) row[3]).longValue() : null);
         entity.setStockPoid(row[4] != null ? ((Number) row[4]).longValue() : null);
-        entity.setQuantity(row[5] != null ? ((Number) row[5]).longValue() : null);
+        entity.setQuantity(convertToBigDecimal(row[5]));
         
         // Handle PRICE - convert from any type to BigDecimal
         entity.setPrice(convertToBigDecimal(row[6]));
         
-        entity.setDiscount(row[7] != null ? ((Number) row[7]).longValue() : null);
-        entity.setAmount(row[8] != null ? ((Number) row[8]).longValue() : null);
+        entity.setDiscount(convertToBigDecimal(row[7]));
+        entity.setAmount(convertToBigDecimal(row[8]));
         entity.setRemarks(toStringSafe(row[9]));
         entity.setStockUnitPoid(row[10] != null ? ((Number) row[10]).longValue() : null);
         entity.setCreatedBy(toStringSafe(row[11]));
@@ -93,20 +93,20 @@ public class SalesInvoiceDtlRepositoryImpl {
         entity.setLastModifiedBy(toStringSafe(row[13]));
         entity.setLastModifiedDate(toLocalDateTime(row[14]));
         entity.setQuotationPoid(row[15] != null ? ((Number) row[15]).longValue() : null);
-        entity.setCostAmt(row[16] != null ? ((Number) row[16]).longValue() : null);
+        entity.setCostAmt(convertToBigDecimal(row[16]));
         entity.setQuotationDetRowId(row[17] != null ? ((Number) row[17]).longValue() : null);
-        entity.setPurchasePrice(row[18] != null ? ((Number) row[18]).longValue() : null);
-        entity.setPurchaseQty(row[19] != null ? ((Number) row[19]).longValue() : null);
-        entity.setNetSales(row[20] != null ? ((Number) row[20]).longValue() : null);
-        entity.setNetDiscount(row[21] != null ? ((Number) row[21]).longValue() : null);
-        entity.setItemGp(row[22] != null ? ((Number) row[22]).longValue() : null);
-        entity.setItemGpPer(row[23] != null ? ((Number) row[23]).longValue() : null);
+        entity.setPurchasePrice(convertToBigDecimal(row[18]));
+        entity.setPurchaseQty(convertToBigDecimal(row[19]));
+        entity.setNetSales(convertToBigDecimal(row[20]));
+        entity.setNetDiscount(convertToBigDecimal(row[21]));
+        entity.setItemGp(convertToBigDecimal(row[22]));
+        entity.setItemGpPer(convertToBigDecimal(row[23]));
         entity.setItemType(toStringSafe(row[24]));
-        entity.setTaxPercentage(row[25] != null ? ((Number) row[25]).longValue() : null);
-        entity.setTaxAmount(row[26] != null ? ((Number) row[26]).longValue() : null);
+        entity.setTaxPercentage(convertToBigDecimal(row[25]));
+        entity.setTaxAmount(convertToBigDecimal(row[26]));
         entity.setTaxPoid(row[27] != null ? ((Number) row[27]).longValue() : null);
-        entity.setBaseAmt(row[28] != null ? ((Number) row[28]).longValue() : null);
-        entity.setIncentive(row[29] != null ? ((Number) row[29]).longValue() : null);
+        entity.setBaseAmt(convertToBigDecimal(row[28]));
+        entity.setIncentive(convertToBigDecimal(row[29]));
         entity.setCostPoid(toStringSafe(row[30]));
         // Note: row[31], row[32], row[33] are tax details (TAX_DETAIL_POID, TAX_DETAIL_CODE, TAX_DETAIL_NAME)
         // but we don't store them in the entity, they're used in the service layer

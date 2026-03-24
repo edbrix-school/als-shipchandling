@@ -46,7 +46,7 @@ public class SalesInvoiceDtl extends BaseEntity {
     private Long stockPoid;
 
     @Column(name = "QUANTITY")
-    private Long quantity;
+    private BigDecimal quantity;
 
     @Column(name = "PRICE")
     @JdbcTypeCode(SqlTypes.VARCHAR)
@@ -54,10 +54,10 @@ public class SalesInvoiceDtl extends BaseEntity {
     private BigDecimal price;
 
     @Column(name = "DISCOUNT")
-    private Long discount;
+    private BigDecimal discount;
 
     @Column(name = "AMOUNT")
-    private Long amount;
+    private BigDecimal amount;
 
     @Column(name = "REMARKS", length = 500)
     private String remarks;
@@ -69,49 +69,49 @@ public class SalesInvoiceDtl extends BaseEntity {
     private Long quotationPoid;
 
     @Column(name = "COST_AMT")
-    private Long costAmt;
+    private BigDecimal costAmt;
 
     @Column(name = "QTN_DET_ROW_ID")
     @AuditIgnore
     private Long quotationDetRowId;
 
     @Column(name = "PURCHASE_PRICE")
-    private Long purchasePrice;
+    private BigDecimal purchasePrice;
 
     @Column(name = "PURCHASE_QTY")
-    private Long purchaseQty;
+    private BigDecimal purchaseQty;
 
     @Column(name = "NET_SALES")
-    private Long netSales;
+    private BigDecimal netSales;
 
     @Column(name = "NET_DISCOUNT")
     @AuditIgnore
-    private Long netDiscount;
+    private BigDecimal netDiscount;
 
     @Column(name = "ITEM_GP")
-    private Long itemGp;
+    private BigDecimal itemGp;
 
     @Column(name = "ITEM_GP_PER")
-    private Long itemGpPer;
+    private BigDecimal itemGpPer;
 
     @Column(name = "ITEM_TYPE", length = 50)
     private String itemType;
 
     @Column(name = "TAX_PERCENTAGE")
-    private Long taxPercentage;
+    private BigDecimal taxPercentage;
 
     @Column(name = "TAX_AMOUNT")
-    private Long taxAmount;
+    private BigDecimal taxAmount;
 
     @Column(name = "TAX_POID")
     private Long taxPoid;
 
     @Column(name = "BASE_AMT")
     @AuditIgnore
-    private Long baseAmt;
+    private BigDecimal baseAmt;
 
     @Column(name = "INCENTIVE")
-    private Long incentive;
+    private BigDecimal incentive;
 
     @Column(name = "COST_POID")
     private String costPoid;

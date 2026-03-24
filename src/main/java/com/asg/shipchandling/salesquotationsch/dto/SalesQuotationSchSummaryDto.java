@@ -22,9 +22,9 @@ public class SalesQuotationSchSummaryDto {
     private String quotationStatus;
     private LocalDate validityToDate;
 
-    private Long totalAmount;
-    private Long totalTax;
-    private Long totalGpAmt;
+    private BigDecimal totalAmount;
+    private BigDecimal totalTax;
+    private BigDecimal totalGpAmt;
     private String currencyCode;
     private String customerRef;
     private String vesselName;

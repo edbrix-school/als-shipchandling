@@ -3,6 +3,7 @@ package com.asg.shipchandling.salesinvoice.dto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.math.BigDecimal;
 
 
 
@@ -18,6 +19,6 @@ public class SalesInvCostbkdDtlDto {
     private Long supplierPoid;
     private String supplierName; // From AR_SCH_SALES_INV_COSTBKD_DTL.SUPPLIER_NAME
     private String bookType; // From AR_SCH_SALES_INV_COSTBKD_DTL.BOOK_TYPE
-    private Long costAmt;
+    private BigDecimal costAmt;
     private String remarks;
 }

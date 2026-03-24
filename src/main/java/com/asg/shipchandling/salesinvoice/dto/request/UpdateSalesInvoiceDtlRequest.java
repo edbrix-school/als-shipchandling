@@ -15,10 +15,10 @@ public class UpdateSalesInvoiceDtlRequest {
     private Long detRowId;
     private Long stockPoid;
     private Long stockUnitPoid;
-    private Long quantity;
+    private BigDecimal quantity;
     private BigDecimal price;
-    private Long discount;
-    private Long baseAmt;
+    private BigDecimal discount;
+    private BigDecimal baseAmt;
     private Long taxPoid;
     private String costCenterPoid;
     private String remarks;
