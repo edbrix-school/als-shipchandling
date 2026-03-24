@@ -61,6 +61,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -1003,23 +1004,20 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     private void calculateTotals(Long transactionPoid) {
         List<SalesQuotationSchItemDtl> itemDetails = itemDtlRepository.findByTransactionPoid(transactionPoid);
 
-        Long totalAmount = itemDetails.stream()
+        BigDecimal totalAmount = itemDetails.stream()
                 .map(SalesQuotationSchItemDtl::getAmount)
                 .filter(java.util.Objects::nonNull)
-                .mapToLong(Long::longValue)
-                .sum();
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        Long totalTax = itemDetails.stream()
+        BigDecimal totalTax = itemDetails.stream()
                 .map(SalesQuotationSchItemDtl::getTaxAmount)
                 .filter(java.util.Objects::nonNull)
-                .mapToLong(Long::longValue)
-                .sum();
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        Long grossProfitAmount = itemDetails.stream()
+        BigDecimal grossProfitAmount = itemDetails.stream()
                 .map(SalesQuotationSchItemDtl::getGpAmount)
                 .filter(java.util.Objects::nonNull)
-                .mapToLong(Long::longValue)
-                .sum();
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Update quotation header
         SalesQuotationSchHdr quotationSch = quotationSchHdrRepository.findByTransactionPoid(transactionPoid)
@@ -1030,8 +1028,10 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         quotationSch.setTotalGpAmt(grossProfitAmount);
 
         // Calculate gross profit percentage
-        if (totalAmount != null && totalAmount > 0 && grossProfitAmount != null) {
-            Long grossProfitPercent = (grossProfitAmount * 100) / totalAmount;
+        if (totalAmount != null && totalAmount.compareTo(BigDecimal.ZERO) > 0 && grossProfitAmount != null) {
+            BigDecimal grossProfitPercent = grossProfitAmount
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(totalAmount, 6, RoundingMode.HALF_UP);
             quotationSch.setTotalGpPercentage(grossProfitPercent);
         }
 
@@ -1262,21 +1262,21 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setPortDescription(getStringValue(row[index++]));
         dto.setRemarks(getStringValue(row[index++]));
         dto.setTotalDiscount(getBigDecimalValue(row[index++]));
-        dto.setTotalAmount(getLongValue(row[index++]));
+        dto.setTotalAmount(getBigDecimalValue(row[index++]));
         dto.setActionStatus(getStringValue(row[index++]));
         dto.setActionDueDate(getLocalDateValue(row[index++]));
         dto.setEnquiryRefNumber(getLongValue(row[index++]));
         dto.setLostReason(getStringValue(row[index++]));
         dto.setBusinessPromotionValue(getLongValue(row[index++]));
-        dto.setPercentage(getLongValue(row[index++]));
+        dto.setPercentage(getBigDecimalValue(row[index++]));
         dto.setDetails(getStringValue(row[index++]));
         dto.setExpectedDeliveryDate(getLocalDateValue(row[index++]));
         dto.setVesselAgent(getStringValue(row[index++]));
         dto.setQuotedRate(getStringValue(row[index++]));
         dto.setRfqRefNo(getStringValue(row[index++]));
         dto.setPercentageDisc(getBigDecimalValue(row[index++]));
-        dto.setTotalGpAmt(getLongValue(row[index++]));
-        dto.setTotalGpPercentage(getLongValue(row[index++]));
+        dto.setTotalGpAmt(getBigDecimalValue(row[index++]));
+        dto.setTotalGpPercentage(getBigDecimalValue(row[index++]));
         dto.setCustomerRef(getStringValue(row[index++]));
         dto.setDeliveryToAddress(getStringValue(row[index++]));
         dto.setSelectAllDtl(getStringValue(row[index++]));
@@ -1286,7 +1286,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setMtaInvPoid(getLongValue(row[index++]));
         dto.setSalesInvPoid(getLongValue(row[index++]));
         dto.setSalesInvDocRef(getStringValue(row[index++]));
-        dto.setTotalTax(getLongValue(row[index++]));
+        dto.setTotalTax(getBigDecimalValue(row[index++]));
         dto.setPartyAddressDetails(getStringValue(row[index++]));
         dto.setDeleted(getStringValue(row[index++]));
         dto.setCreatedBy(getStringValue(row[index++]));
@@ -1529,21 +1529,21 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setPortDescription(getStringValue(row[index++]));
         dto.setRemarks(getStringValue(row[index++]));
         dto.setTotalDiscount(getBigDecimalValue(row[index++]));
-        dto.setTotalAmount(getLongValue(row[index++]));
+        dto.setTotalAmount(getBigDecimalValue(row[index++]));
         dto.setActionStatus(getStringValue(row[index++]));
         dto.setActionDueDate(getLocalDateValue(row[index++]));
         dto.setEnquiryRefNumber(getLongValue(row[index++]));
         dto.setLostReason(getStringValue(row[index++]));
         dto.setBusinessPromotionValue(getLongValue(row[index++]));
-        dto.setPercentage(getLongValue(row[index++]));
+        dto.setPercentage(getBigDecimalValue(row[index++]));
         dto.setDetails(getStringValue(row[index++]));
         dto.setExpectedDeliveryDate(getLocalDateValue(row[index++]));
         dto.setVesselAgent(getStringValue(row[index++]));
         dto.setQuotedRate(getStringValue(row[index++]));
         dto.setRfqRefNo(getStringValue(row[index++]));
         dto.setPercentageDisc(getBigDecimalValue(row[index++]));
-        dto.setTotalGpAmt(getLongValue(row[index++]));
-        dto.setTotalGpPercentage(getLongValue(row[index++]));
+        dto.setTotalGpAmt(getBigDecimalValue(row[index++]));
+        dto.setTotalGpPercentage(getBigDecimalValue(row[index++]));
         dto.setCustomerRef(getStringValue(row[index++]));
         dto.setDeliveryToAddress(getStringValue(row[index++]));
         dto.setSelectAllDtl(getStringValue(row[index++]));
@@ -1553,7 +1553,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         dto.setMtaInvPoid(getLongValue(row[index++]));
         dto.setSalesInvPoid(getLongValue(row[index++]));
         dto.setSalesInvDocRef(getStringValue(row[index++]));
-        dto.setTotalTax(getLongValue(row[index++]));
+        dto.setTotalTax(getBigDecimalValue(row[index++]));
         dto.setPartyAddressDetails(getStringValue(row[index++]));
         dto.setDeleted(getStringValue(row[index++]));
         dto.setCreatedBy(getStringValue(row[index++]));

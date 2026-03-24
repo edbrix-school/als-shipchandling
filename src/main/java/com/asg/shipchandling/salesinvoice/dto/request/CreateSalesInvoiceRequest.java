@@ -27,7 +27,7 @@ public class CreateSalesInvoiceRequest {
     private Long principalPoid; // Required if partyType = PRINCIPAL
     private Long customerAddrPoid;
     private String currencyCode;
-    private Long currencyRate;
+    private BigDecimal currencyRate;
     private Long creditDays;
     private Long qtnPoid;
     private String dataLoadType;

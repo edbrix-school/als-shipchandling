@@ -39,7 +39,7 @@ public class SalesQuotationSchHdrDto {
     private String voyageRef;
     private String remarks;
     private BigDecimal totalDiscount;
-    private Long totalAmount;
+    private BigDecimal totalAmount;
     private String actionStatus;
     private LocalDate actionDueDate;
 
@@ -51,7 +51,7 @@ public class SalesQuotationSchHdrDto {
     private LocalDateTime lastmodifiedDate;
     private String lostReason;
     private Long businessPromotionValue;
-    private Long percentage;
+    private BigDecimal percentage;
     private String details;
     private LocalDate expectedDeliveryDate;
 
@@ -60,8 +60,8 @@ public class SalesQuotationSchHdrDto {
     private String quotedRate;
     private String rfqRefNo;
     private BigDecimal percentageDisc;
-    private Long totalGpAmt;
-    private Long totalGpPercentage;
+    private BigDecimal totalGpAmt;
+    private BigDecimal totalGpPercentage;
     private String vesselName;
     private String portDescription;
     private String customerRef;
@@ -73,7 +73,7 @@ public class SalesQuotationSchHdrDto {
     private Long mtaInvPoid;
     private Long salesInvPoid;
     private String salesInvDocRef;
-    private Long totalTax;
+    private BigDecimal totalTax;
     private String partyAddressDetails;
 
     private List<SalesQuotationSchItemDtlDto> itemDetails;

@@ -19,22 +19,22 @@ public class CreateSalesQuotationSchItemDtlRequest {
     
     private BigDecimal price;
     
-    private Long discount;
+    private BigDecimal discount;
     
-    private Long amount;
+    private BigDecimal amount;
     
     @Size(max = 500, message = "Remarks must not exceed 500 characters")
     private String remarks;
     
     private Long stockUnitPoid;
     
-    private Long adjQuantity;
+    private BigDecimal adjQuantity;
     
     private BigDecimal cost;
     
-    private Long lastRate1;
+    private BigDecimal lastRate1;
     
-    private Long lastRate2;
+    private BigDecimal lastRate2;
     
     @Size(max = 1, message = "Delivery select must not exceed 1 character")
     private String deliverySelect;
@@ -42,15 +42,15 @@ public class CreateSalesQuotationSchItemDtlRequest {
     @Size(max = 50, message = "DN reference number must not exceed 50 characters")
     private String dnRefNo;
     
-    private Long gpAmount;
+    private BigDecimal gpAmount;
     
-    private Long gpPercentage;
+    private BigDecimal gpPercentage;
     
-    private Long totCost;
+    private BigDecimal totCost;
     
-    private Long purchasePrice;
+    private BigDecimal purchasePrice;
     
-    private Long purchaseQty;
+    private BigDecimal purchaseQty;
     
     @Size(max = 50, message = "Item type must not exceed 50 characters")
     private String itemType;
@@ -62,9 +62,9 @@ public class CreateSalesQuotationSchItemDtlRequest {
     
     private Long taxPoid;
     
-    private Long taxAmount;
+    private BigDecimal taxAmount;
     
-    private Long taxPercentage;
+    private BigDecimal taxPercentage;
     
     @Size(max = 1, message = "VAT modified must not exceed 1 character")
     private String vatModified;
