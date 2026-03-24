@@ -92,7 +92,7 @@ public class SalesQuotationSchHdr extends BaseEntity {
     private BigDecimal totalDiscount;
 
     @Column(name = "TOTAL_AMOUNT")
-    private Long totalAmount;
+    private BigDecimal totalAmount;
 
     @Column(name = "ACTION_STATUS", length = 20)
     @AuditIgnore
@@ -121,7 +121,7 @@ public class SalesQuotationSchHdr extends BaseEntity {
 
     @Column(name = "PERCENTAGE")
     @AuditIgnore
-    private Long percentage;
+    private BigDecimal percentage;
 
     @Column(name = "DETAILS", length = 100)
     private String details;
@@ -149,10 +149,10 @@ public class SalesQuotationSchHdr extends BaseEntity {
     private BigDecimal percentageDisc;
 
     @Column(name = "TOTAL_GP_AMT")
-    private Long totalGpAmt;
+    private BigDecimal totalGpAmt;
 
     @Column(name = "TOTAL_GP_PERCENTAGE")
-    private Long totalGpPercentage;
+    private BigDecimal totalGpPercentage;
 
     @Column(name = "VESSEL_NAME", length = 50)
     private String vesselName;
@@ -193,7 +193,7 @@ public class SalesQuotationSchHdr extends BaseEntity {
 
     @Column(name = "TOTAL_TAX")
     @AuditIgnore
-    private Long totalTax;
+    private BigDecimal totalTax;
 
     @Column(name = "PARTY_ADDRESS_DETAILS", length = 1000)
     @AuditIgnore
