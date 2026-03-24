@@ -2388,6 +2388,7 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
     @Override
     public byte[] print(Long transactionPoid) throws Exception {
         Map<String, Object> params = printService.buildBaseParams(transactionPoid, "350-104");
+        params.put("LOGIN_DIV_POID", "2");
         params.put("SUB_SALES_DTL", printService.load("ShipChandling/SALES/Sales_quotation_Items.jrxml"));
         JasperReport mainReport = printService.load("ShipChandling/SALES/Sales_quotation.jrxml");
         return printService.fillReportToPdf(mainReport, params, dataSource);
