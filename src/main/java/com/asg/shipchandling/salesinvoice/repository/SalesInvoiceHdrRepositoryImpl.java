@@ -458,7 +458,7 @@ public class SalesInvoiceHdrRepositoryImpl {
         entity.setPrincipalPoid(row[7] != null ? ((Number) row[7]).longValue() : null);
         entity.setCustomerAddrPoid(row[8] != null ? ((Number) row[8]).longValue() : null);
         entity.setCurrencyCode(toStringSafe(row[9]));
-        entity.setCurrencyRate(row[10] != null ? ((Number) row[10]).longValue() : null);
+        entity.setCurrencyRate(convertToBigDecimal(row[10]));
         entity.setInvAmount(row[11] != null ? convertToBigDecimal(row[11]) : null);
         entity.setCreditDays(row[12] != null ? ((Number) row[12]).longValue() : null);
         entity.setDueDate(toLocalDateTime(row[13]));
@@ -479,7 +479,7 @@ public class SalesInvoiceHdrRepositoryImpl {
         entity.setIncentiveTo3(toStringSafe(row[28]));
         entity.setTotalGpAmt(row[29] != null ? convertToBigDecimal(row[29]) : null);
         entity.setTotalGpPercent(row[30] != null ? convertToBigDecimal(row[30]) : null);
-        entity.setTotalCost(row[31] != null ? ((Number) row[31]).longValue() : null);
+        entity.setTotalCost(convertToBigDecimal(row[31]));
         entity.setPaymentMode(toStringSafe(row[32]));
         entity.setDataLoadType(toStringSafe(row[33]));
         entity.setVesselName(toStringSafe(row[34]));

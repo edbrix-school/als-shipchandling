@@ -63,7 +63,7 @@ public class SalesInvoiceHdr extends BaseEntity {
 
     @Column(name = "CURRENCY_RATE")
     @AuditIgnore
-    private Long currencyRate;
+    private BigDecimal currencyRate;
 
     @Column(name = "INV_AMOUNT")
     @AuditIgnore
@@ -143,7 +143,7 @@ public class SalesInvoiceHdr extends BaseEntity {
 
     @Column(name = "TOTAL_COST")
     @AuditIgnore
-    private Long totalCost;
+    private BigDecimal totalCost;
 
     @Column(name = "PAYMENT_MODE", length = 20)
     private String paymentMode;

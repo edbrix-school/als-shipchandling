@@ -1423,6 +1423,7 @@ public class SalesDeliveryNoteServiceImpl implements SalesDeliveryNoteService {
     @Override
     public byte[] print(Long transactionPoid) throws Exception {
         Map<String, Object> params = printService.buildBaseParams(transactionPoid, "350-104");
+        params.put("SUB_SALES_DTL", printService.load("ShipChandling/SALES/Sales_Delivery_Items.jrxml"));
         JasperReport mainReport = printService.load("ShipChandling/SALES/Sales_Delivery_note.jrxml");
         return printService.fillReportToPdf(mainReport, params, dataSource);
     }

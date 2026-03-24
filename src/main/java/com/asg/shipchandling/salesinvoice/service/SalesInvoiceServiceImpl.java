@@ -548,10 +548,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dto.setDnPoidLinkFk(row[2] != null ? ((Number) row[2]).longValue() : null);
         dto.setDetRowIdChrgFk(row[3] != null ? ((Number) row[3]).longValue() : null);
         dto.setStockPoid(row[4] != null ? ((Number) row[4]).longValue() : null);
-        dto.setQuantity(row[5] != null ? ((Number) row[5]).longValue() : null);
+        dto.setQuantity(convertToBigDecimal(row[5]));
         dto.setPrice(convertToBigDecimal(row[6]));
-        dto.setDiscount(row[7] != null ? ((Number) row[7]).longValue() : null);
-        dto.setAmount(row[8] != null ? ((Number) row[8]).longValue() : null);
+        dto.setDiscount(convertToBigDecimal(row[7]));
+        dto.setAmount(convertToBigDecimal(row[8]));
         dto.setRemarks(toStringSafe(row[9]));
         dto.setStockUnitPoid(row[10] != null ? ((Number) row[10]).longValue() : null);
         dto.setCreatedBy(toStringSafe(row[11]));
@@ -559,20 +559,20 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dto.setLastmodifiedBy(toStringSafe(row[13]));
         dto.setLastmodifiedDate(getLocalDateTimeValue(row[14]));
         dto.setQuotationPoid(row[15] != null ? ((Number) row[15]).longValue() : null);
-        dto.setCostAmt(row[16] != null ? ((Number) row[16]).longValue() : null);
+        dto.setCostAmt(convertToBigDecimal(row[16]));
         dto.setQuotationDetRowId(row[17] != null ? ((Number) row[17]).longValue() : null);
-        dto.setPurchasePrice(row[18] != null ? ((Number) row[18]).longValue() : null);
-        dto.setPurchaseQty(row[19] != null ? ((Number) row[19]).longValue() : null);
-        dto.setNetSales(row[20] != null ? ((Number) row[20]).longValue() : null);
-        dto.setNetDiscount(row[21] != null ? ((Number) row[21]).longValue() : null);
-        dto.setItemGp(row[22] != null ? ((Number) row[22]).longValue() : null);
-        dto.setItemGpPer(row[23] != null ? ((Number) row[23]).longValue() : null);
+        dto.setPurchasePrice(convertToBigDecimal(row[18]));
+        dto.setPurchaseQty(convertToBigDecimal(row[19]));
+        dto.setNetSales(convertToBigDecimal(row[20]));
+        dto.setNetDiscount(convertToBigDecimal(row[21]));
+        dto.setItemGp(convertToBigDecimal(row[22]));
+        dto.setItemGpPer(convertToBigDecimal(row[23]));
         dto.setItemType(toStringSafe(row[24]));
-        dto.setTaxPercentage(row[25] != null ? ((Number) row[25]).longValue() : null);
-        dto.setTaxAmount(row[26] != null ? ((Number) row[26]).longValue() : null);
+        dto.setTaxPercentage(convertToBigDecimal(row[25]));
+        dto.setTaxAmount(convertToBigDecimal(row[26]));
         dto.setTaxPoid(row[27] != null ? ((Number) row[27]).longValue() : null);
-        dto.setBaseAmt(row[28] != null ? ((Number) row[28]).longValue() : null);
-        dto.setIncentive(row[29] != null ? ((Number) row[29]).longValue() : null);
+        dto.setBaseAmt(convertToBigDecimal(row[28]));
+        dto.setIncentive(convertToBigDecimal(row[29]));
         String costPoidStr = toStringSafe(row[30]);
         // costPoid is stored as String in entity but DTO expects Long for costCenterPoid
         if (costPoidStr != null && !costPoidStr.isEmpty()) {
@@ -1092,12 +1092,12 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
         // Calculate amount
         if (dtl.getQuantity() != null && dtl.getPrice() != null) {
-            BigDecimal quantity = BigDecimal.valueOf(dtl.getQuantity());
+            BigDecimal quantity = dtl.getQuantity();
             BigDecimal amount = quantity.multiply(dtl.getPrice());
             if (dtl.getDiscount() != null) {
-                amount = amount.subtract(BigDecimal.valueOf(dtl.getDiscount()));
+                amount = amount.subtract(dtl.getDiscount());
             }
-            dtl.setAmount(amount.longValue());
+            dtl.setAmount(amount);
         }
 
         // Get tax percentage if tax is selected
@@ -1150,12 +1150,12 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
         // Recalculate amount
         if (dtl.getQuantity() != null && dtl.getPrice() != null) {
-            BigDecimal quantity = BigDecimal.valueOf(dtl.getQuantity());
+            BigDecimal quantity = dtl.getQuantity();
             BigDecimal amount = quantity.multiply(dtl.getPrice());
             if (dtl.getDiscount() != null) {
-                amount = amount.subtract(BigDecimal.valueOf(dtl.getDiscount()));
+                amount = amount.subtract(dtl.getDiscount());
             }
-            dtl.setAmount(amount.longValue());
+            dtl.setAmount(amount);
         }
 
         // Recalculate tax if tax is selected

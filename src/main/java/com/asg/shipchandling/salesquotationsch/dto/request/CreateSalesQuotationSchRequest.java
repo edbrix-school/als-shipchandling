@@ -75,7 +75,7 @@ public class CreateSalesQuotationSchRequest {
 
     private Long businessPromotionValue;
 
-    private Long percentage;
+    private BigDecimal percentage;
 
     @Size(max = 100, message = "Details must not exceed 100 characters")
     private String details;

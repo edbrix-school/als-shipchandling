@@ -24,7 +24,7 @@ public class SalesInvoiceHdrDto {
     private Long principalPoid;
     private Long customerAddrPoid;
     private String currencyCode;
-    private Long currencyRate;
+    private BigDecimal currencyRate;
     private BigDecimal invAmount;
     private Long creditDays;
     private LocalDateTime dueDate;
@@ -45,7 +45,7 @@ public class SalesInvoiceHdrDto {
     private String incentiveTo3;
     private BigDecimal totalGpAmt;
     private BigDecimal totalGpPercent;
-    private Long totalCost;
+    private BigDecimal totalCost;
     private String paymentMode;
     private String dataLoadType;
     private String vesselName;

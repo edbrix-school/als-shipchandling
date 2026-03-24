@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 
@@ -43,7 +44,7 @@ public class SalesInvCostbkdDtl extends BaseEntity {
     private Long supplierPoid;
 
     @Column(name = "COST_AMOUNT")
-    private Long costAmount;
+    private BigDecimal costAmount;
 
     @Column(name = "REMARKS", length = 200)
     private String remarks;

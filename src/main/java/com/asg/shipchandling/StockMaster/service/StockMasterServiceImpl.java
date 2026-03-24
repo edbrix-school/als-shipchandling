@@ -1848,8 +1848,9 @@ public class StockMasterServiceImpl implements StockMasterService {
     }
 
     /**
-     * Check if node should be included based on filter
-     * Include if node matches filter or has matching children
+     * Check if node should be included based on filter.
+     * With no filter: always include (caller builds full tree).
+     * With filter: only stock (LEDGER) rows match on code/name; categories appear only as ancestors of matching stocks.
      */
     private boolean shouldIncludeNode(Map<String, Object> node, String filterValue) {
         if (filterValue == null || filterValue.trim().isEmpty()) {
@@ -1857,37 +1858,24 @@ public class StockMasterServiceImpl implements StockMasterService {
         }
         
         String filter = filterValue.toLowerCase().trim();
-        
-        // Check if node itself matches (for categories)
-        String categoryName = (String) node.get("categoryName");
-        String categoryCode = (String) node.get("categoryCode");
-        
-        if (categoryName != null && categoryName.toLowerCase().trim().contains(filter)) {
-            return true;
-        }
-        if (categoryCode != null && categoryCode.toLowerCase().trim().contains(filter)) {
-            return true;
-        }
-        
-        // Check if node is a stock item (LEDGER) and matches
         String type = (String) node.get("type");
+        
         if ("LEDGER".equals(type)) {
             String stockName = (String) node.get("stockName");
             String stockCode = (String) node.get("stockCode");
-            
             if (stockName != null && stockName.toLowerCase().trim().contains(filter)) {
                 return true;
             }
             if (stockCode != null && stockCode.toLowerCase().trim().contains(filter)) {
                 return true;
             }
+            return false;
         }
         
-        // Check if any children match
+        // MAIN_GROUP / SUB_GROUP: never match filter on category name/code alone; keep only if a descendant stock matches
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> children = (List<Map<String, Object>>) node.get("children");
         if (children != null && !children.isEmpty()) {
-            // Check if any child matches
             for (Map<String, Object> child : children) {
                 if (shouldIncludeNode(child, filterValue)) {
                     return true;

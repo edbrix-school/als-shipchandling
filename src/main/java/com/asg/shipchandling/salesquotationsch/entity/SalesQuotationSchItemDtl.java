@@ -41,10 +41,10 @@ public class SalesQuotationSchItemDtl extends BaseEntity {
 
     @Column(name = "DISCOUNT")
     @AuditIgnore
-    private Long discount;
+    private BigDecimal discount;
 
     @Column(name = "AMOUNT")
-    private Long amount;
+    private BigDecimal amount;
 
     @Column(name = "REMARKS", length = 500)
     private String remarks;
@@ -54,17 +54,17 @@ public class SalesQuotationSchItemDtl extends BaseEntity {
 
     @Column(name = "ADJ_QUANTITY")
     @AuditIgnore
-    private Long adjQuantity;
+    private BigDecimal adjQuantity;
 
     @Column(name = "COST", precision = 18, scale = 6)
     private BigDecimal cost;
 
     @Column(name = "LAST_RATE1")
-    private Long lastRate1;
+    private BigDecimal lastRate1;
 
     @Column(name = "LAST_RATE2")
     @AuditIgnore
-    private Long lastRate2;
+    private BigDecimal lastRate2;
 
     @Column(name = "DELIVERY_SELECT", length = 1)
     @AuditIgnore
@@ -75,20 +75,20 @@ public class SalesQuotationSchItemDtl extends BaseEntity {
     private String dnRefNo;
 
     @Column(name = "GP_AMOUNT")
-    private Long gpAmount;
+    private BigDecimal gpAmount;
 
     @Column(name = "GP_PERCENTAGE")
-    private Long gpPercentage;
+    private BigDecimal gpPercentage;
 
     @Column(name = "TOT_COST")
     @AuditIgnore
-    private Long totCost;
+    private BigDecimal totCost;
 
     @Column(name = "PURCHASE_PRICE")
-    private Long purchasePrice;
+    private BigDecimal purchasePrice;
 
     @Column(name = "PURCHASE_QTY")
-    private Long purchaseQty;
+    private BigDecimal purchaseQty;
 
     @Column(name = "ITEM_TYPE", length = 50)
     private String itemType;
@@ -106,10 +106,10 @@ public class SalesQuotationSchItemDtl extends BaseEntity {
     private Long taxPoid;
 
     @Column(name = "TAX_AMOUNT")
-    private Long taxAmount;
+    private BigDecimal taxAmount;
 
     @Column(name = "TAX_PERCENTAGE")
-    private Long taxPercentage;
+    private BigDecimal taxPercentage;
 
     @Column(name = "VAT_MODIFIED", length = 1)
     @AuditIgnore
