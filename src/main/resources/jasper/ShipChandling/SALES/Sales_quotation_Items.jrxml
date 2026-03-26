@@ -122,7 +122,7 @@ order by det_row_id asc]]>
 			<staticText>
 				<reportElement x="461" y="1" width="80" height="15" uuid="283eab04-32a0-45c8-82e2-1b250f71d887"/>
 				<textElement textAlignment="Right">
-					<font size="11" isBold="true"/>
+					<font size="11"/>
 				</textElement>
 				<text><![CDATA[Total Amount]]></text>
 			</staticText>
@@ -285,7 +285,7 @@ order by det_row_id asc]]>
 			<textField pattern="#,##0.000" isBlankWhenNull="true">
 				<reportElement x="463" y="0" width="78" height="15" uuid="1cdee186-439d-479b-8ae3-d1a5311f6b13"/>
 				<textElement textAlignment="Right">
-					<font size="11" isBold="true"/>
+					<font size="11" isBold="true"  fontName="Times New Roman" pdfFontName="Times-Bold"/>
 				</textElement>
 				<textFieldExpression><![CDATA[$V{AMOUNT_2}]]></textFieldExpression>
 			</textField>
@@ -294,7 +294,7 @@ order by det_row_id asc]]>
 					<printWhenExpression><![CDATA[$F{TAX_APPLICABLE} == "Y"]]></printWhenExpression>
 				</reportElement>
 				<textElement textAlignment="Right">
-					<font size="11" isBold="true"/>
+					<font size="11" isBold="true"  fontName="Times New Roman" pdfFontName="Times-Bold"/>
 				</textElement>
 				<textFieldExpression><![CDATA[$V{TOTAL_TAX}]]></textFieldExpression>
 			</textField>
