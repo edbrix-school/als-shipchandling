@@ -183,21 +183,21 @@ WHERE TO_CHAR(C.TRANSACTION_POID)= $P{DOC_KEY_POID}]]>
 			<staticText>
 				<reportElement x="344" y="118" width="85" height="18" uuid="c0953ba4-baab-443a-861b-21c594fb89f0"/>
 				<textElement verticalAlignment="Top">
-					<font size="10" isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Ref No]]></text>
 			</staticText>
 			<staticText>
 				<reportElement x="344" y="136" width="85" height="18" uuid="0267831b-4405-4890-8724-2e357879a1ae"/>
 				<textElement verticalAlignment="Top">
-					<font size="10" isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Date ]]></text>
 			</staticText>
 			<staticText>
 				<reportElement x="344" y="155" width="85" height="18" uuid="835cb922-16ab-43ea-ba9c-f0430928af42"/>
 				<textElement verticalAlignment="Top">
-					<font size="10" isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Valid Until]]></text>
 			</staticText>
@@ -225,14 +225,14 @@ WHERE TO_CHAR(C.TRANSACTION_POID)= $P{DOC_KEY_POID}]]>
 			<staticText>
 				<reportElement x="16" y="235" width="85" height="18" uuid="56050e55-6bac-4eae-a982-892827ac0b5e"/>
 				<textElement verticalAlignment="Middle">
-					<font size="11" isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Vessel Name]]></text>
 			</staticText>
 			<staticText>
 				<reportElement x="345" y="173" width="85" height="18" uuid="2bf9bbe6-b09b-44be-badd-bf5c1a6049b5"/>
 				<textElement>
-					<font size="10" isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Cust Ref]]></text>
 			</staticText>
@@ -246,7 +246,7 @@ WHERE TO_CHAR(C.TRANSACTION_POID)= $P{DOC_KEY_POID}]]>
 			<staticText>
 				<reportElement x="345" y="193" width="85" height="18" uuid="d2ba493f-6140-4b90-a6f2-e2f4b61627fa"/>
 				<textElement>
-					<font size="10" isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Payment Mode]]></text>
 			</staticText>
@@ -260,7 +260,7 @@ WHERE TO_CHAR(C.TRANSACTION_POID)= $P{DOC_KEY_POID}]]>
 			<staticText>
 				<reportElement x="16" y="254" width="85" height="18" uuid="43e6c9bb-61cf-480c-81f8-bc0b8d7d8d2c"/>
 				<textElement>
-					<font size="11" isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Vessel Agent]]></text>
 			</staticText>
@@ -274,7 +274,7 @@ WHERE TO_CHAR(C.TRANSACTION_POID)= $P{DOC_KEY_POID}]]>
 			<staticText>
 				<reportElement x="292" y="235" width="71" height="18" uuid="cf47eabc-9ebd-4a44-974c-b390dd3e5307"/>
 				<textElement>
-					<font size="11" isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Port Name]]></text>
 			</staticText>
