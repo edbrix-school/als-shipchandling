@@ -456,7 +456,7 @@ WHERE TO_CHAR(C.TRANSACTION_POID)= $P{DOC_KEY_POID}]]>
 					<printWhenExpression><![CDATA[$F{TOT_AMT_PRINT_YN} == 'Y']]></printWhenExpression>
 				</reportElement>
 				<textElement textAlignment="Right">
-					<font size="13" isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<textFieldExpression><![CDATA[new java.text.DecimalFormat($F{NUMBER_FORMAT_CURRENCY}).format($V{RETURN_AMT}.subtract($F{TOTAL_DISCOUNT}))]]></textFieldExpression>
 			</textField>
@@ -539,7 +539,7 @@ WHERE TO_CHAR(C.TRANSACTION_POID)= $P{DOC_KEY_POID}]]>
 							<textField isBlankWhenNull="true">
 								<reportElement x="0" y="0" width="346" height="20" isRemoveLineWhenBlank="true" uuid="4cf1c707-1324-4724-b05d-8f38764da795"/>
 								<textElement>
-									<font size="11" isBold="true"  fontName="Times New Roman" pdfFontName="Times-Bold"/>
+									<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 								</textElement>
 								<textFieldExpression><![CDATA[$F{AMOUNT_WORD}]]></textFieldExpression>
 							</textField>
