@@ -576,7 +576,7 @@ public class SalesQuotationSchController {
         @AllowedAction(UserRolesRightsEnum.VIEW)
         public ResponseEntity<?> getStockDetails(
                         @RequestParam Long stockPoid,
-                        @RequestParam(required = false) Long customerPoid,
+                        @RequestParam(required = false) BigDecimal customerPoid,
                         @RequestParam(required = false) Long transactionPoid) {
                 log.info("getStockDetails started for stockPoid={} companyPoid={} groupPoid={} customerPoid={} transactionPoid={}", 
                                 stockPoid, UserContext.getCompanyPoid(), UserContext.getGroupPoid(), customerPoid, transactionPoid);

@@ -19,6 +19,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Map;
+import java.math.BigDecimal;
 
 public interface StockMasterService {
     StockMasterViewResponse getStockMasterById(Long stockPoid, boolean includeDetails, Long groupPoid);
@@ -71,7 +72,7 @@ public interface StockMasterService {
 
     StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid);
     
-    StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid, Long customerPoid, Long transactionPoid);
+    StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid, BigDecimal customerPoid, Long transactionPoid);
     
     StockDetailsResponse getStockDetailsByCode(String stockCode, Long companyPoid);
 }

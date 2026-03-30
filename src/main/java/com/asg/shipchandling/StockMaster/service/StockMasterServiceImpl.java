@@ -91,6 +91,9 @@ public class StockMasterServiceImpl implements StockMasterService {
     private StockCategoryMasterRepository categoryMasterRepository;
 
     @Autowired
+    private com.asg.shipchandling.salesquotationsch.repository.SalesQuotationSchHdrRepository salesQuotationSchHdrRepository;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
@@ -1894,7 +1897,7 @@ public class StockMasterServiceImpl implements StockMasterService {
 
     @Override
     @Transactional(readOnly = true)
-    public StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid, Long customerPoid, Long transactionPoid) {
+    public StockDetailsResponse getStockDetails(Long stockPoid, Long companyPoid, BigDecimal customerPoid, Long transactionPoid) {
         logger.info("getStockDetails started for stockPoid={} companyPoid={} customerPoid={} transactionPoid={}", 
                 stockPoid, companyPoid, customerPoid, transactionPoid);
         
@@ -1916,8 +1919,40 @@ public class StockMasterServiceImpl implements StockMasterService {
         // Call stored procedure to get lastPrice if customerPoid and transactionPoid are provided
         if (customerPoid != null && transactionPoid != null && response.getStockUnitPoid() != null) {
             try {
-                BigDecimal lastPrice = callGetLastPriceProc(customerPoid, stockPoid, transactionPoid, response.getStockUnitPoid());
+                // Fetch transaction date from header
+                com.asg.shipchandling.salesquotationsch.entity.SalesQuotationSchHdr header = salesQuotationSchHdrRepository
+                        .findByTransactionPoidAndCompanyPoid(transactionPoid, companyPoid)
+                        .orElseThrow(() -> new ResourceNotFoundException("Sales Quotation", "transactionPoid", transactionPoid));
+                
+                LocalDateTime transactionDate = header.getTransactionDate();
+                
+                Map<String, Object> procResult = callGetLastPriceProcV2(customerPoid, stockPoid, transactionPoid, response.getStockUnitPoid(), transactionDate);
+                
+                BigDecimal lastPrice = (BigDecimal) procResult.get("lastPrice");
                 response.setLastPrice(lastPrice);
+                
+                // Update tax details from procedure if returned
+                BigDecimal taxPercentage = (BigDecimal) procResult.get("taxPercentage");
+                Long taxPoid = (Long) procResult.get("taxPoid");
+                
+                if (taxPoid != null) {
+                    if (response.getTaxDetails() == null) {
+                        response.setTaxDetails(new StockDetailsResponse.TaxDetailDto());
+                    }
+                    response.getTaxDetails().setTaxPoid(taxPoid);
+                    response.getTaxDetails().setTaxPercentage(taxPercentage);
+                    
+                    // Fetch tax code/name if poid changed
+                    try {
+                        String taxSql = "SELECT TAX_CODE, TAX_NAME FROM GLOBAL_TAX_MASTER WHERE TAX_POID = ?";
+                        Map<String, Object> taxInfo = jdbcTemplate.queryForMap(taxSql, taxPoid);
+                        response.getTaxDetails().setTaxCode((String) taxInfo.get("TAX_CODE"));
+                        response.getTaxDetails().setTaxName((String) taxInfo.get("TAX_NAME"));
+                    } catch (Exception e) {
+                        logger.warn("Could not fetch tax details for poid {}: {}", taxPoid, e.getMessage());
+                    }
+                }
+                
                 logger.info("Last price retrieved: {} for stockPoid={} customerPoid={}", lastPrice, stockPoid, customerPoid);
             } catch (Exception e) {
                 logger.warn("Failed to retrieve last price for stockPoid={} customerPoid={}: {}", 
@@ -1932,57 +1967,47 @@ public class StockMasterServiceImpl implements StockMasterService {
     }
     
     /**
-     * Call PROC_SALES_SCQTN_SET_DFLT_DTL to get last price
-     * @param customerPoid Customer POID
-     * @param stockPoid Stock POID
-     * @param transactionPoid Transaction POID
-     * @param stockUnitPoid Stock Unit POID (IN OUT parameter)
-     * @return Last price (BigDecimal) or null if not found
+     * Call PROC_SALES_SCQTN_SET_DFLT_DTL2 to get last price and tax details
      */
-    private BigDecimal callGetLastPriceProc(Long customerPoid, Long stockPoid, Long transactionPoid, Long stockUnitPoid) {
-        // Validate all parameters are non-null before conversion
-        if (customerPoid == null) {
-            throw new IllegalArgumentException("customerPoid cannot be null");
-        }
-        if (stockPoid == null) {
-            throw new IllegalArgumentException("stockPoid cannot be null");
-        }
-        if (transactionPoid == null) {
-            throw new IllegalArgumentException("transactionPoid cannot be null");
-        }
-        if (stockUnitPoid == null) {
-            throw new IllegalArgumentException("stockUnitPoid cannot be null");
-        }
-        
-        String proc = "{call PROC_SALES_SCQTN_SET_DFLT_DTL(?, ?, ?, ?, ?)}";
+    private Map<String, Object> callGetLastPriceProcV2(BigDecimal customerPoid, Long stockPoid, Long transactionPoid, Long stockUnitPoid, LocalDateTime transactionDate) {
+        String proc = "{call PROC_SALES_SCQTN_SET_DFLT_DTL2(?, ?, ?, ?, ?, ?, ?, ?)}";
         return jdbcTemplate.execute((Connection con) -> {
             try (CallableStatement cs = con.prepareCall(proc)) {
                 // Set input parameters
-                cs.setBigDecimal(1, BigDecimal.valueOf(customerPoid));        // P_CUSTOMER_POID (IN)
+                cs.setBigDecimal(1, customerPoid);        // P_CUSTOMER_POID (IN)
                 cs.setBigDecimal(2, BigDecimal.valueOf(stockPoid));           // P_STOCK_POID (IN)
                 cs.setBigDecimal(3, BigDecimal.valueOf(transactionPoid));       // P_TRANSACTION_POID (IN)
                 
                 // Register IN OUT parameter and set input value
                 cs.registerOutParameter(4, Types.NUMERIC); // P_STOCK_UNIT_POID (IN OUT)
-                cs.setBigDecimal(4, BigDecimal.valueOf(stockUnitPoid)); // Set the input value for IN OUT parameter
+                cs.setBigDecimal(4, BigDecimal.valueOf(stockUnitPoid));
                 
-                // Register OUT parameter
-                cs.registerOutParameter(5, Types.NUMERIC); // P_LAST_PRICE (OUT)
+                // P_TRANSACTION_DATE (IN)
+                if (transactionDate != null) {
+                    cs.setTimestamp(5, java.sql.Timestamp.valueOf(transactionDate));
+                } else {
+                    cs.setNull(5, Types.TIMESTAMP);
+                }
+                
+                // Register OUT parameters
+                cs.registerOutParameter(6, Types.NUMERIC); // P_LAST_PRICE (OUT)
+                cs.registerOutParameter(7, Types.NUMERIC); // P_TAX_PERCENTAGE (OUT)
+                cs.registerOutParameter(8, Types.NUMERIC); // P_TAX_POID (OUT)
                 
                 cs.execute();
                 
-                // Get the updated stockUnitPoid (if changed by procedure)
-                BigDecimal updatedStockUnitPoid = cs.getBigDecimal(4);
-                if (updatedStockUnitPoid != null && !updatedStockUnitPoid.equals(BigDecimal.valueOf(stockUnitPoid))) {
-                    logger.debug("Stock unit POID updated from {} to {}", stockUnitPoid, updatedStockUnitPoid);
-                }
+                Map<String, Object> results = new HashMap<>();
+                results.put("stockUnitPoid", cs.getLong(4));
+                results.put("lastPrice", cs.getBigDecimal(6));
+                results.put("taxPercentage", cs.getBigDecimal(7));
                 
-                // Get last price
-                BigDecimal lastPrice = cs.getBigDecimal(5);
-                return lastPrice;
+                BigDecimal taxPoidDec = cs.getBigDecimal(8);
+                results.put("taxPoid", taxPoidDec != null ? taxPoidDec.longValue() : null);
+                
+                return results;
             } catch (SQLException ex) {
-                logger.error("Error calling PROC_SALES_SCQTN_SET_DFLT_DTL: {}", ex.getMessage(), ex);
-                throw new RuntimeException("Error calling PROC_SALES_SCQTN_SET_DFLT_DTL: " + ex.getMessage(), ex);
+                logger.error("Error calling PROC_SALES_SCQTN_SET_DFLT_DTL2: {}", ex.getMessage(), ex);
+                throw new RuntimeException("Error calling PROC_SALES_SCQTN_SET_DFLT_DTL2: " + ex.getMessage(), ex);
             }
         });
     }

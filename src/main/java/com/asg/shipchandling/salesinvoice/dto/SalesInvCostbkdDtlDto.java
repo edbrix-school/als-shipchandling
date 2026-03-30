@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 
 
@@ -21,4 +22,6 @@ public class SalesInvCostbkdDtlDto {
     private String bookType; // From AR_SCH_SALES_INV_COSTBKD_DTL.BOOK_TYPE
     private BigDecimal costAmt;
     private String remarks;
+    private LocalDateTime bookedDate;
+    private BigDecimal costAmount;
 }
