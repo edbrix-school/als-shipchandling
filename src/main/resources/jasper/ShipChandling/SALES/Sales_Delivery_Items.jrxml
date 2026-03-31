@@ -76,28 +76,28 @@ order by C.det_row_id]]>
 			<staticText>
 				<reportElement x="31" y="2" width="84" height="13" uuid="75d4729f-0a24-4f24-848b-b136019063e2"/>
 				<textElement>
-					<font isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Description]]></text>
 			</staticText>
 			<staticText>
 				<reportElement x="402" y="2" width="100" height="13" uuid="78c7793b-ae67-49ee-a34c-46ff40398069"/>
 				<textElement textAlignment="Right">
-					<font isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Quantity]]></text>
 			</staticText>
 			<staticText>
 				<reportElement x="508" y="2" width="43" height="13" uuid="282577aa-237c-4c00-bb15-3434a87ba08b"/>
 				<textElement>
-					<font isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Unit]]></text>
 			</staticText>
 			<staticText>
 				<reportElement x="0" y="2" width="22" height="13" uuid="cb866ba8-64f0-4f20-a02d-7dddf7e2e9e9"/>
 				<textElement>
-					<font isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[SN]]></text>
 			</staticText>
@@ -144,7 +144,7 @@ order by C.det_row_id]]>
 			<textField pattern="###0.000">
 				<reportElement x="402" y="0" width="100" height="20" uuid="2be5e2c9-b0e1-4ff6-9c4d-f326fe891e02"/>
 				<textElement textAlignment="Right" verticalAlignment="Middle">
-					<font isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<textFieldExpression><![CDATA[$V{TOTAL_QUANTITY}]]></textFieldExpression>
 			</textField>
