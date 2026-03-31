@@ -119,14 +119,14 @@ WHERE TO_CHAR(C.TRANSACTION_POID)= $P{DOC_KEY_POID}]]>
 			<staticText>
 				<reportElement x="342" y="154" width="75" height="16" uuid="6cc98dc1-fd38-4a21-a3ef-f52529d7e00b"/>
 				<textElement verticalAlignment="Top">
-					<font isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Date ]]></text>
 			</staticText>
 			<staticText>
 				<reportElement x="342" y="115" width="75" height="16" uuid="e55c198f-42fc-4d00-af53-f5b8a3e5df2b"/>
 				<textElement verticalAlignment="Top">
-					<font isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[DN No]]></text>
 			</staticText>
@@ -143,7 +143,7 @@ WHERE TO_CHAR(C.TRANSACTION_POID)= $P{DOC_KEY_POID}]]>
 			<staticText>
 				<reportElement x="342" y="173" width="75" height="16" uuid="ea40cd83-f296-4d18-a512-d80c0fa6231b"/>
 				<textElement verticalAlignment="Top">
-					<font isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Salesman ]]></text>
 			</staticText>
@@ -168,7 +168,7 @@ WHERE TO_CHAR(C.TRANSACTION_POID)= $P{DOC_KEY_POID}]]>
 			<staticText>
 				<reportElement mode="Transparent" x="342" y="135" width="75" height="16" uuid="d3db8a1b-99f5-49f0-b0da-6ba9db38dbb8"/>
 				<textElement>
-					<font isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Qtn Ref No]]></text>
 			</staticText>
@@ -208,14 +208,14 @@ WHERE TO_CHAR(C.TRANSACTION_POID)= $P{DOC_KEY_POID}]]>
 			<staticText>
 				<reportElement x="342" y="192" width="75" height="16" uuid="143940a4-f1e2-4823-83de-3323bf7823ce"/>
 				<textElement verticalAlignment="Top">
-					<font isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Payment Mode]]></text>
 			</staticText>
 			<staticText>
 				<reportElement x="342" y="210" width="82" height="15" uuid="1ed276f9-8cdd-41d0-b976-603b736407be"/>
 				<textElement>
-					<font isBold="true"/>
+					<font fontName="SansSerif" size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
 				</textElement>
 				<text><![CDATA[Customer Ref]]></text>
 			</staticText>
