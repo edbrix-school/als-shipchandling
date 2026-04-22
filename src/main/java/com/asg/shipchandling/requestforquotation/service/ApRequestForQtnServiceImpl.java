@@ -1075,7 +1075,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                     .sorted(Comparator.comparing(ApRequestForQtnItemDtl::getDetRowId))
                     .collect(Collectors.toList());
             dto.setItemDetails(itemDetails.stream()
-                    .map(item -> convertItemDtlToDto(item, rfq.getGroupPoid()))
+                    .map(this::convertItemDtlToDto)
                     .collect(Collectors.toList()));
 
             List<ApRequestForQtnSupDtl> supplierDetails = rfqSupDtlRepository
@@ -1092,10 +1092,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
     }
 
     private ApRequestForQtnItemDtlDto convertItemDtlToDto(ApRequestForQtnItemDtl itemDtl) {
-        return convertItemDtlToDto(itemDtl, null);
-    }
-
-    private ApRequestForQtnItemDtlDto convertItemDtlToDto(ApRequestForQtnItemDtl itemDtl, Long groupPoid) {
         ApRequestForQtnItemDtlDto dto = new ApRequestForQtnItemDtlDto();
         BeanUtils.copyProperties(itemDtl, dto);
 
@@ -1103,17 +1099,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         dto.setStockPoidDetails(getStockPoidDetails(itemDtl.getStockPoid()));
         dto.setStockUnitDetails(getStockUnitDetails(itemDtl.getStockUnitPoid()));
         dto.setTaxPoidDetails(getTaxPoidDetails(itemDtl.getTaxPoid()));
-
-        // For supplier in item details, use the special method that checks transaction and excludes cash/cheque suppliers
-        if (groupPoid != null) {
-            dto.setSupplierPoidDetails(getSupplierPoidDetailsForItem(
-                    itemDtl.getSupplierPoid(),
-                    itemDtl.getTransactionPoid(),
-                    groupPoid));
-        } else {
-            // Fallback: use simple supplier lookup if groupPoid is not available
-            dto.setSupplierPoidDetails(getSupplierPoidDetailsForSupplier(itemDtl.getSupplierPoid()));
-        }
+        dto.setSupplierPoidDetails(getSupplierPoidDetailsForSupplier(itemDtl.getSupplierPoid()));
 
         return dto;
     }
@@ -1194,7 +1180,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         itemDtl.setRemarks(request.getRemarks());
 
         ApRequestForQtnItemDtl savedItemDtl = rfqItemDtlRepository.save(itemDtl);
-        return convertItemDtlToDto(savedItemDtl, groupPoid);
+        return convertItemDtlToDto(savedItemDtl);
     }
 
     @Override
@@ -1284,7 +1270,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
 
         ApRequestForQtnItemDtl savedItemDtl = rfqItemDtlRepository.save(itemDtl);
-        return convertItemDtlToDto(savedItemDtl, groupPoid);
+        return convertItemDtlToDto(savedItemDtl);
     }
 
     @Override
@@ -1338,7 +1324,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                 .sorted(Comparator.comparing(ApRequestForQtnItemDtl::getDetRowId))
                 .collect(Collectors.toList());
         return itemDetails.stream()
-                .map(item -> convertItemDtlToDto(item, groupPoid))
+                .map(this::convertItemDtlToDto)
                 .collect(Collectors.toList());
     }
 
@@ -2140,73 +2126,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         }
     }
 
-    private LovItem getSupplierPoidDetailsForItem(Long supplierPoid, Long transactionPoid, Long groupPoid) {
-        if (supplierPoid == null || transactionPoid == null) {
-            return null;
-        }
-        if (dataSource == null) {
-            log.warn("DataSource is not configured; skipping supplier LOV fetch for item");
-            return null;
-        }
 
-        try (Connection connection = dataSource.getConnection()) {
-            // First, get Cash and Cheque supplier POIDs
-            String paramSql = "SELECT RTN_GLOBAL_PARAMETER(1, 'Cash Suppliers', 'GROUP', '1', NULL) AS CASH_SUPPLIER, " +
-                    "RTN_GLOBAL_PARAMETER(1, 'Cheque Suppliers', 'GROUP', '1', NULL) AS CHEQUE_SUPPLIER FROM DUAL";
-            Long cashSupplier = null;
-            Long chequeSupplier = null;
-
-            try (PreparedStatement paramStatement = connection.prepareStatement(paramSql);
-                 ResultSet paramRs = paramStatement.executeQuery()) {
-                if (paramRs.next()) {
-                    Object cashObj = paramRs.getObject("CASH_SUPPLIER");
-                    Object chequeObj = paramRs.getObject("CHEQUE_SUPPLIER");
-                    if (cashObj != null) {
-                        cashSupplier = paramRs.getLong("CASH_SUPPLIER");
-                    }
-                    if (chequeObj != null) {
-                        chequeSupplier = paramRs.getLong("CHEQUE_SUPPLIER");
-                    }
-                }
-            }
-
-            // Check if supplier is cash or cheque supplier - if so, return null
-            if ((cashSupplier != null && supplierPoid.equals(cashSupplier)) ||
-                    (chequeSupplier != null && supplierPoid.equals(chequeSupplier))) {
-                return null;
-            }
-
-            final String sql = "SELECT DISTINCT ASM.SUPPLIER_POID AS POID, " +
-                    "ASM.SUPPLIER_CODE AS CODE, " +
-                    "ASM.SUPPLIER_NAME AS DESCRIPTION " +
-                    "FROM AP_REQUEST_FOR_QTN_ITEM_DTL RFQI " +
-                    "INNER JOIN AP_REQUEST_FOR_QTN_HDR RFQH ON RFQH.TRANSACTION_POID = RFQI.TRANSACTION_POID " +
-                    "INNER JOIN AP_SUPPLIER_MASTER ASM ON ASM.SUPPLIER_POID = RFQI.SUPPLIER_POID " +
-                    "WHERE RFQI.TRANSACTION_POID = ? AND RFQI.SUPPLIER_POID = ? " +
-                    "AND RFQH.STATUS != 'CLOSED' " +
-                    "AND RFQI.SUPPLIER_POID != NVL(?, -1) " +
-                    "AND RFQI.SUPPLIER_POID != NVL(?, -1)";
-
-            try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                statement.setLong(1, transactionPoid);
-                statement.setLong(2, supplierPoid);
-                statement.setObject(3, cashSupplier);
-                statement.setObject(4, chequeSupplier);
-                try (ResultSet rs = statement.executeQuery()) {
-                    if (rs.next()) {
-                        Long poid = rs.getLong("POID");
-                        String code = rs.getString("CODE");
-                        String description = rs.getString("DESCRIPTION");
-                        return new LovItem(poid, code, description, description, poid, null);
-                    }
-                }
-            }
-            return null;
-        } catch (SQLException ex) {
-            log.error("Failed to fetch supplier LOV for item supplierPoid {} transactionPoid {}", supplierPoid, transactionPoid, ex);
-            return null;
-        }
-    }
 
     private LovItem getTaxPoidDetails(Long taxPoid) {
         if (taxPoid == null) {
@@ -2250,7 +2170,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
 
         final String sql = "SELECT SUPPLIER_POID AS POID, SUPPLIER_CODE AS CODE, SUPPLIER_NAME AS DESCRIPTION " +
                 "FROM AP_SUPPLIER_MASTER " +
-                "WHERE SUPPLIER_POID = ? AND NVL(ACTIVE, 'Y') = 'Y'";
+                "WHERE SUPPLIER_POID = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
 
@@ -2263,6 +2183,34 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                     return new LovItem(poid, code, description, description, poid, null);
                 }
             }
+
+            // Fallback for Cash and Cheque suppliers if not found in master table
+            Long currentGroupPoid = UserContext.getGroupPoid();
+            if (currentGroupPoid == null) {
+                currentGroupPoid = 1L;
+            }
+
+            String paramSql = "SELECT RTN_GLOBAL_PARAMETER(?, 'Cash Suppliers', 'GROUP', '1', NULL) AS CASH_SUPPLIER, " +
+                    "RTN_GLOBAL_PARAMETER(?, 'Cheque Suppliers', 'GROUP', '1', NULL) AS CHEQUE_SUPPLIER FROM DUAL";
+
+            try (PreparedStatement paramStmt = connection.prepareStatement(paramSql)) {
+                paramStmt.setLong(1, currentGroupPoid);
+                paramStmt.setLong(2, currentGroupPoid);
+                try (ResultSet paramRs = paramStmt.executeQuery()) {
+                    if (paramRs.next()) {
+                        Object cashObj = paramRs.getObject("CASH_SUPPLIER");
+                        Object chequeObj = paramRs.getObject("CHEQUE_SUPPLIER");
+                        
+                        if (cashObj != null && supplierPoid.equals(Long.valueOf(cashObj.toString()))) {
+                            return new LovItem(supplierPoid, "CASH", "Cash Supplier", "Cash Supplier", supplierPoid, null);
+                        }
+                        if (chequeObj != null && supplierPoid.equals(Long.valueOf(chequeObj.toString()))) {
+                            return new LovItem(supplierPoid, "CHEQUE", "Cheque Supplier", "Cheque Supplier", supplierPoid, null);
+                        }
+                    }
+                }
+            }
+
             return null;
         } catch (SQLException ex) {
             log.error("Failed to fetch supplier LOV for supplierPoid {}", supplierPoid, ex);
