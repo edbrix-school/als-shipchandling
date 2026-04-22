@@ -2183,34 +2183,6 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                     return new LovItem(poid, code, description, description, poid, null);
                 }
             }
-
-            // Fallback for Cash and Cheque suppliers if not found in master table
-            Long currentGroupPoid = UserContext.getGroupPoid();
-            if (currentGroupPoid == null) {
-                currentGroupPoid = 1L;
-            }
-
-            String paramSql = "SELECT RTN_GLOBAL_PARAMETER(?, 'Cash Suppliers', 'GROUP', '1', NULL) AS CASH_SUPPLIER, " +
-                    "RTN_GLOBAL_PARAMETER(?, 'Cheque Suppliers', 'GROUP', '1', NULL) AS CHEQUE_SUPPLIER FROM DUAL";
-
-            try (PreparedStatement paramStmt = connection.prepareStatement(paramSql)) {
-                paramStmt.setLong(1, currentGroupPoid);
-                paramStmt.setLong(2, currentGroupPoid);
-                try (ResultSet paramRs = paramStmt.executeQuery()) {
-                    if (paramRs.next()) {
-                        Object cashObj = paramRs.getObject("CASH_SUPPLIER");
-                        Object chequeObj = paramRs.getObject("CHEQUE_SUPPLIER");
-                        
-                        if (cashObj != null && supplierPoid.equals(Long.valueOf(cashObj.toString()))) {
-                            return new LovItem(supplierPoid, "CASH", "Cash Supplier", "Cash Supplier", supplierPoid, null);
-                        }
-                        if (chequeObj != null && supplierPoid.equals(Long.valueOf(chequeObj.toString()))) {
-                            return new LovItem(supplierPoid, "CHEQUE", "Cheque Supplier", "Cheque Supplier", supplierPoid, null);
-                        }
-                    }
-                }
-            }
-
             return null;
         } catch (SQLException ex) {
             log.error("Failed to fetch supplier LOV for supplierPoid {}", supplierPoid, ex);
