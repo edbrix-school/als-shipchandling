@@ -12,7 +12,7 @@ import java.util.Optional;
 @Repository
 public interface GlobalCurrencyRatesRepository extends JpaRepository<GlobalCurrencyRates, GlobalCurrencyRatesId> {
 
-    @Query("SELECT r FROM GlobalCurrencyRates r WHERE r.currencyCode = :currencyCode AND (r.deleted IS NULL OR r.deleted != 'Y') ORDER BY r.rateDate DESC")
+    @Query("SELECT r FROM GlobalCurrencyRates r WHERE r.currencyCode = :currencyCode AND (r.deleted IS NULL OR r.deleted != 'Y') " +
+           "AND r.rateDate = (SELECT MAX(r2.rateDate) FROM GlobalCurrencyRates r2 WHERE r2.currencyCode = :currencyCode AND (r2.deleted IS NULL OR r2.deleted != 'Y'))")
     Optional<GlobalCurrencyRates> findLatestByCurrencyCode(@Param("currencyCode") String currencyCode);
 }
-

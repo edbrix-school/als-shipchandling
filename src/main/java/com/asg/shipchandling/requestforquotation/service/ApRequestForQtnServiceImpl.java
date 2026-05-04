@@ -2105,7 +2105,7 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             return null;
         }
 
-        final String sql = "SELECT STOCK_UNIT_POID AS POID, STOCK_UNIT_CODE AS CODE, STOCK_UNIT_CODE AS DESCRIPTION " +
+        final String sql = "SELECT STOCK_UNIT_POID AS POID, STOCK_UNIT_CODE AS CODE, STOCK_UNIT_NAME AS DESCRIPTION " +
                 "FROM STOCK_UNIT_MASTER WHERE STOCK_UNIT_POID = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
