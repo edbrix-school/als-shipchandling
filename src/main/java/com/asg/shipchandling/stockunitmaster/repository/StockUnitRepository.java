@@ -22,9 +22,14 @@ public interface StockUnitRepository
 
     boolean existsByStockUnitName(String stockUnitName);
 
-    boolean existsByStockUnitCodeIgnoreCaseAndStockUnitPoidNot(String stockUnitCode, Long stockUnitPoid);
+    @Query("SELECT COUNT(s) > 0 FROM StockUnitMaster s WHERE UPPER(s.stockUnitCode) = UPPER(:stockUnitCode) " +
+           "AND s.stockUnitPoid <> :stockUnitPoid AND (s.deleted IS NULL OR s.deleted <> 'Y') AND s.active = 'Y'")
+    boolean existsByStockUnitCodeIgnoreCaseAndStockUnitPoidNot(@Param("stockUnitCode") String stockUnitCode, @Param("stockUnitPoid") Long stockUnitPoid);
 
-    boolean existsByStockUnitNameIgnoreCaseAndStockUnitPoidNot(String stockUnitName, Long stockUnitPoid);
+    @Query("SELECT COUNT(s) > 0 FROM StockUnitMaster s WHERE UPPER(s.stockUnitName) = UPPER(:stockUnitName) " +
+           "AND s.stockUnitPoid <> :stockUnitPoid AND (s.deleted IS NULL OR s.deleted <> 'Y') AND s.active = 'Y'")
+    boolean existsByStockUnitNameIgnoreCaseAndStockUnitPoidNot(@Param("stockUnitName") String stockUnitName, @Param("stockUnitPoid") Long stockUnitPoid);
+
 
     StockUnitMaster findByStockUnitPoid(Long stockUnitPoid);
 
