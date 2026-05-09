@@ -879,18 +879,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         
         if (!entitiesToSaveFiltered.isEmpty()) {
             dtlRepository.saveAll(entitiesToSaveFiltered);
-            entitiesToSaveFiltered.forEach(e -> {
-                String logDetail = String.format(
-                        "Row Created on Stock Supplier Detail with detRowId: %s",
-                        e.getDetRowId()
-                );
-
-                loggingService.createLogSummaryEntry(
-                        UserContext.getDocumentId(),
-                        stockPoid.toString(),
-                        logDetail
-                );
-            });
         }
     }
 
@@ -899,17 +887,7 @@ public class StockMasterServiceImpl implements StockMasterService {
             // Use detRowId to identify the specific record to delete
             dtlRepository.findById(new StockMasterDtlId(stockPoid, dto.getDetRowId()))
                     .ifPresentOrElse(
-                            entity -> {
-                                // existing behavior
-                                entitiesToDelete.add(entity);
-
-                                // ✅ ADD DELETE LOGGING
-                                loggingService.logDelete(
-                                        entity,
-                                        UserContext.getDocumentId(),
-                                        stockPoid.toString()
-                                );
-                            },
+                            entitiesToDelete::add,
                             () -> logger.warn("No StockMasterDTLEntity found for stockPoid={} and detRowId={}, skipping delete.",
                                     stockPoid, dto.getDetRowId())
                     );
@@ -919,17 +897,7 @@ public class StockMasterServiceImpl implements StockMasterService {
                     .filter(entity -> entity.getSupplierPoid() != null && entity.getSupplierPoid().equals(dto.getSupplierPoid()))
                     .findFirst()
                     .ifPresentOrElse(
-                            entity -> {
-                                // existing behavior
-                                entitiesToDelete.add(entity);
-
-                                // ✅ ADD DELETE LOGGING
-                                loggingService.logDelete(
-                                        entity,
-                                        UserContext.getDocumentId(),
-                                        stockPoid.toString()
-                                );
-                            },
+                            entitiesToDelete::add,
                             () -> logger.warn("No StockMasterDTLEntity found for stockPoid={} and supplierPoid={}, skipping delete.",
                                     stockPoid, dto.getSupplierPoid())
                     );
@@ -978,10 +946,6 @@ public class StockMasterServiceImpl implements StockMasterService {
     }
 
     private void updateExistingSupplierEntity(StockMasterDTLEntity entity, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToSave, String userId) {
-        // Create a copy of the existing entity for logging
-        StockMasterDTLEntity oldEntity = new StockMasterDTLEntity();
-        BeanUtils.copyProperties(entity, oldEntity);
-        
         // Update fields only if provided
         if (dto.getSupplierPoid() != null) {
             entity.setSupplierPoid(dto.getSupplierPoid());
@@ -993,14 +957,6 @@ public class StockMasterServiceImpl implements StockMasterService {
             entity.setRemarks(dto.getRemarks());
         }
         entitiesToSave.add(entity);
-
-        String logDetail = String.format("KeyId = STOCK_POID %s: DET_ROW_ID %s", entity.getStockPoid(),entity.getDetRowId());
-
-        // Log the changes
-        loggingService.createLog(oldEntity, entity, StockMasterDTLEntity.class,
-                UserContext.getDocumentId(),entity.getStockPoid().toString(),
-                logDetail);
-
     }
 
     private void createNewSupplierEntity(Long stockPoid, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToSave, String userId) {
@@ -1027,11 +983,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         newEntity.setSupplierStockCode(dto.getSupplierStockCode());
         newEntity.setRemarks(dto.getRemarks());
         entitiesToSave.add(newEntity);
-        
-        // Log the creation
-        loggingService.createLog(null, newEntity, StockMasterDTLEntity.class, 
-                UserContext.getDocumentId(), stockPoid.toString(), 
-                String.format("Supplier detail created - DetRowId: %d", detRowId));
     }
 
     private void processWarehouseDetails(Long stockPoid, List<CreateStockMasterWarehouseDtlRequest> details, String userId) {
