@@ -946,8 +946,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         if (entityToDelete != null) {
             final StockMasterDTLEntity finalEntity = entityToDelete;
             if (isUpdate) {
-                loggingService.createLogSummaryEntry(UserContext.getDocumentId(), stockPoid.toString(),
-                        String.format("Row Deleted from Stock Supplier Detail with DetRowId: %s", finalEntity.getDetRowId()));
                 loggingService.logDelete(finalEntity, UserContext.getDocumentId(), stockPoid.toString());
             }
             dtlRepository.delete(finalEntity);
@@ -1076,8 +1074,6 @@ public class StockMasterServiceImpl implements StockMasterService {
         if (entityToDelete != null) {
             final StockMasterWarehouseDtl finalEntity = entityToDelete;
             if (isUpdate) {
-                loggingService.createLogSummaryEntry(UserContext.getDocumentId(), stockPoid.toString(),
-                        String.format("Row Deleted from Stock Warehouse Detail with DetRowId: %s", finalEntity.getDetRowId()));
                 loggingService.logDelete(finalEntity, UserContext.getDocumentId(), stockPoid.toString());
             }
             warehouseRepository.delete(finalEntity);
