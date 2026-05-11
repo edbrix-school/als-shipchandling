@@ -847,9 +847,9 @@ public class StockMasterServiceImpl implements StockMasterService {
         Long maxIdDb = dtlRepository.findMaxDetRowIdByStockPoid(stockPoid);
         long nextDetRowId = (maxIdDb != null ? maxIdDb : 0L) + 1L;
 
-        // Account for any detRowIds provided in the payload for creations to avoid collisions
+        // Account for any detRowIds provided in the payload for any action to avoid collisions
         for (CreateStockMasterDtlRequest item : details) {
-            if ("iscreated".equalsIgnoreCase(item.getActionType()) && item.getDetRowId() != null) {
+            if (item.getDetRowId() != null) {
                 if (item.getDetRowId() >= nextDetRowId) {
                     nextDetRowId = item.getDetRowId() + 1;
                 }
@@ -864,7 +864,8 @@ public class StockMasterServiceImpl implements StockMasterService {
                     handleSupplierDeleteAction(stockPoid, dto.getDetRowId(), isUpdate);
                 }
                 case "iscreated" -> {
-                    createSupplierDetail(stockPoid, dto, userId, isUpdate, nextDetRowId++);
+                    long detIdToUse = (dto.getDetRowId() != null) ? dto.getDetRowId() : nextDetRowId++;
+                    createSupplierDetail(stockPoid, dto, userId, isUpdate, detIdToUse);
                 }
                 case "isupdated" -> {
                     updateSupplierDetailByAction(stockPoid, dto, userId, isUpdate);
@@ -967,9 +968,9 @@ public class StockMasterServiceImpl implements StockMasterService {
         Long maxIdDb = warehouseRepository.findMaxDetRowIdByStockPoid(stockPoid);
         long nextDetRowId = (maxIdDb != null ? maxIdDb : 0L) + 1L;
 
-        // Account for any detRowIds provided in the payload for creations
+        // Account for any detRowIds provided in the payload for any action
         for (CreateStockMasterWarehouseDtlRequest item : details) {
-            if ("iscreated".equalsIgnoreCase(item.getActionType()) && item.getDetRowId() != null) {
+            if (item.getDetRowId() != null) {
                 if (item.getDetRowId() >= nextDetRowId) {
                     nextDetRowId = item.getDetRowId() + 1;
                 }
@@ -981,7 +982,10 @@ public class StockMasterServiceImpl implements StockMasterService {
 
             switch (action) {
                 case "isdeleted" -> handleWarehouseDeleteAction(stockPoid, dto, isUpdate);
-                case "iscreated" -> createWarehouseDetail(stockPoid, dto, userId, isUpdate, nextDetRowId++);
+                case "iscreated" -> {
+                    long detIdToUse = (dto.getDetRowId() != null) ? dto.getDetRowId() : nextDetRowId++;
+                    createWarehouseDetail(stockPoid, dto, userId, isUpdate, detIdToUse);
+                }
                 case "isupdated" -> updateWarehouseDetailByAction(stockPoid, dto, userId, isUpdate);
                 case "nochanges", "nochange" -> {
                     // Ignore
