@@ -68,6 +68,7 @@ import jakarta.persistence.PersistenceContext;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.sql.CallableStatement;
 import java.sql.Connection;
@@ -838,173 +839,46 @@ public class StockMasterServiceImpl implements StockMasterService {
     }
 
     private void processSupplierDetails(Long stockPoid, List<CreateStockMasterDtlRequest> details, String userId, boolean isUpdate) {
-        List<StockMasterDTLEntity> entitiesToDelete = new ArrayList<>();
-        List<StockMasterDTLEntity> entitiesToSave = new ArrayList<>();
-        // Track detRowIds that are being deleted to prevent saving them
-        Set<Long> deletedDetRowIds = new HashSet<>();
+        if (details == null || details.isEmpty()) {
+            return;
+        }
+
+        // Calculate initial max DetRowId once to prevent duplicates
+        Long maxIdDb = dtlRepository.findMaxDetRowIdByStockPoid(stockPoid);
+        long nextDetRowId = (maxIdDb != null ? maxIdDb : 0L) + 1L;
+
+        // Account for any detRowIds provided in the payload for creations to avoid collisions
+        for (CreateStockMasterDtlRequest item : details) {
+            if ("iscreated".equalsIgnoreCase(item.getActionType()) && item.getDetRowId() != null) {
+                if (item.getDetRowId() >= nextDetRowId) {
+                    nextDetRowId = item.getDetRowId() + 1;
+                }
+            }
+        }
 
         for (CreateStockMasterDtlRequest dto : details) {
             String action = StringUtils.isBlank(dto.getActionType()) ? "" : dto.getActionType().toLowerCase();
 
             switch (action) {
                 case "isdeleted" -> {
-                    handleSupplierDeleteAction(stockPoid, dto, entitiesToDelete, isUpdate);
-                    // Track the detRowId being deleted
-                    if (dto.getDetRowId() != null) {
-                        deletedDetRowIds.add(dto.getDetRowId());
-                    }
+                    handleSupplierDeleteAction(stockPoid, dto.getDetRowId(), isUpdate);
                 }
-                case "iscreated", "isupdated" ->
-                        handleSupplierCreateOrUpdateAction(stockPoid, dto, entitiesToSave, deletedDetRowIds, userId, isUpdate);
+                case "iscreated" -> {
+                    createSupplierDetail(stockPoid, dto, userId, isUpdate, nextDetRowId++);
+                }
+                case "isupdated" -> {
+                    updateSupplierDetailByAction(stockPoid, dto, userId, isUpdate);
+                }
                 case "nochanges", "nochange" -> {
-                    // Ignore - no action needed, record remains in database and will appear in response
-                    logger.debug("Preserving supplier detail with actionType 'noChanges' for supplierPoid={} - record remains unchanged", dto.getSupplierPoid());
+                    // Ignore - no action needed
                 }
                 default ->
-                        logger.warn("Unknown actionType '{}' for supplierPoid={}", dto.getActionType(), dto.getSupplierPoid());
+                        logger.warn("Unknown actionType '{}' for supplierPoid={} on stockPoid={}", dto.getActionType(), dto.getSupplierPoid(), stockPoid);
             }
         }
-
-        // Delete entities first and flush to ensure they're removed from persistence context
-        if (!entitiesToDelete.isEmpty()) {
-            dtlRepository.deleteAll(entitiesToDelete);
-            entityManager.flush(); // Flush to commit deletes before saves
-        }
-        
-        // Filter out any entities that are in the delete list (shouldn't happen, but safety check)
-        List<StockMasterDTLEntity> entitiesToSaveFiltered = entitiesToSave.stream()
-                .filter(entity -> !entitiesToDelete.contains(entity))
-                .filter(entity -> !deletedDetRowIds.contains(entity.getDetRowId()))
-                .collect(java.util.stream.Collectors.toList());
-        
-        if (!entitiesToSaveFiltered.isEmpty()) {
-            dtlRepository.saveAll(entitiesToSaveFiltered);
-        }
     }
 
-    private void handleSupplierDeleteAction(Long stockPoid, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToDelete, boolean isUpdate) {
-        if (dto.getDetRowId() != null) {
-            // Use detRowId to identify the specific record to delete
-            dtlRepository.findById(new StockMasterDtlId(stockPoid, dto.getDetRowId()))
-                    .ifPresentOrElse(
-                            entity -> {
-                                entitiesToDelete.add(entity);
-                                if (isUpdate) {
-                                    loggingService.createLogSummaryEntry(UserContext.getDocumentId(), stockPoid.toString(),
-                                            String.format("Row Deleted from Stock Supplier Detail with DetRowId: %s", entity.getDetRowId()));
-                                    loggingService.logDelete(entity, UserContext.getDocumentId(), stockPoid.toString());
-                                }
-                            },
-                            () -> logger.warn("No StockMasterDTLEntity found for stockPoid={} and detRowId={}, skipping delete.",
-                                    stockPoid, dto.getDetRowId())
-                    );
-        } else if (dto.getSupplierPoid() != null) {
-            // Fallback: use supplierPoid if detRowId is not provided
-            dtlRepository.findByStockPoid(stockPoid).stream()
-                    .filter(entity -> entity.getSupplierPoid() != null && entity.getSupplierPoid().equals(dto.getSupplierPoid()))
-                    .findFirst()
-                    .ifPresentOrElse(
-                            entity -> {
-                                entitiesToDelete.add(entity);
-                                if (isUpdate) {
-                                    loggingService.createLogSummaryEntry(UserContext.getDocumentId(), stockPoid.toString(),
-                                            String.format("Row Deleted from Stock Supplier Detail with DetRowId: %s", entity.getDetRowId()));
-                                    loggingService.logDelete(entity, UserContext.getDocumentId(), stockPoid.toString());
-                                }
-                            },
-                            () -> logger.warn("No StockMasterDTLEntity found for stockPoid={} and supplierPoid={}, skipping delete.",
-                                    stockPoid, dto.getSupplierPoid())
-                    );
-        } else {
-            logger.warn("Both detRowId and supplierPoid are null for stockPoid={}, skipping delete.", stockPoid);
-        }
-    }
-
-    private void handleSupplierCreateOrUpdateAction(Long stockPoid, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToSave, Set<Long> deletedDetRowIds, String userId, boolean isUpdate) {
-        // Skip if this detRowId is marked for deletion
-        if (dto.getDetRowId() != null && deletedDetRowIds.contains(dto.getDetRowId())) {
-            logger.warn("Skipping create/update for detRowId={} as it is marked for deletion", dto.getDetRowId());
-            return;
-        }
-
-        if (dto.getDetRowId() != null) {
-            // Use detRowId to identify the specific record to update
-            dtlRepository.findById(new StockMasterDtlId(stockPoid, dto.getDetRowId()))
-                    .ifPresentOrElse(
-                            existingEntity -> {
-                                // Double-check entity is not marked for deletion
-                                if (!deletedDetRowIds.contains(existingEntity.getDetRowId())) {
-                                    updateExistingSupplierEntity(existingEntity, dto, entitiesToSave, userId, isUpdate);
-                                } else {
-                                    logger.warn("Skipping update for entity with detRowId={} as it is marked for deletion", existingEntity.getDetRowId());
-                                }
-                            },
-                            () -> {
-                                // If detRowId provided but record doesn't exist, create with that detRowId
-                                createSupplierEntityWithDetRowId(stockPoid, dto, entitiesToSave, userId, isUpdate);
-                            }
-                    );
-        } else if (dto.getSupplierPoid() != null) {
-            // Fallback: use supplierPoid if detRowId is not provided
-            dtlRepository.findByStockPoid(stockPoid).stream()
-                    .filter(entity -> entity.getSupplierPoid() != null && entity.getSupplierPoid().equals(dto.getSupplierPoid()))
-                    .filter(entity -> !deletedDetRowIds.contains(entity.getDetRowId())) // Exclude entities marked for deletion
-                    .findFirst()
-                    .ifPresentOrElse(
-                            existingEntity -> updateExistingSupplierEntity(existingEntity, dto, entitiesToSave, userId, isUpdate),
-                            () -> createNewSupplierEntity(stockPoid, dto, entitiesToSave, userId, isUpdate)
-                    );
-        } else {
-            createNewSupplierEntity(stockPoid, dto, entitiesToSave, userId, isUpdate);
-        }
-    }
-
-    private void updateExistingSupplierEntity(StockMasterDTLEntity entity, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToSave, String userId, boolean isUpdate) {
-        // Create a copy of the existing entity for logging
-        StockMasterDTLEntity oldEntity = null;
-        if (isUpdate) {
-            oldEntity = new StockMasterDTLEntity();
-            BeanUtils.copyProperties(entity, oldEntity);
-        }
-
-        // Update fields only if provided
-        if (dto.getSupplierPoid() != null) {
-            entity.setSupplierPoid(dto.getSupplierPoid());
-        }
-        if (dto.getSupplierStockCode() != null) {
-            entity.setSupplierStockCode(dto.getSupplierStockCode());
-        }
-        if (dto.getRemarks() != null) {
-            entity.setRemarks(dto.getRemarks());
-        }
-        
-        if (isUpdate) {
-            String logDetail = String.format("KeyId = STOCK_POID %s: DET_ROW_ID %s", entity.getStockPoid(), entity.getDetRowId());
-            // Log the changes
-            loggingService.createLog(oldEntity, entity, StockMasterDTLEntity.class,
-                    UserContext.getDocumentId(), entity.getStockPoid().toString(),
-                    logDetail);
-        }
-        entitiesToSave.add(entity);
-    }
-
-    private void createNewSupplierEntity(Long stockPoid, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToSave, String userId, boolean isUpdate) {
-        Long maxDetRowId = dtlRepository.findMaxDetRowIdByStockPoid(stockPoid);
-        Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
-        createSupplierEntityWithDetRowId(stockPoid, dto, detRowId, entitiesToSave, userId, isUpdate);
-    }
-
-    private void createSupplierEntityWithDetRowId(Long stockPoid, CreateStockMasterDtlRequest dto, List<StockMasterDTLEntity> entitiesToSave, String userId, boolean isUpdate) {
-        Long detRowId = dto.getDetRowId();
-        if (detRowId == null) {
-            // If detRowId not provided, generate a new one
-            Long maxDetRowId = dtlRepository.findMaxDetRowIdByStockPoid(stockPoid);
-            detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
-        }
-        createSupplierEntityWithDetRowId(stockPoid, dto, detRowId, entitiesToSave, userId, isUpdate);
-    }
-
-    private void createSupplierEntityWithDetRowId(Long stockPoid, CreateStockMasterDtlRequest dto, Long detRowId, List<StockMasterDTLEntity> entitiesToSave, String userId, boolean isUpdate) {
+    private void createSupplierDetail(Long stockPoid, CreateStockMasterDtlRequest dto, String userId, boolean isUpdate, long detRowId) {
         StockMasterDTLEntity newEntity = new StockMasterDTLEntity();
         newEntity.setStockPoid(stockPoid);
         newEntity.setDetRowId(detRowId);
@@ -1012,108 +886,118 @@ public class StockMasterServiceImpl implements StockMasterService {
         newEntity.setSupplierStockCode(dto.getSupplierStockCode());
         newEntity.setRemarks(dto.getRemarks());
         
+        dtlRepository.save(newEntity);
+
         if (isUpdate) {
             loggingService.createLogSummaryEntry(UserContext.getDocumentId(), stockPoid.toString(),
                     String.format("Row Created on Stock Supplier Detail with DetRowId: %s", detRowId));
         }
-        entitiesToSave.add(newEntity);
     }
 
-    private void processWarehouseDetails(Long stockPoid, List<CreateStockMasterWarehouseDtlRequest> details, String userId, boolean isUpdate) {
-        List<StockMasterWarehouseDtl> entitiesToDelete = new ArrayList<>();
-        List<StockMasterWarehouseDtl> entitiesToSave = new ArrayList<>();
-
-        for (CreateStockMasterWarehouseDtlRequest dto : details) {
-            String action = StringUtils.isBlank(dto.getActionType()) ? "" : dto.getActionType().toLowerCase();
-
-            switch (action) {
-                case "isdeleted" -> handleWarehouseDeleteAction(stockPoid, dto, entitiesToDelete, isUpdate);
-                case "iscreated", "isupdated" ->
-                        handleWarehouseCreateOrUpdateAction(stockPoid, dto, entitiesToSave, userId, isUpdate);
-                default ->
-                        logger.warn("Unknown actionType '{}' for locationPoid={}", dto.getActionType(), dto.getLocationPoid());
-            }
-        }
-
-        if (!entitiesToDelete.isEmpty()) {
-            warehouseRepository.deleteAll(entitiesToDelete);
-        }
-        if (!entitiesToSave.isEmpty()) {
-            warehouseRepository.saveAll(entitiesToSave);
-        }
-    }
-
-    private void handleWarehouseDeleteAction(Long stockPoid, CreateStockMasterWarehouseDtlRequest dto, List<StockMasterWarehouseDtl> entitiesToDelete, boolean isUpdate) {
-        if (dto.getLocationPoid() != null) {
-            warehouseRepository.findByStockPoid(stockPoid).stream()
-                    .filter(entity -> entity.getLocationPoid().equals(dto.getLocationPoid()))
+    private void updateSupplierDetailByAction(Long stockPoid, CreateStockMasterDtlRequest dto, String userId, boolean isUpdate) {
+        StockMasterDTLEntity entity = null;
+        if (dto.getDetRowId() != null) {
+            entity = dtlRepository.findById(new StockMasterDtlId(stockPoid, dto.getDetRowId()))
+                    .orElse(null);
+        } else if (dto.getSupplierPoid() != null) {
+            // Fallback: match by supplierPoid if detRowId is missing (previous flow behavior)
+            entity = dtlRepository.findByStockPoid(stockPoid).stream()
+                    .filter(e -> e.getSupplierPoid() != null && e.getSupplierPoid().equals(dto.getSupplierPoid()))
                     .findFirst()
-                    .ifPresentOrElse(
-                            entity -> {
-                                entitiesToDelete.add(entity);
-                                if (isUpdate) {
-                                    loggingService.createLogSummaryEntry(UserContext.getDocumentId(), stockPoid.toString(),
-                                            String.format("Row Deleted from Stock Warehouse Detail with DetRowId: %s", entity.getDetRowId()));
-                                    loggingService.logDelete(entity, UserContext.getDocumentId(), stockPoid.toString());
-                                }
-                            },
-                            () -> logger.warn("No StockMasterWarehouseDtl found for stockPoid={} and locationPoid={}, skipping delete.",
-                                    stockPoid, dto.getLocationPoid())
-                    );
-        } else {
-            logger.warn("locationPoid is null for stockPoid={}, skipping delete.", stockPoid);
+                    .orElse(null);
         }
-    }
 
-    private void handleWarehouseCreateOrUpdateAction(Long stockPoid, CreateStockMasterWarehouseDtlRequest dto, List<StockMasterWarehouseDtl> entitiesToSave, String userId, boolean isUpdate) {
-        if (dto.getLocationPoid() != null) {
-            warehouseRepository.findByStockPoid(stockPoid).stream()
-                    .filter(entity -> entity.getLocationPoid().equals(dto.getLocationPoid()))
-                    .findFirst()
-                    .ifPresentOrElse(
-                            existingEntity -> updateExistingWarehouseEntity(existingEntity, dto, entitiesToSave, userId, isUpdate),
-                            () -> createNewWarehouseEntity(stockPoid, dto, entitiesToSave, userId, isUpdate)
-                    );
-        } else {
-            createNewWarehouseEntity(stockPoid, dto, entitiesToSave, userId, isUpdate);
+        if (entity == null) {
+            logger.warn("Supplier Detail not found for detRowId={} or supplierPoid={} on stockPoid={}", 
+                    dto.getDetRowId(), dto.getSupplierPoid(), stockPoid);
+            return;
         }
-    }
 
-    private void updateExistingWarehouseEntity(StockMasterWarehouseDtl entity, CreateStockMasterWarehouseDtlRequest dto, List<StockMasterWarehouseDtl> entitiesToSave, String userId, boolean isUpdate) {
         // Create a copy of the existing entity for logging
-        StockMasterWarehouseDtl oldEntity = null;
+        StockMasterDTLEntity oldEntity = null;
         if (isUpdate) {
-            oldEntity = new StockMasterWarehouseDtl();
+            oldEntity = new StockMasterDTLEntity();
             BeanUtils.copyProperties(entity, oldEntity);
         }
+
+        // Update fields
+        entity.setSupplierPoid(dto.getSupplierPoid());
+        entity.setSupplierStockCode(dto.getSupplierStockCode());
+        entity.setRemarks(dto.getRemarks());
         
-        entity.setTransactionDate(dto.getTransactionDate());
-        entity.setAisleNo(dto.getAisleNo());
-        entity.setBayNo(dto.getBayNo());
-        entity.setShelfNo(dto.getShelfNo());
-        entity.setBinNo(dto.getBinNo());
-        entity.setReorderLevel(dto.getReorderLevel());
-        entity.setReorderQty(dto.getReorderQty());
-        entitiesToSave.add(entity);
+        dtlRepository.save(entity);
 
         if (isUpdate) {
             String logDetail = String.format("KeyId = STOCK_POID %s: DET_ROW_ID %s", entity.getStockPoid(), entity.getDetRowId());
-            // Log the changes
-            loggingService.createLog(oldEntity, entity, StockMasterWarehouseDtl.class,
+            loggingService.createLog(oldEntity, entity, StockMasterDTLEntity.class,
                     UserContext.getDocumentId(), entity.getStockPoid().toString(),
                     logDetail);
         }
     }
 
-    private void createNewWarehouseEntity(Long stockPoid, CreateStockMasterWarehouseDtlRequest dto, List<StockMasterWarehouseDtl> entitiesToSave, String userId, boolean isUpdate) {
-        Long maxDetRowId = warehouseRepository.findMaxDetRowIdByStockPoid(stockPoid);
-        Long detRowId = (maxDetRowId != null ? maxDetRowId : 0L) + 1L;
+    private void handleSupplierDeleteAction(Long stockPoid, Long detRowId, boolean isUpdate) {
+        StockMasterDTLEntity entityToDelete = null;
+        if (detRowId != null) {
+            entityToDelete = dtlRepository.findById(new StockMasterDtlId(stockPoid, detRowId))
+                    .orElse(null);
+        }
 
+        if (entityToDelete != null) {
+            final StockMasterDTLEntity finalEntity = entityToDelete;
+            if (isUpdate) {
+                loggingService.createLogSummaryEntry(UserContext.getDocumentId(), stockPoid.toString(),
+                        String.format("Row Deleted from Stock Supplier Detail with DetRowId: %s", finalEntity.getDetRowId()));
+                loggingService.logDelete(finalEntity, UserContext.getDocumentId(), stockPoid.toString());
+            }
+            dtlRepository.delete(finalEntity);
+            dtlRepository.flush();
+        } else {
+            logger.warn("Supplier Detail not found to delete for stockPoid={} and detRowId={}", stockPoid, detRowId);
+        }
+    }
+
+
+
+    private void processWarehouseDetails(Long stockPoid, List<CreateStockMasterWarehouseDtlRequest> details, String userId, boolean isUpdate) {
+        if (details == null || details.isEmpty()) {
+            return;
+        }
+
+        // Calculate initial max DetRowId once to prevent duplicates
+        Long maxIdDb = warehouseRepository.findMaxDetRowIdByStockPoid(stockPoid);
+        long nextDetRowId = (maxIdDb != null ? maxIdDb : 0L) + 1L;
+
+        // Account for any detRowIds provided in the payload for creations
+        for (CreateStockMasterWarehouseDtlRequest item : details) {
+            if ("iscreated".equalsIgnoreCase(item.getActionType()) && item.getDetRowId() != null) {
+                if (item.getDetRowId() >= nextDetRowId) {
+                    nextDetRowId = item.getDetRowId() + 1;
+                }
+            }
+        }
+
+        for (CreateStockMasterWarehouseDtlRequest dto : details) {
+            String action = StringUtils.isBlank(dto.getActionType()) ? "" : dto.getActionType().toLowerCase();
+
+            switch (action) {
+                case "isdeleted" -> handleWarehouseDeleteAction(stockPoid, dto, isUpdate);
+                case "iscreated" -> createWarehouseDetail(stockPoid, dto, userId, isUpdate, nextDetRowId++);
+                case "isupdated" -> updateWarehouseDetailByAction(stockPoid, dto, userId, isUpdate);
+                case "nochanges", "nochange" -> {
+                    // Ignore
+                }
+                default ->
+                        logger.warn("Unknown actionType '{}' for locationPoid={} on stockPoid={}", dto.getActionType(), dto.getLocationPoid(), stockPoid);
+            }
+        }
+    }
+
+    private void createWarehouseDetail(Long stockPoid, CreateStockMasterWarehouseDtlRequest dto, String userId, boolean isUpdate, long detRowId) {
         StockMasterWarehouseDtl newEntity = new StockMasterWarehouseDtl();
         newEntity.setStockPoid(stockPoid);
         newEntity.setDetRowId(detRowId);
-        newEntity.setTransactionDate(dto.getTransactionDate());
         newEntity.setLocationPoid(dto.getLocationPoid());
+        newEntity.setTransactionDate(dto.getTransactionDate());
         newEntity.setAisleNo(dto.getAisleNo());
         newEntity.setBayNo(dto.getBayNo());
         newEntity.setShelfNo(dto.getShelfNo());
@@ -1121,11 +1005,82 @@ public class StockMasterServiceImpl implements StockMasterService {
         newEntity.setReorderLevel(dto.getReorderLevel());
         newEntity.setReorderQty(dto.getReorderQty());
         
+        warehouseRepository.save(newEntity);
+
         if (isUpdate) {
             loggingService.createLogSummaryEntry(UserContext.getDocumentId(), stockPoid.toString(),
                     String.format("Row Created on Stock Warehouse Detail with DetRowId: %s", detRowId));
         }
-        entitiesToSave.add(newEntity);
+    }
+
+    private void updateWarehouseDetailByAction(Long stockPoid, CreateStockMasterWarehouseDtlRequest dto, String userId, boolean isUpdate) {
+        StockMasterWarehouseDtl entity = null;
+        if (dto.getDetRowId() != null) {
+            entity = warehouseRepository.findById(new StockMasterWarehouseDtlId(stockPoid, dto.getDetRowId()))
+                    .orElse(null);
+        } else if (dto.getLocationPoid() != null) {
+            // Fallback to finding by locationPoid if detRowId not provided
+            entity = warehouseRepository.findByStockPoid(stockPoid).stream()
+                    .filter(e -> e.getLocationPoid().equals(dto.getLocationPoid()))
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        if (entity == null) {
+            logger.warn("Warehouse Detail not found for detRowId={} or locationPoid={} on stockPoid={}", 
+                    dto.getDetRowId(), dto.getLocationPoid(), stockPoid);
+            return;
+        }
+
+        // Create a copy of the existing entity for logging
+        StockMasterWarehouseDtl oldEntity = null;
+        if (isUpdate) {
+            oldEntity = new StockMasterWarehouseDtl();
+            BeanUtils.copyProperties(entity, oldEntity);
+        }
+
+        entity.setTransactionDate(dto.getTransactionDate());
+        entity.setAisleNo(dto.getAisleNo());
+        entity.setBayNo(dto.getBayNo());
+        entity.setShelfNo(dto.getShelfNo());
+        entity.setBinNo(dto.getBinNo());
+        entity.setReorderLevel(dto.getReorderLevel());
+        entity.setReorderQty(dto.getReorderQty());
+        
+        warehouseRepository.save(entity);
+
+        if (isUpdate) {
+            String logDetail = String.format("KeyId = STOCK_POID %s: DET_ROW_ID %s", entity.getStockPoid(), entity.getDetRowId());
+            loggingService.createLog(oldEntity, entity, StockMasterWarehouseDtl.class,
+                    UserContext.getDocumentId(), entity.getStockPoid().toString(),
+                    logDetail);
+        }
+    }
+
+    private void handleWarehouseDeleteAction(Long stockPoid, CreateStockMasterWarehouseDtlRequest dto, boolean isUpdate) {
+        StockMasterWarehouseDtl entityToDelete = null;
+        if (dto.getDetRowId() != null) {
+            entityToDelete = warehouseRepository.findById(new StockMasterWarehouseDtlId(stockPoid, dto.getDetRowId()))
+                    .orElse(null);
+        } else if (dto.getLocationPoid() != null) {
+            entityToDelete = warehouseRepository.findByStockPoid(stockPoid).stream()
+                    .filter(e -> e.getLocationPoid().equals(dto.getLocationPoid()))
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        if (entityToDelete != null) {
+            final StockMasterWarehouseDtl finalEntity = entityToDelete;
+            if (isUpdate) {
+                loggingService.createLogSummaryEntry(UserContext.getDocumentId(), stockPoid.toString(),
+                        String.format("Row Deleted from Stock Warehouse Detail with DetRowId: %s", finalEntity.getDetRowId()));
+                loggingService.logDelete(finalEntity, UserContext.getDocumentId(), stockPoid.toString());
+            }
+            warehouseRepository.delete(finalEntity);
+            warehouseRepository.flush();
+        } else {
+            logger.warn("No Warehouse Detail found to delete for stockPoid={} and locationPoid={}", stockPoid, dto.getLocationPoid());
+        }
     }
 
 

@@ -19,5 +19,6 @@ public class CreateStockMasterWarehouseDtlRequest {
     private String binNo;
     private BigDecimal reorderLevel;
     private BigDecimal reorderQty;
+    private Long detRowId;
     private String actionType;
 }
