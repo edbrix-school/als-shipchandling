@@ -412,6 +412,8 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
             Long normalizedSupplierPoid = normalizeSupplierPoid(detail.getSupplierPoid());
             itemDtl.setSupplierPoid(normalizedSupplierPoid);
             itemDtl.setPrice(detail.getPrice());
+            itemDtl.setPurchaseQty(detail.getPurchaseQty());
+            itemDtl.setPurchasePrice(detail.getPurchasePrice());
 
             if (normalizedSupplierPoid != null) {
                 BigDecimal lastPrice = getLastPriceFromProcedure(detail.getStockPoid(), stockUnitPoid,
@@ -668,6 +670,8 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         itemDtl.setStockPoid(request.getStockPoid());
         itemDtl.setQty(request.getQty());
         itemDtl.setPrice(request.getPrice());
+        itemDtl.setPurchaseQty(request.getPurchaseQty());
+        itemDtl.setPurchasePrice(request.getPurchasePrice());
 
         Long stockUnitPoid = request.getStockUnitPoid();
         if (stockUnitPoid == null) {
@@ -758,6 +762,8 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         if (itemDtl.getRefDocId() == null || !itemDtl.getRefDocId().contains("400")) {
             itemDtl.setPrice(request.getPrice());
         }
+        itemDtl.setPurchaseQty(request.getPurchaseQty());
+        itemDtl.setPurchasePrice(request.getPurchasePrice());
         Long normalizedSupplierPoid = normalizeSupplierPoid(request.getSupplierPoid());
         itemDtl.setSupplierPoid(normalizedSupplierPoid);
         itemDtl.setRemarks(request.getRemarks());
@@ -898,6 +904,12 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         }
         if (detail.getPrice() != null && detail.getPrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new CustomException("Price cannot be negative for RFQ item detail");
+        }
+        if (detail.getPurchaseQty() != null && detail.getPurchaseQty().compareTo(BigDecimal.ZERO) < 0) {
+            throw new CustomException("Purchase quantity cannot be negative for RFQ item detail");
+        }
+        if (detail.getPurchasePrice() != null && detail.getPurchasePrice().compareTo(BigDecimal.ZERO) < 0) {
+            throw new CustomException("Purchase price cannot be negative for RFQ item detail");
         }
     }
 
@@ -1153,6 +1165,8 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         itemDtl.setStockPoid(request.getStockPoid());
         itemDtl.setQty(request.getQty());
         itemDtl.setPrice(request.getPrice());
+        itemDtl.setPurchaseQty(request.getPurchaseQty());
+        itemDtl.setPurchasePrice(request.getPurchasePrice());
 
         Long stockUnitPoid = request.getStockUnitPoid();
         if (stockUnitPoid == null) {
@@ -1252,6 +1266,8 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
         if (itemDtl.getRefDocId() == null || !itemDtl.getRefDocId().contains("400")) {
             itemDtl.setPrice(request.getPrice());
         }
+        itemDtl.setPurchaseQty(request.getPurchaseQty());
+        itemDtl.setPurchasePrice(request.getPurchasePrice());
         Long normalizedSupplierPoid = normalizeSupplierPoid(request.getSupplierPoid());
         itemDtl.setSupplierPoid(normalizedSupplierPoid);
         itemDtl.setRemarks(request.getRemarks());
