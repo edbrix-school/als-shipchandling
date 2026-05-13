@@ -19,6 +19,8 @@ public class CreateApRequestForQtnItemDtlRequest {
 
     private Long supplierPoid;
     private BigDecimal price;
+    private BigDecimal purchaseQty;
+    private BigDecimal purchasePrice;
     private Long taxPoid;
     private String remarks;
     
