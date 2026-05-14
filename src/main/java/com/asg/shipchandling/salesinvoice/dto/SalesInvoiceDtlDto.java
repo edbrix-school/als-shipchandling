@@ -35,7 +35,7 @@ public class SalesInvoiceDtlDto {
     private BigDecimal purchasePrice;
     private BigDecimal purchaseQty;
     private String itemType;
-    private Long costCenterPoid;
+    private String costCenterPoid;
     private Long dnPoidLinkFk;
     private Long detRowIdChrgFk;
     private Long quotationPoid;
