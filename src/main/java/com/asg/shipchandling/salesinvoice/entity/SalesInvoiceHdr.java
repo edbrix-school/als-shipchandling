@@ -58,15 +58,12 @@ public class SalesInvoiceHdr extends BaseEntity {
     private Long customerAddrPoid;
 
     @Column(name = "CURRENCY_CODE", length = 10)
-    @AuditIgnore
     private String currencyCode;
 
     @Column(name = "CURRENCY_RATE")
-    @AuditIgnore
     private BigDecimal currencyRate;
 
     @Column(name = "INV_AMOUNT")
-    @AuditIgnore
     private BigDecimal invAmount;
 
     @Column(name = "CREDIT_DAYS")
@@ -79,70 +76,54 @@ public class SalesInvoiceHdr extends BaseEntity {
     private Long qtnPoid;
 
     @Column(name = "STATUS", length = 20)
-    @AuditIgnore
     private String status;
 
     @Column(name = "INV_STATUS", length = 20)
     private String invStatus = "IN_PROGRESS";
 
     @Column(name = "DISCOUNT_PERCENT")
-    @AuditIgnore
     private BigDecimal discountPercent;
 
     @Column(name = "DISCOUNT_AMT")
-    @AuditIgnore
     private BigDecimal discountAmt;
 
     @Column(name = "INV_DISCOUNT")
-    @AuditIgnore
     private BigDecimal invDiscount;
 
     @Column(name = "INCENTIVE_PERCENT")
-    @AuditIgnore
     private BigDecimal incentivePercent;
 
     @Column(name = "INCENTIVE_AMT")
-    @AuditIgnore
     private BigDecimal incentiveAmt;
 
     @Column(name = "INCENTIVE_TO", length = 30)
-    @AuditIgnore
     private String incentiveTo;
 
     @Column(name = "INCENTIVE_PERCENT2")
-    @AuditIgnore
     private BigDecimal incentivePercent2;
 
     @Column(name = "INCENTIVE_AMT2")
-    @AuditIgnore
     private BigDecimal incentiveAmt2;
 
     @Column(name = "INCENTIVE_TO2", length = 30)
-    @AuditIgnore
     private String incentiveTo2;
 
     @Column(name = "INCENTIVE_PERCENT3")
-    @AuditIgnore
     private BigDecimal incentivePercent3;
 
     @Column(name = "INCENTIVE_AMT3")
-    @AuditIgnore
     private BigDecimal incentiveAmt3;
 
     @Column(name = "INCENTIVE_TO3", length = 30)
-    @AuditIgnore
     private String incentiveTo3;
 
     @Column(name = "TOTAL_GP_AMT")
-    @AuditIgnore
     private BigDecimal totalGpAmt;
 
     @Column(name = "TOTAL_GP_PERCENT")
-    @AuditIgnore
     private BigDecimal totalGpPercent;
 
     @Column(name = "TOTAL_COST")
-    @AuditIgnore
     private BigDecimal totalCost;
 
     @Column(name = "PAYMENT_MODE", length = 20)
@@ -166,18 +147,15 @@ public class SalesInvoiceHdr extends BaseEntity {
     private String deliveryToAddress;
 
     @Column(name = "DETAILS", length = 200)
-    @AuditIgnore
     private String details;
 
     @Column(name = "REMARKS", length = 500)
-    @AuditIgnore
     private String remarks;
 
     @Column(name = "LPO_DETAILS", length = 100)
     private String lpoDetails;
 
     @Column(name = "LPO_NUMBER", length = 300)
-    @AuditIgnore
     private String lpoNumber;
 
     @Column(name = "CONTRACT_REF_NUMBER", length = 500)
@@ -193,7 +171,6 @@ public class SalesInvoiceHdr extends BaseEntity {
     private Long printDivisionPoid;
 
     @Column(name = "DN_POID", length = 50)
-    @AuditIgnore
     private String dnPoid;
 
     @Column(name = "VERIFIED", length = 1)
