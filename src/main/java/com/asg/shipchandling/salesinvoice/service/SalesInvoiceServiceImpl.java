@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -292,8 +293,19 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             // Fetch invoice details with tax details in single query
             List<Object[]> detailsWithTax = invoiceDtlRepositoryImpl
                     .findByTransactionPoidWithTaxDetails(invoice.getTransactionPoid());
+
+            Map<String, Long> costCenterMap = getAllCostCenterRownumMap();
+
+            Set<Long> stockPoids = detailsWithTax.stream()
+                    .filter(r -> r[4] != null)
+                    .map(r -> ((Number) r[4]).longValue())
+                    .collect(Collectors.toSet());
+            Map<Long, StockMasterEntity> stockMap = stockMasterRepository.findAllById(stockPoids)
+                    .stream()
+                    .collect(Collectors.toMap(StockMasterEntity::getStockPoid, s -> s));
+
             List<SalesInvoiceDtlDto> detailDtos = detailsWithTax.stream()
-                    .map(this::convertInvoiceDtlRowToDtoWithLov)
+                    .map(row -> convertInvoiceDtlRowToDtoWithLov(row, costCenterMap, stockMap))
                     .collect(Collectors.toList());
             dto.setInvoiceDetails(detailDtos);
             
@@ -536,10 +548,13 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
     }
     
     /**
-     * Convert invoice detail row (Object[]) to DTO with LOV details
+     * Convert invoice detail row (Object[]) to DTO with LOV details.
+     * Accepts pre-loaded maps to avoid N+1 DB queries.
      * Row structure: [0-30] invoice detail fields, [31-33] tax details (POID, CODE, NAME)
      */
-    private SalesInvoiceDtlDto convertInvoiceDtlRowToDtoWithLov(Object[] row) {
+    private SalesInvoiceDtlDto convertInvoiceDtlRowToDtoWithLov(Object[] row,
+            Map<String, Long> costCenterMap,
+            Map<Long, StockMasterEntity> stockMap) {
         SalesInvoiceDtlDto dto = new SalesInvoiceDtlDto();
         
         // Map invoice detail fields (indices 0-30)
@@ -575,14 +590,8 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dto.setIncentive(convertToBigDecimal(row[29]));
         String costPoidStr = toStringSafe(row[30]);
         // costPoid is stored as String in entity but DTO expects Long for costCenterPoid
-        if (costPoidStr != null && !costPoidStr.isEmpty()) {
-            try {
-                dto.setCostCenterPoid(Long.parseLong(costPoidStr));
-            } catch (NumberFormatException e) {
-                log.warn("Failed to parse costPoid as Long: {}", costPoidStr);
-            }
-        }
-        
+        dto.setCostCenterPoid(costPoidStr);
+
         // Populate tax details from query result (indices 31-33)
         if (row.length > 31 && row[31] != null) {
             Long taxPoid = row[31] instanceof Number ? ((Number) row[31]).longValue() : null;
@@ -596,11 +605,10 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             }
         }
         
-        // Populate stock details
+        // Populate stock details — use pre-loaded map (no DB call)
         if (dto.getStockPoid() != null) {
-            Optional<StockMasterEntity> stock = stockMasterRepository.findByStockPoid(dto.getStockPoid());
-            if (stock.isPresent()) {
-                StockMasterEntity stockEntity = stock.get();
+            StockMasterEntity stockEntity = stockMap.get(dto.getStockPoid());
+            if (stockEntity != null) {
                 dto.setStockDetails(new SalesInvoiceDtlDto.LovDetailDto(
                         stockEntity.getStockPoid(),
                         stockEntity.getStockCode(),
@@ -608,21 +616,14 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
             }
         }
         
-        // Populate cost center details (from GL_COST_CENTER_MASTER.MIS_GROUP)
-        // LOV query: SELECT ROWNUM AS POID, MIS_GROUP AS CODE, '' AS DESCRIPTION
-        if (dto.getCostCenterPoid() != null) {
-            try {
-                String misGroup = getCostCenterMisGroup(dto.getCostCenterPoid());
-                if (misGroup != null) {
-                    dto.setCostCenterDetails(new SalesInvoiceDtlDto.LovDetailDto(
-                            dto.getCostCenterPoid(),
-                            misGroup, // MIS_GROUP is the code
-                            misGroup)); // MIS_GROUP is also the description
-            }
-            } catch (Exception e) {
-                log.warn("Failed to fetch cost center details for costCenterPoid={}: {}", 
-                        dto.getCostCenterPoid(), e.getMessage());
-            }
+        // Populate cost center details — use pre-loaded map (no DB call per row)
+        if (dto.getCostCenterPoid() != null && !dto.getCostCenterPoid().trim().isEmpty()) {
+            String misGroup = dto.getCostCenterPoid().trim();
+            Long rownumPoid = costCenterMap.get(misGroup);
+            dto.setCostCenterDetails(new SalesInvoiceDtlDto.LovDetailDto(
+                    rownumPoid,   // ROWNUM from pre-loaded map (null if MIS_GROUP not found)
+                    misGroup,     // MIS_GROUP is the code
+                    misGroup));   // MIS_GROUP is also the description
         }
         
         return dto;
@@ -743,9 +744,7 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         // }
 
         // Update fields (verified can be set via update; normalised to Y/N)
-        BeanUtils.copyProperties(request, invoice, "transactionPoid", "docRef", "createdBy",
-                "createdDate", "transactionDate", "invStatus", "invAmount", "totalGpAmt", "totalGpPercent",
-                "totalCost", "discountAmt", "discountPercent", "invDiscount", "paymentMode");
+        BeanUtils.copyProperties(request, invoice);
 
         if (request.getTransactionDate() != null) {
             invoice.setTransactionDate(request.getTransactionDate());
@@ -1816,34 +1815,56 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
     }
     
     /**
-     * Helper method to get MIS_GROUP from GL_COST_CENTER_MASTER
-     * Note: costCenterPoid is ROWNUM, so we need to query by position
-     * The LOV query: SELECT ROWNUM AS POID, MIS_GROUP AS CODE, '' AS DESCRIPTION
-     * FROM (SELECT MIS_GROUP FROM GL_COST_CENTER_MASTER GROUP BY MIS_GROUP)
+     * Loads ALL cost center MIS_GROUPs with their LOV ROWNUMs in a single query.
+     * The DB stores MIS_GROUP string (e.g. 'MTA') as COST_POID — this map lets us
+     * reverse-lookup to get the ROWNUM that the frontend LOV expects as the poid.
+     * Called once per request; result is passed into the per-row converter.
      */
-    private String getCostCenterMisGroup(Long costCenterPoid) {
-        if (costCenterPoid == null) {
+    private Map<String, Long> getAllCostCenterRownumMap() {
+        try {
+            String sql = "SELECT ROWNUM AS RN, MIS_GROUP " +
+                    "FROM (SELECT MIS_GROUP FROM GL_COST_CENTER_MASTER GROUP BY MIS_GROUP)";
+            Query query = entityManager.createNativeQuery(sql);
+            @SuppressWarnings("unchecked")
+            List<Object[]> results = query.getResultList();
+            Map<String, Long> map = new java.util.LinkedHashMap<>();
+            for (Object[] row : results) {
+                if (row[0] != null && row[1] != null) {
+                    map.put(row[1].toString(), ((Number) row[0]).longValue());
+                }
+            }
+            return map;
+        } catch (Exception e) {
+            log.warn("Failed to load cost center ROWNUM map: {}", e.getMessage());
+            return java.util.Collections.emptyMap();
+        }
+    }
+
+    /**
+     * @deprecated Use getAllCostCenterRownumMap() + pre-loaded map instead.
+     * Kept for any future single-item lookups outside the invoice detail loop.
+     */
+    private Long getCostCenterRownum(String misGroup) {
+        if (misGroup == null || misGroup.trim().isEmpty()) {
             return null;
         }
-        
+
         try {
-            // Query to get MIS_GROUP by ROWNUM position
-            // This matches the LOV query structure where ROWNUM is used as POID
-            String sql = "SELECT MIS_GROUP FROM (" +
+            String sql = "SELECT RN FROM (" +
                     "SELECT ROWNUM AS RN, MIS_GROUP " +
                     "FROM (SELECT MIS_GROUP FROM GL_COST_CENTER_MASTER GROUP BY MIS_GROUP)" +
-                    ") WHERE RN = :costCenterPoid";
-            
+                    ") WHERE MIS_GROUP = :misGroup";
+
             Query query = entityManager.createNativeQuery(sql);
-            query.setParameter("costCenterPoid", costCenterPoid);
-            
+            query.setParameter("misGroup", misGroup.trim());
+
             Object result = query.getSingleResult();
-            if (result != null) {
-                return result.toString();
+            if (result instanceof Number) {
+                return ((Number) result).longValue();
             }
             return null;
         } catch (Exception e) {
-            log.warn("Failed to get cost center MIS_GROUP for costCenterPoid={}: {}", costCenterPoid, e.getMessage());
+            log.warn("Failed to get cost center ROWNUM for misGroup='{}': {}", misGroup, e.getMessage());
             return null;
         }
     }
