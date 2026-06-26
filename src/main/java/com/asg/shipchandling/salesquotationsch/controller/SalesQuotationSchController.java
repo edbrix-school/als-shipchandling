@@ -605,7 +605,7 @@ public class SalesQuotationSchController {
             byte[] pdf = quotationSchService.print(transactionPoid);
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=imco-deposit-refund-" + transactionPoid + ".pdf")
+                            "attachment; filename=sales-quotation-" + transactionPoid + ".pdf")
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdf);
         } catch (Exception e) {
