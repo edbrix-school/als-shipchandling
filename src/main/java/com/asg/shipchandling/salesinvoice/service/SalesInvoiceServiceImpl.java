@@ -244,7 +244,19 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
     private SalesInvoiceDtlDto convertInvoiceDtlToDto(SalesInvoiceDtl dtl) {
         SalesInvoiceDtlDto dto = new SalesInvoiceDtlDto();
         BeanUtils.copyProperties(dtl, dto);
+        // purCost is transient (not a DB column): PurCost = PurchasePrice * PurchaseQty
+        dto.setPurCost(calculatePurCost(dto.getPurchasePrice(), dto.getPurchaseQty()));
         return dto;
+    }
+
+    /**
+     * Calculate the transient PurCost: PurchasePrice * PurchaseQty with nvl-style
+     * null handling (null treated as zero).
+     */
+    private BigDecimal calculatePurCost(BigDecimal purchasePrice, BigDecimal purchaseQty) {
+        BigDecimal price = purchasePrice != null ? purchasePrice : BigDecimal.ZERO;
+        BigDecimal qty = purchaseQty != null ? purchaseQty : BigDecimal.ZERO;
+        return price.multiply(qty);
     }
 
     private SalesDnDtlDto convertDnDtlToDto(SalesDnDtl dtl) {
@@ -578,6 +590,8 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
         dto.setQuotationDetRowId(row[17] != null ? ((Number) row[17]).longValue() : null);
         dto.setPurchasePrice(convertToBigDecimal(row[18]));
         dto.setPurchaseQty(convertToBigDecimal(row[19]));
+        // purCost is transient (not a DB column): PurCost = PurchasePrice * PurchaseQty
+        dto.setPurCost(calculatePurCost(dto.getPurchasePrice(), dto.getPurchaseQty()));
         dto.setNetSales(convertToBigDecimal(row[20]));
         dto.setNetDiscount(convertToBigDecimal(row[21]));
         dto.setItemGp(convertToBigDecimal(row[22]));
