@@ -60,6 +60,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -727,7 +728,18 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
         log.info("getSalesInvoiceByPoid completed for transactionPoid={} companyPoid={}", transactionPoid, companyPoid);
         // Always include details regardless of includeDetails parameter
-        return convertToDtoWithLov(invoice, true);
+        SalesInvoiceHdrDto dto = convertToDtoWithLov(invoice, true);
+
+        // Send invAmount as the total of amount from invoice detail rows
+        if (dto.getInvoiceDetails() != null) {
+            BigDecimal totalAmount = dto.getInvoiceDetails().stream()
+                    .map(SalesInvoiceDtlDto::getAmount)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            dto.setInvAmount(totalAmount);
+        }
+
+        return dto;
     }
 
     @Override
