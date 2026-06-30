@@ -1019,6 +1019,16 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 .filter(java.util.Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        // Net sales = Amount - Discount (legacy "NetSales"); this is the GP% denominator,
+        // matching SCHsalesInvBean.getGpPercentage() which divides GP by net sales, not gross amount.
+        BigDecimal netSales = itemDetails.stream()
+                .map(item -> {
+                    BigDecimal amount = item.getAmount() != null ? item.getAmount() : BigDecimal.ZERO;
+                    BigDecimal discount = item.getDiscount() != null ? item.getDiscount() : BigDecimal.ZERO;
+                    return amount.subtract(discount);
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         // Update quotation header
         SalesQuotationSchHdr quotationSch = quotationSchHdrRepository.findByTransactionPoid(transactionPoid)
                 .orElseThrow(
@@ -1027,12 +1037,16 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         quotationSch.setTotalTax(totalTax);
         quotationSch.setTotalGpAmt(grossProfitAmount);
 
-        // Calculate gross profit percentage
-        if (totalAmount != null && totalAmount.compareTo(BigDecimal.ZERO) > 0 && grossProfitAmount != null) {
+        // Gross profit percentage = (GP amount * 100) / net sales.
+        // When net sales is zero/negative the percentage is undefined; reset to zero
+        // so a stale value is not left on the header (legacy returns 0 in this case).
+        if (netSales.compareTo(BigDecimal.ZERO) > 0 && grossProfitAmount != null) {
             BigDecimal grossProfitPercent = grossProfitAmount
                     .multiply(BigDecimal.valueOf(100))
-                    .divide(totalAmount, 6, RoundingMode.HALF_UP);
+                    .divide(netSales, 6, RoundingMode.HALF_UP);
             quotationSch.setTotalGpPercentage(grossProfitPercent);
+        } else {
+            quotationSch.setTotalGpPercentage(BigDecimal.ZERO);
         }
 
         quotationSchHdrRepository.save(quotationSch);
