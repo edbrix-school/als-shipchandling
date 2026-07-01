@@ -1339,9 +1339,43 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                 .stream()
                 .sorted(Comparator.comparing(ApRequestForQtnItemDtl::getDetRowId))
                 .collect(Collectors.toList());
+
+        // Map RFQ item rows to the Purchase Order they were converted into.
+        // In AP_PURCHASE_ORDER_ITEM_DTL, RFQ_POID matches this RFQ's transactionPoid
+        // and RFQ_DET_ROW_ID matches the RFQ item's detRowId; TRANSACTION_POID is the PO id.
+        Map<Long, Long> purchaseOrderIdByRfqDetRowId = getPurchaseOrderIdsByRfqDetRowId(transactionPoid);
+
         return itemDetails.stream()
-                .map(this::convertItemDtlToDto)
+                .map(itemDtl -> {
+                    ApRequestForQtnItemDtlDto dto = convertItemDtlToDto(itemDtl);
+                    dto.setPurchaseOrderId(purchaseOrderIdByRfqDetRowId.get(itemDtl.getDetRowId()));
+                    return dto;
+                })
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Fetches the Purchase Order id (AP_PURCHASE_ORDER_ITEM_DTL.TRANSACTION_POID) for each
+     * RFQ item row that has been converted into a PO, keyed by the RFQ item's detRowId.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<Long, Long> getPurchaseOrderIdsByRfqDetRowId(Long rfqPoid) {
+        List<Object[]> rows = entityManager.createNativeQuery(
+                        "SELECT RFQ_DET_ROW_ID, TRANSACTION_POID FROM AP_PURCHASE_ORDER_ITEM_DTL WHERE RFQ_POID = :rfqPoid")
+                .setParameter("rfqPoid", rfqPoid)
+                .getResultList();
+
+        Map<Long, Long> result = new HashMap<>();
+        for (Object[] row : rows) {
+            if (row[0] == null || row[1] == null) {
+                continue;
+            }
+            Long rfqDetRowId = ((Number) row[0]).longValue();
+            Long purchaseOrderId = ((Number) row[1]).longValue();
+            // A single RFQ line maps to one PO line; keep the first match if duplicates exist.
+            result.putIfAbsent(rfqDetRowId, purchaseOrderId);
+        }
+        return result;
     }
 
     @Override
