@@ -34,6 +34,7 @@ public class ApRequestForQtnItemDtlDto {
     private String refDocId;
     private String refPoid;
     private String remarks;
+    private Long purchaseOrderId;
     private String createdBy;
     private LocalDateTime createdDate;
     private String lastmodifiedBy;
