@@ -1086,8 +1086,14 @@ public class ApRequestForQtnServiceImpl implements ApRequestForQtnService {
                     .stream()
                     .sorted(Comparator.comparing(ApRequestForQtnItemDtl::getDetRowId))
                     .collect(Collectors.toList());
+            Map<Long, Long> purchaseOrderIdByRfqDetRowId =
+                    getPurchaseOrderIdsByRfqDetRowId(rfq.getTransactionPoid());
             dto.setItemDetails(itemDetails.stream()
-                    .map(this::convertItemDtlToDto)
+                    .map(itemDtl -> {
+                        ApRequestForQtnItemDtlDto itemDto = convertItemDtlToDto(itemDtl);
+                        itemDto.setPurchaseOrderId(purchaseOrderIdByRfqDetRowId.get(itemDtl.getDetRowId()));
+                        return itemDto;
+                    })
                     .collect(Collectors.toList()));
 
             List<ApRequestForQtnSupDtl> supplierDetails = rfqSupDtlRepository
