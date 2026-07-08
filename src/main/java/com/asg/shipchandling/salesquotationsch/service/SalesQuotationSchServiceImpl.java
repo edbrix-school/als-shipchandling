@@ -342,6 +342,16 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         // Expose legacy temp-address status in response (true if temp address exists for CustomerPoid)
         dto.setNewAddressYN(tempNewAddressFound);
 
+        // Recompute GP totals from the current line items on load, matching the legacy bean which
+        // derives getTotalGpAmt()/getGpPercentage() on every render. The stored TOTAL_GP_AMT /
+        // TOTAL_GP_PERCENTAGE columns are only refreshed at save time, so records persisted before
+        // the GP fix would otherwise load stale gross values (e.g. 800 / 58.82 instead of 798 /
+        // 58.70). This is read-only and does not persist.
+        List<SalesQuotationSchItemDtl> loadedItems = itemDtlRepository.findByTransactionPoid(transactionPoid);
+        GpTotals gp = computeGpTotals(loadedItems, dto.getTotalDiscount());
+        dto.setTotalGpAmt(gp.getGpAmount());
+        dto.setTotalGpPercentage(gp.getGpPercentage());
+
         log.info("getSalesQuotationSchByPoid completed for transactionPoid={} companyPoid={}",
                 transactionPoid, companyPoid);
         return dto;
@@ -1014,42 +1024,80 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
                 .filter(java.util.Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        // Update quotation header
+        SalesQuotationSchHdr quotationSch = quotationSchHdrRepository.findByTransactionPoid(transactionPoid)
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
+
+        GpTotals gp = computeGpTotals(itemDetails, quotationSch.getTotalDiscount());
+
+        quotationSch.setTotalAmount(totalAmount);
+        quotationSch.setTotalTax(totalTax);
+        quotationSch.setTotalGpAmt(gp.getGpAmount());
+        quotationSch.setTotalGpPercentage(gp.getGpPercentage());
+
+        quotationSchHdrRepository.save(quotationSch);
+    }
+
+    /**
+     * Legacy-parity gross-profit totals, matching SalesQuotationBean.getTotalGpAmt() and
+     * getGpPercentage(): the header-level Total Discount is subtracted from BOTH the gross profit
+     * and the net sales (Amount) before deriving the totals.
+     * <ul>
+     *   <li>Total GP Amount = &Sigma;gpAmount &minus; totalDiscount</li>
+     *   <li>GP % = (netGrossProfit / netSales) truncated (ROUND_FLOOR) to 3 dp, then &times;100
+     *       truncated (ROUND_FLOOR) to 2 dp; zero when net sales &le; 0.</li>
+     * </ul>
+     * An earlier version subtracted the line-level item discount (usually 0) instead of the header
+     * discount, so the header discount never affected the GP figures (e.g. 800 / 58.82 instead of
+     * the legacy 798 / 58.70).
+     */
+    private GpTotals computeGpTotals(List<SalesQuotationSchItemDtl> itemDetails, BigDecimal totalDiscount) {
+        BigDecimal discount = totalDiscount != null ? totalDiscount : BigDecimal.ZERO;
+
         BigDecimal grossProfitAmount = itemDetails.stream()
                 .map(SalesQuotationSchItemDtl::getGpAmount)
                 .filter(java.util.Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Net sales = Amount - Discount (legacy "NetSales"); this is the GP% denominator,
-        // matching SCHsalesInvBean.getGpPercentage() which divides GP by net sales, not gross amount.
-        BigDecimal netSales = itemDetails.stream()
-                .map(item -> {
-                    BigDecimal amount = item.getAmount() != null ? item.getAmount() : BigDecimal.ZERO;
-                    BigDecimal discount = item.getDiscount() != null ? item.getDiscount() : BigDecimal.ZERO;
-                    return amount.subtract(discount);
-                })
+        BigDecimal totalAmount = itemDetails.stream()
+                .map(SalesQuotationSchItemDtl::getAmount)
+                .filter(java.util.Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Update quotation header
-        SalesQuotationSchHdr quotationSch = quotationSchHdrRepository.findByTransactionPoid(transactionPoid)
-                .orElseThrow(
-                        () -> new ResourceNotFoundException("Sales Quotation SCH", "transactionPoid", transactionPoid));
-        quotationSch.setTotalAmount(totalAmount);
-        quotationSch.setTotalTax(totalTax);
-        quotationSch.setTotalGpAmt(grossProfitAmount);
+        BigDecimal netGrossProfit = grossProfitAmount.subtract(discount);
+        BigDecimal netSales = totalAmount.subtract(discount);
 
-        // Gross profit percentage = (GP amount * 100) / net sales.
-        // When net sales is zero/negative the percentage is undefined; reset to zero
-        // so a stale value is not left on the header (legacy returns 0 in this case).
-        if (netSales.compareTo(BigDecimal.ZERO) > 0 && grossProfitAmount != null) {
-            BigDecimal grossProfitPercent = grossProfitAmount
+        BigDecimal gpPercent;
+        if (netSales.compareTo(BigDecimal.ZERO) > 0) {
+            gpPercent = netGrossProfit
+                    .divide(netSales, 3, RoundingMode.FLOOR)
                     .multiply(BigDecimal.valueOf(100))
-                    .divide(netSales, 6, RoundingMode.HALF_UP);
-            quotationSch.setTotalGpPercentage(grossProfitPercent);
+                    .setScale(2, RoundingMode.FLOOR);
         } else {
-            quotationSch.setTotalGpPercentage(BigDecimal.ZERO);
+            gpPercent = BigDecimal.ZERO;
         }
 
-        quotationSchHdrRepository.save(quotationSch);
+        return new GpTotals(netGrossProfit, gpPercent);
+    }
+
+    /** Immutable holder for the legacy-parity gross-profit totals. */
+    private static final class GpTotals {
+        private final BigDecimal gpAmount;
+        private final BigDecimal gpPercentage;
+
+        GpTotals(BigDecimal gpAmount, BigDecimal gpPercentage) {
+            this.gpAmount = gpAmount;
+            this.gpPercentage = gpPercentage;
+        }
+
+        BigDecimal getGpAmount() {
+            return gpAmount;
+        }
+
+        BigDecimal getGpPercentage() {
+            return gpPercentage;
+        }
     }
 
     /**
