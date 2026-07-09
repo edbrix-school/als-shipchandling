@@ -1046,11 +1046,15 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
      * <ul>
      *   <li>Total GP Amount = &Sigma;gpAmount &minus; totalDiscount</li>
      *   <li>GP % = (netGrossProfit / netSales) truncated (ROUND_FLOOR) to 3 dp, then &times;100
-     *       truncated (ROUND_FLOOR) to 2 dp; zero when net sales &le; 0.</li>
+     *       truncated (ROUND_FLOOR) to 2 dp; zero only when net sales is zero.</li>
      * </ul>
      * An earlier version subtracted the line-level item discount (usually 0) instead of the header
      * discount, so the header discount never affected the GP figures (e.g. 800 / 58.82 instead of
      * the legacy 798 / 58.70).
+     * <p>
+     * Legacy guards the division with {@code Amount == null || Amount.compareTo(ZERO) == 0} only,
+     * so a negative net sales still yields a percentage rather than 0. A previous version of this
+     * method guarded on {@code netSales > 0} and collapsed the whole negative range to 0.
      */
     private GpTotals computeGpTotals(List<SalesQuotationSchItemDtl> itemDetails, BigDecimal totalDiscount) {
         BigDecimal discount = totalDiscount != null ? totalDiscount : BigDecimal.ZERO;
@@ -1069,13 +1073,13 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         BigDecimal netSales = totalAmount.subtract(discount);
 
         BigDecimal gpPercent;
-        if (netSales.compareTo(BigDecimal.ZERO) > 0) {
+        if (netSales.compareTo(BigDecimal.ZERO) == 0) {
+            gpPercent = BigDecimal.ZERO;
+        } else {
             gpPercent = netGrossProfit
                     .divide(netSales, 3, RoundingMode.FLOOR)
                     .multiply(BigDecimal.valueOf(100))
                     .setScale(2, RoundingMode.FLOOR);
-        } else {
-            gpPercent = BigDecimal.ZERO;
         }
 
         return new GpTotals(netGrossProfit, gpPercent);
