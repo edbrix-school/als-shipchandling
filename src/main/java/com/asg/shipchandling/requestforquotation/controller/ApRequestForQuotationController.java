@@ -3,6 +3,8 @@ package com.asg.shipchandling.requestforquotation.controller;
 import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDownloadHeaderService;
 import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.requestforquotation.dto.request.*;
 import com.asg.shipchandling.requestforquotation.dto.response.*;
@@ -23,7 +25,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -43,6 +44,7 @@ public class ApRequestForQuotationController {
 
     private final ApRequestForQtnService rfqService;
     private final LoggingService loggingService;
+    private final DocumentDownloadHeaderService downloadHeaderService;
 
     @Operation(summary = "Get all RFQs", description = "Returns paginated list of RFQs with optional filters. Supports pagination with page and size parameters, and sorting with sortBy and sortOrder parameters.", responses = {
             @ApiResponse(responseCode = "200", description = "Task list fetched successfully", content = @Content(schema = @Schema(implementation = Page.class)))
@@ -397,10 +399,11 @@ public class ApRequestForQuotationController {
             @Parameter(description = "Transaction POID", example = "281")
             @PathVariable Long transactionPoid) {
         try {
+            String docId = UserContext.getDocumentId();
             byte[] pdf = rfqService.printConfirmedSupplier(transactionPoid);
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=request-for-quotation-confirmed-supplier-" + transactionPoid + ".pdf")
+                    .headers(downloadHeaderService.buildAttachmentHeaders(docId, transactionPoid,
+                            "request-for-quotation-confirmed-supplier", "pdf"))
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdf);
         } catch (Exception e) {
@@ -425,10 +428,11 @@ public class ApRequestForQuotationController {
             @Parameter(description = "Transaction POID", example = "281")
             @PathVariable Long transactionPoid) {
         try {
+            String docId = UserContext.getDocumentId();
             byte[] pdf = rfqService.print(transactionPoid);
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=request-for-quotation-" + transactionPoid + ".pdf")
+                    .headers(downloadHeaderService.buildAttachmentHeaders(docId, transactionPoid,
+                            "request-for-quotation", "pdf"))
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdf);
         } catch (Exception e) {

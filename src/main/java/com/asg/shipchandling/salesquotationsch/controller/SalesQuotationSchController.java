@@ -3,6 +3,8 @@ package com.asg.shipchandling.salesquotationsch.controller;
 import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDownloadHeaderService;
 import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.salesquotation.service.SalesQuotationShipService;
 import com.asg.shipchandling.salesquotationsch.dto.*;
@@ -20,7 +22,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -57,6 +58,7 @@ public class SalesQuotationSchController {
         private final SalesQuotationSchService quotationSchService;
         private final StockMasterService stockMasterService;
         private final LoggingService loggingService;
+        private final DocumentDownloadHeaderService downloadHeaderService;
 
         // ==================== BASIC CRUD OPERATIONS ====================
 
@@ -602,10 +604,10 @@ public class SalesQuotationSchController {
             @Parameter(description = "Transaction POID", example = "281")
             @PathVariable Long transactionPoid) {
         try {
+            String docId = UserContext.getDocumentId();
             byte[] pdf = quotationSchService.print(transactionPoid);
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=sales-quotation-" + transactionPoid + ".pdf")
+                    .headers(downloadHeaderService.buildAttachmentHeaders(docId, transactionPoid, "sales-quotation", "pdf"))
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdf);
         } catch (Exception e) {
