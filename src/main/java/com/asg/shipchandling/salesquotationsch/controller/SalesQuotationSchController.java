@@ -10,6 +10,7 @@ import com.asg.shipchandling.salesquotation.service.SalesQuotationShipService;
 import com.asg.shipchandling.salesquotationsch.dto.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.*;
 import com.asg.shipchandling.salesquotationsch.dto.request.UpdateSalesQuotationSchRequest;
+import com.asg.shipchandling.salesquotationsch.entity.SalesQuotationSchHdr;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -604,10 +605,9 @@ public class SalesQuotationSchController {
             @Parameter(description = "Transaction POID", example = "281")
             @PathVariable Long transactionPoid) {
         try {
-            String docId = UserContext.getDocumentId();
             byte[] pdf = quotationSchService.print(transactionPoid);
             return ResponseEntity.ok()
-                    .headers(downloadHeaderService.buildAttachmentHeaders(docId, transactionPoid, "sales-quotation", "pdf"))
+                    .headers(downloadHeaderService.buildAttachmentHeaders(SalesQuotationSchHdr.class, transactionPoid, "sales-quotation", "pdf"))
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdf);
         } catch (Exception e) {

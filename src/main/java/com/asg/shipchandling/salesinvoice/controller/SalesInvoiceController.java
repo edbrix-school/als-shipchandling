@@ -26,6 +26,7 @@ import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationAndCostBooki
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.VerifyInvoiceResponse;
+import com.asg.shipchandling.salesinvoice.entity.SalesInvoiceHdr;
 import com.asg.shipchandling.salesinvoice.service.SalesInvoiceService;
 import com.asg.common.lib.security.util.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
@@ -504,10 +505,9 @@ public class SalesInvoiceController {
             @Parameter(description = "Transaction POID", example = "281")
             @PathVariable Long transactionPoid) {
         try {
-            String docId = UserContext.getDocumentId();
             byte[] pdf = invoiceService.print(transactionPoid);
             return ResponseEntity.ok()
-                    .headers(downloadHeaderService.buildAttachmentHeaders(docId, transactionPoid, "imco-deposit-refund", "pdf"))
+                    .headers(downloadHeaderService.buildAttachmentHeaders(SalesInvoiceHdr.class, transactionPoid, "imco-deposit-refund", "pdf"))
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdf);
         } catch (Exception e) {
