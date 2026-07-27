@@ -3,6 +3,8 @@ package com.asg.shipchandling.salesinvoice.controller;
 import com.asg.common.lib.dto.DeleteReasonDto;
 import com.asg.common.lib.dto.FilterRequestDto;
 import com.asg.common.lib.enums.LogDetailsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.common.lib.service.DocumentDownloadHeaderService;
 import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.salesinvoice.dto.*;
 import com.asg.shipchandling.salesinvoice.dto.request.CalculateDiscountCommissionRequest;
@@ -24,6 +26,7 @@ import com.asg.shipchandling.salesinvoice.dto.response.LoadQuotationAndCostBooki
 import com.asg.shipchandling.salesinvoice.dto.response.UnloadQuotationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.ValidationResponse;
 import com.asg.shipchandling.salesinvoice.dto.response.VerifyInvoiceResponse;
+import com.asg.shipchandling.salesinvoice.entity.SalesInvoiceHdr;
 import com.asg.shipchandling.salesinvoice.service.SalesInvoiceService;
 import com.asg.common.lib.security.util.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,7 +43,6 @@ import com.asg.common.lib.enums.UserRolesRightsEnum;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -58,6 +60,7 @@ import static com.asg.shipchandling.common.ApiResponse.success;
 public class SalesInvoiceController {
 
         private final SalesInvoiceService invoiceService;
+        private final DocumentDownloadHeaderService downloadHeaderService;
         private final LoggingService loggingService;
 
         // ==================== BASIC CRUD OPERATIONS ====================
@@ -504,8 +507,7 @@ public class SalesInvoiceController {
         try {
             byte[] pdf = invoiceService.print(transactionPoid);
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=imco-deposit-refund-" + transactionPoid + ".pdf")
+                    .headers(downloadHeaderService.buildAttachmentHeaders(SalesInvoiceHdr.class, transactionPoid, "imco-deposit-refund", "pdf"))
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdf);
         } catch (Exception e) {
