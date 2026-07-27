@@ -9,6 +9,7 @@ import com.asg.common.lib.security.util.UserContext;
 import com.asg.common.lib.service.DocumentDownloadHeaderService;
 import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.deliverynote.dto.*;
+import com.asg.shipchandling.deliverynote.entity.SalesDeliveryNoteHdr;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -257,10 +258,9 @@ public class SalesDeliveryNoteController {
             @Parameter(description = "Transaction POID", example = "281")
             @PathVariable Long transactionPoid) {
         try {
-            String docId = UserContext.getDocumentId();
             byte[] pdf = deliveryNoteService.print(transactionPoid);
             return ResponseEntity.ok()
-                    .headers(downloadHeaderService.buildAttachmentHeaders(docId, transactionPoid,
+                    .headers(downloadHeaderService.buildAttachmentHeaders(SalesDeliveryNoteHdr.class, transactionPoid,
                             "sales-delivery-note", "pdf"))
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdf);
