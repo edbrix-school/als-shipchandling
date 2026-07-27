@@ -8,6 +8,7 @@ import com.asg.common.lib.service.DocumentDownloadHeaderService;
 import com.asg.common.lib.service.LoggingService;
 import com.asg.shipchandling.requestforquotation.dto.request.*;
 import com.asg.shipchandling.requestforquotation.dto.response.*;
+import com.asg.shipchandling.requestforquotation.entity.ApRequestForQtnHdr;
 import com.asg.shipchandling.requestforquotation.service.ApRequestForQtnService;
 import com.asg.common.lib.annotation.AllowedAction;
 import com.asg.common.lib.enums.UserRolesRightsEnum;
@@ -399,10 +400,9 @@ public class ApRequestForQuotationController {
             @Parameter(description = "Transaction POID", example = "281")
             @PathVariable Long transactionPoid) {
         try {
-            String docId = UserContext.getDocumentId();
             byte[] pdf = rfqService.printConfirmedSupplier(transactionPoid);
             return ResponseEntity.ok()
-                    .headers(downloadHeaderService.buildAttachmentHeaders(docId, transactionPoid,
+                    .headers(downloadHeaderService.buildAttachmentHeaders(ApRequestForQtnHdr.class, transactionPoid,
                             "request-for-quotation-confirmed-supplier", "pdf"))
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdf);
@@ -428,10 +428,9 @@ public class ApRequestForQuotationController {
             @Parameter(description = "Transaction POID", example = "281")
             @PathVariable Long transactionPoid) {
         try {
-            String docId = UserContext.getDocumentId();
             byte[] pdf = rfqService.print(transactionPoid);
             return ResponseEntity.ok()
-                    .headers(downloadHeaderService.buildAttachmentHeaders(docId, transactionPoid,
+                    .headers(downloadHeaderService.buildAttachmentHeaders(ApRequestForQtnHdr.class, transactionPoid,
                             "request-for-quotation", "pdf"))
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdf);
