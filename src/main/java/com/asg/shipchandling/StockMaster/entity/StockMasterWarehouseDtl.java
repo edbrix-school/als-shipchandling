@@ -15,6 +15,8 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 @IdClass(StockMasterWarehouseDtlId.class)
+@AttributeOverride(name = "lastModifiedBy", column = @Column(name = "LAST_MODIFIED_BY"))
+@AttributeOverride(name = "lastModifiedDate", column = @Column(name = "LAST_MODIFIED_DATE"))
 public class StockMasterWarehouseDtl extends BaseEntity {
      @Id
     @Column(name = "STOCK_POID", nullable = false)

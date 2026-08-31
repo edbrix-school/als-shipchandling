@@ -98,9 +98,9 @@ public interface StockMasterRepository
                         "LEFT JOIN STOCK_UNIT_MASTER su3 ON sm.CONSUMPTION_UNIT_POID = su3.STOCK_UNIT_POID " +
                         "LEFT JOIN GLOBAL_TAX_MASTER tax1 ON sm.TAX_POID = tax1.TAX_POID " +
                         "LEFT JOIN GLOBAL_TAX_MASTER tax2 ON sm.INPUT_TAX_POID = tax2.TAX_POID " +
-                        "LEFT JOIN GL_MASTER gl1 ON TO_NUMBER(sm.STOCK_GL_POID) = gl1.GL_POID " +
-                        "LEFT JOIN GL_MASTER gl2 ON TO_NUMBER(sm.SALES_GL_POID) = gl2.GL_POID " +
-                        "LEFT JOIN GL_MASTER gl3 ON TO_NUMBER(sm.COST_OF_SALES_GL_POID) = gl3.GL_POID " +
+                        "LEFT JOIN GL_MASTER gl1 ON sm.STOCK_GL_POID = gl1.GL_POID " +
+                        "LEFT JOIN GL_MASTER gl2 ON sm.SALES_GL_POID = gl2.GL_POID " +
+                        "LEFT JOIN GL_MASTER gl3 ON sm.COST_OF_SALES_GL_POID = gl3.GL_POID " +
                         "WHERE sm.STOCK_POID = :stockPoid", nativeQuery = true)
         List<Object[]> findStockMasterWithDetails(@Param("stockPoid") Long stockPoid);
 
