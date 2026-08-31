@@ -94,23 +94,23 @@ public interface SalesInvoiceHdrRepository extends JpaRepository<SalesInvoiceHdr
             // Print Division Details (from GLOBAL_COMPANY_MASTER_DIV_DTL)
             "div.DIV_POID as divDetailPoid, div.REMARKS as divDetailCode, div.REMARKS as divDetailDescription, " +
             // Delivery Note Details (from SALES_DELIVERY_NOTE_HDR)
-            "CASE WHEN inv.DN_POID IS NOT NULL THEN TO_NUMBER(inv.DN_POID) ELSE NULL END as dnDetailPoid, " +
+            "CASE WHEN inv.DN_POID IS NOT NULL THEN CAST(inv.DN_POID AS NUMERIC) ELSE NULL END as dnDetailPoid, " +
             "dn.DOC_REF as dnDetailCode, " +
-            "'VOY:-' || NVL(dn.VOYAGE_REF, '') || ' CUST:' || NVL(get_SALES_CUSTOMER_NAME(dn.CUSTOMER_POID), '') as dnDetailDescription, " +
+            "'VOY:-' || NVL(dn.VOYAGE_REF, '') || ' CUST:' || NVL(get_SALES_CUSTOMER_NAME(CAST(dn.CUSTOMER_POID AS VARCHAR)), '') as dnDetailDescription, " +
             // FDA Details (from PDA_FDA_HDR)
-            "CASE WHEN inv.FDA_REF IS NOT NULL THEN TO_NUMBER(inv.FDA_REF) ELSE NULL END as fdaDetailPoid, " +
+            "CASE WHEN inv.FDA_REF IS NOT NULL THEN CAST(inv.FDA_REF AS NUMERIC) ELSE NULL END as fdaDetailPoid, " +
             "fda.DOC_REF as fdaDetailCode, " +
             "NVL(fdaVessel.VESSEL_NAME, '') || ' / ' || NVL(fda.VOYAGE_NO, '') || ' / ' || NVL(fdaPr.PRINCIPAL_NAME, '') as fdaDetailDescription " +
             "FROM AR_SCH_SALES_INVOICE_HDR inv " +
             "LEFT JOIN SALES_CUSTOMER_MASTER cust ON inv.CUSTOMER_POID = cust.CUSTOMER_POID " +
             "LEFT JOIN SHIP_PRINCIPAL_MASTER prFromCust ON inv.CUSTOMER_POID = prFromCust.PRINCIPAL_POID " +
             "LEFT JOIN SHIP_PRINCIPAL_MASTER pr ON inv.PRINCIPAL_POID = pr.PRINCIPAL_POID " +
-            "LEFT JOIN SALES_QUOTATION_HDR qtn ON inv.QTN_POID = TO_CHAR(qtn.TRANSACTION_POID) " +
+            "LEFT JOIN SALES_QUOTATION_HDR qtn ON inv.QTN_POID = CAST(qtn.TRANSACTION_POID AS VARCHAR) " +
             "LEFT JOIN GLOBAL_ADDRESS_DETAILS gad ON gad.ADDRESS_POID = qtn.CUSTOMER_POID " +
             "LEFT JOIN GLOBAL_ADDRESS_MASTER gam ON gam.ADDRESS_MASTER_POID = gad.ADDRESS_MASTER_POID " +
             "LEFT JOIN GLOBAL_COMPANY_MASTER_DIV_DTL div ON inv.PRINT_DIVISION_POID = div.DIV_POID AND inv.COMPANY_POID = div.COMPANY_POID " +
-            "LEFT JOIN SALES_DELIVERY_NOTE_HDR dn ON inv.DN_POID = TO_CHAR(dn.TRANSACTION_POID) " +
-            "LEFT JOIN PDA_FDA_HDR fda ON inv.FDA_REF = TO_CHAR(fda.TRANSACTION_POID) " +
+            "LEFT JOIN SALES_DELIVERY_NOTE_HDR dn ON inv.DN_POID = CAST(dn.TRANSACTION_POID AS VARCHAR) " +
+            "LEFT JOIN PDA_FDA_HDR fda ON inv.FDA_REF = CAST(fda.TRANSACTION_POID AS VARCHAR) " +
             "LEFT JOIN SHIP_VESSEL_MASTER fdaVessel ON fda.VESSEL_POID = fdaVessel.VESSEL_POID " +
             "LEFT JOIN SHIP_PRINCIPAL_MASTER fdaPr ON fda.PRINCIPAL_POID = fdaPr.PRINCIPAL_POID " +
             "WHERE inv.TRANSACTION_POID = :transactionPoid AND inv.COMPANY_POID = :companyPoid", nativeQuery = true)

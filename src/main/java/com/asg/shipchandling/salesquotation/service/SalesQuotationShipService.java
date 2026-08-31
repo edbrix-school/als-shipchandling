@@ -15,7 +15,6 @@ import com.asg.shipchandling.salesquotation.repository.SalesQuotationShipEquipme
 import com.asg.shipchandling.salesquotation.spec.SalesQuotationShipSpecifications;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
-import oracle.jdbc.OracleTypes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
@@ -136,14 +135,15 @@ public class SalesQuotationShipService {
     private List<BigDecimal> getAccessibleLinePoids(BigDecimal userId) {
         try {
             String lineList = jdbcTemplate.execute((Connection connection) -> {
-                try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GLOB_USER_LINE_LIST_SHQN(?,?); END;")) {
-                    cs.setBigDecimal(1, userId);
-                    cs.registerOutParameter(2, Types.VARCHAR);
-                    cs.execute();
-                    return cs.getString(2);
+                try (PreparedStatement ps = connection.prepareStatement("CALL PROC_GLOB_USER_LINE_LIST_SHQN(?,?)")) {
+                    ps.setBigDecimal(1, userId);
+                    ps.setNull(2, Types.VARCHAR);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        return rs.next() ? rs.getString(1) : null;
+                    }
                 }
             });
-            
+
             if (lineList == null || lineList.isBlank()) {
                 log.debug("User {} has no line access restrictions (empty line list)", userId);
                 return null; // No restrictions - all lines accessible
@@ -836,15 +836,21 @@ public class SalesQuotationShipService {
             throw new IllegalStateException("Unable to determine company id for quotation " + transactionPoid);
         }
 
+        // NOTE: this call passes 5 args, but the migrated Postgres procedure only has 3 params
+        // (p_transaction_poid, p_login_user, INOUT p_status) — same shape the sibling
+        // addLocalCharges() below calls correctly. This method is unreachable from any
+        // controller route (dead code), so the mismatch is a pre-existing bug, not something
+        // this migration caused; left as-is as directed, syntax only converted for consistency.
         String result = jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SHQTN_LOCAL_CHARGES(?,?,?,?,?); END;")) {
-                cs.setBigDecimal(1, groupId);
-                cs.setBigDecimal(2, companyId);
-                cs.setBigDecimal(3, transactionPoid);
-                cs.setString(4, loginUser);
-                cs.registerOutParameter(5, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(5));
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_SHQTN_LOCAL_CHARGES(?,?,?,?,?)")) {
+                ps.setBigDecimal(1, groupId);
+                ps.setBigDecimal(2, companyId);
+                ps.setBigDecimal(3, transactionPoid);
+                ps.setString(4, loginUser);
+                ps.setNull(5, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
             }
         });
 
@@ -888,11 +894,14 @@ public class SalesQuotationShipService {
         // Call stored procedure PROC_SALES_QTN_SALESMAN
         // Parameters: P_USER_POID, P_SALESMAN_POID (OUT VARCHAR)
         String salesmanPoidStr = jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_QTN_SALESMAN(?,?); END;")) {
-                cs.setBigDecimal(1, userPoid);
-                cs.registerOutParameter(2, Types.VARCHAR);
-                cs.execute();
-                return cs.getString(2);
+            // Two Postgres overloads exist (numeric/numeric and text/text); the OUT value is
+            // read here as a String, so bind the text/text overload explicitly.
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_QTN_SALESMAN(?,?)")) {
+                ps.setString(1, userId);
+                ps.setNull(2, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? rs.getString(1) : null;
+                }
             }
         });
 
@@ -946,11 +955,12 @@ public class SalesQuotationShipService {
         // Parameters: P_USER_POID, P_LINE_LIST (OUT VARCHAR)
         // Returns: Comma-separated list of line POIDs, or "ALL_LINE_USER" if user has access to all lines
         String lineList = jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GLOB_USER_LINE_LIST_SHQN(?,?); END;")) {
-                cs.setBigDecimal(1, userPoid);
-                cs.registerOutParameter(2, Types.VARCHAR);
-                cs.execute();
-                return cs.getString(2);
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_GLOB_USER_LINE_LIST_SHQN(?,?)")) {
+                ps.setBigDecimal(1, userPoid);
+                ps.setNull(2, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? rs.getString(1) : null;
+                }
             }
         });
 
@@ -1045,40 +1055,54 @@ public class SalesQuotationShipService {
         Objects.requireNonNull(loginUserPoid, "loginUserPoid is required");
         Objects.requireNonNull(customerPoid, "customerPoid is required");
         return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GET_QTN_CUST_ADDRESS(?,?,?); END;")) {
-                cs.setBigDecimal(1, loginUserPoid);
-                cs.setBigDecimal(2, customerPoid);
-                cs.registerOutParameter(3, OracleTypes.CURSOR);
-                cs.execute();
-                try (ResultSet rs = (ResultSet) cs.getObject(3)) {
-                    if (rs != null && rs.next()) {
-                        return new CustomerContactResponse(rs.getString("CONTACT_PERSON"), rs.getString("EMAIL1"));
-                    }
+            String cursorName;
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_GET_QTN_CUST_ADDRESS(?,?,?)")) {
+                ps.setBigDecimal(1, loginUserPoid);
+                ps.setBigDecimal(2, customerPoid);
+                ps.setNull(3, Types.OTHER);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) return new CustomerContactResponse(null, null);
+                    cursorName = rs.getString(1);
+                }
+            }
+            if (cursorName == null) return new CustomerContactResponse(null, null);
+            try (Statement st = connection.createStatement();
+                 ResultSet rs = st.executeQuery("FETCH ALL FROM \"" + cursorName + "\"")) {
+                if (rs.next()) {
+                    return new CustomerContactResponse(rs.getString("CONTACT_PERSON"), rs.getString("EMAIL1"));
                 }
                 return new CustomerContactResponse(null, null);
             }
         });
     }
 
+    // The proc's internal debug-logging helper does an INSERT — needs the readOnly override
+    // even though this method is conceptually a read.
+    @Transactional
     public ChargeTaxResponse getChargeTaxDetails(BigDecimal companyPoid, BigDecimal customerPoid, BigDecimal chargePoid) {
         Objects.requireNonNull(companyPoid, "companyPoid is required");
         Objects.requireNonNull(customerPoid, "customerPoid is required");
         Objects.requireNonNull(chargePoid, "chargePoid is required");
         return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GET_CHARGE_TAX_PER_V2(?,?,?,?,?); END;")) {
-                cs.setBigDecimal(1, companyPoid);
-                cs.setString(2, "CUSTOMER");
-                cs.setBigDecimal(3, customerPoid);
-                cs.setBigDecimal(4, chargePoid);
-                cs.registerOutParameter(5, OracleTypes.CURSOR);
-                cs.execute();
-                try (ResultSet rs = (ResultSet) cs.getObject(5)) {
-                    if (rs != null && rs.next()) {
-                        return new ChargeTaxResponse(
-                                rs.getBigDecimal("PERCENTAGE"),
-                                rs.getBigDecimal("TAX_POID")
-                        );
-                    }
+            // p_company_poid is migrated as numeric[], not scalar numeric.
+            java.sql.Array companyIds = connection.createArrayOf("numeric", new BigDecimal[]{companyPoid});
+            String cursorName;
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_GET_CHARGE_TAX_PER_V2(?,?,?,?,?)")) {
+                ps.setArray(1, companyIds);
+                ps.setString(2, "CUSTOMER");
+                ps.setBigDecimal(3, customerPoid);
+                ps.setBigDecimal(4, chargePoid);
+                ps.setNull(5, Types.OTHER);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) return new ChargeTaxResponse(BigDecimal.ZERO, null);
+                    cursorName = rs.getString(1);
+                }
+            }
+            if (cursorName == null) return new ChargeTaxResponse(BigDecimal.ZERO, null);
+            try (Statement st = connection.createStatement();
+                 ResultSet rs = st.executeQuery("FETCH ALL FROM \"" + cursorName + "\"")) {
+                if (rs.next()) {
+                    return new ChargeTaxResponse(rs.getBigDecimal("PERCENTAGE"), rs.getBigDecimal("TAX_POID"));
                 }
                 return new ChargeTaxResponse(BigDecimal.ZERO, null);
             }
@@ -1741,12 +1765,13 @@ public class SalesQuotationShipService {
         // Call stored procedure PROC_SALES_SHQTN_LOCAL_CHARGES
         // Procedure signature: PROC_SALES_SHQTN_LOCAL_CHARGES(P_TRANSACTION_POID NUMBER, P_LOGIN_USER VARCHAR2, P_STATUS OUT VARCHAR2)
         String result = jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SHQTN_LOCAL_CHARGES(?,?,?); END;")) {
-                cs.setBigDecimal(1, transactionPoid);
-                cs.setString(2, userId);
-                cs.registerOutParameter(3, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(3));
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_SHQTN_LOCAL_CHARGES(?,?,?)")) {
+                ps.setBigDecimal(1, transactionPoid);
+                ps.setString(2, userId);
+                ps.setNull(3, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
             }
         });
 
@@ -1818,20 +1843,28 @@ public class SalesQuotationShipService {
         // Call stored procedure PROC_GET_QTN_CUST_ADDRESS
         // Parameters: P_USER_POID, P_CUSTOMER_POID, P_CURSOR (OUT CURSOR)
         CustomerContactResponse response = jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GET_QTN_CUST_ADDRESS(?,?,?); END;")) {
-                cs.setBigDecimal(1, userPoid);
-                cs.setBigDecimal(2, customerPoid);
-                cs.registerOutParameter(3, OracleTypes.CURSOR);
-                cs.execute();
-                try (ResultSet rs = (ResultSet) cs.getObject(3)) {
-                    if (rs != null && rs.next()) {
-                        String contactPerson = rs.getString("CONTACT_PERSON");
-                        String email = rs.getString("EMAIL1");
-                        log.debug("Retrieved customer contact details: contactPerson={} email={}", contactPerson, email);
-                        return new CustomerContactResponse(contactPerson, email);
+            String cursorName;
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_GET_QTN_CUST_ADDRESS(?,?,?)")) {
+                ps.setBigDecimal(1, userPoid);
+                ps.setBigDecimal(2, customerPoid);
+                ps.setNull(3, Types.OTHER);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        log.warn("No customer contact details found for customerPoid={}", customerPoid);
+                        return new CustomerContactResponse(null, null);
                     }
+                    cursorName = rs.getString(1);
                 }
-                // No data found - return null values
+            }
+            if (cursorName == null) return new CustomerContactResponse(null, null);
+            try (Statement st = connection.createStatement();
+                 ResultSet rs = st.executeQuery("FETCH ALL FROM \"" + cursorName + "\"")) {
+                if (rs.next()) {
+                    String contactPerson = rs.getString("CONTACT_PERSON");
+                    String email = rs.getString("EMAIL1");
+                    log.debug("Retrieved customer contact details: contactPerson={} email={}", contactPerson, email);
+                    return new CustomerContactResponse(contactPerson, email);
+                }
                 log.warn("No customer contact details found for customerPoid={}", customerPoid);
                 return new CustomerContactResponse(null, null);
             }
@@ -1917,125 +1950,151 @@ public class SalesQuotationShipService {
         Objects.requireNonNull(request.customerAddressId(), "customerAddressId is required");
         Objects.requireNonNull(request.transactionPoid(), "transactionPoid is required");
         return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SCQTN_GET_CUST_DATA(?,?,?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.customerAddressId());
-                cs.setBigDecimal(4, request.transactionPoid());
-                cs.registerOutParameter(5, OracleTypes.CURSOR);
-                cs.execute();
-                try (ResultSet rs = (ResultSet) cs.getObject(5)) {
-                    return new SalesQuotationShipCustomerDataResponse(mapResultSet(rs));
+            String cursorName;
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_SCQTN_GET_CUST_DATA(?,?,?,?,?)")) {
+                ps.setLong(1, request.groupId().longValue());
+                ps.setLong(2, request.companyId().longValue());
+                ps.setBigDecimal(3, request.customerAddressId());
+                ps.setLong(4, request.transactionPoid().longValue());
+                ps.setNull(5, Types.OTHER);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) return new SalesQuotationShipCustomerDataResponse(List.of());
+                    cursorName = rs.getString(1);
+                }
+            }
+            if (cursorName == null) return new SalesQuotationShipCustomerDataResponse(List.of());
+            try (Statement st = connection.createStatement();
+                 ResultSet rs = st.executeQuery("FETCH ALL FROM \"" + cursorName + "\"")) {
+                return new SalesQuotationShipCustomerDataResponse(mapResultSet(rs));
+            }
+        });
+    }
+
+    @Transactional
+    public String refreshDetailCharges(SalesQuotationShipRefreshDetailRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        return jdbcTemplate.execute((Connection connection) -> {
+            java.sql.Array companyIds = connection.createArrayOf("numeric", new BigDecimal[]{request.companyId()});
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_SCQTN_REFRESH_DTL(?,?,?,?,?)")) {
+                ps.setLong(1, request.groupId().longValue());
+                ps.setArray(2, companyIds);
+                ps.setLong(3, request.transactionPoid().longValue());
+                ps.setString(4, request.quotedRate());
+                ps.setNull(5, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
                 }
             }
         });
     }
 
-    public String refreshDetailCharges(SalesQuotationShipRefreshDetailRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SCQTN_REFRESH_DTL(?,?,?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.transactionPoid());
-                cs.setString(4, request.quotedRate());
-                cs.registerOutParameter(5, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(5));
-            }
-        });
-    }
-
+    @Transactional
     public String createRfq(SalesQuotationShipRfQRequest request) {
         Objects.requireNonNull(request, "request is required");
         return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SCQTN_RFQ_CREATE(?,?,?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.transactionPoid());
-                cs.setString(4, request.loginUser());
-                cs.registerOutParameter(5, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(5));
+            java.sql.Array companyIds = connection.createArrayOf("numeric", new BigDecimal[]{request.companyId()});
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_SCQTN_RFQ_CREATE(?,?,?,?,?)")) {
+                ps.setLong(1, request.groupId().longValue());
+                ps.setArray(2, companyIds);
+                ps.setLong(3, request.transactionPoid().longValue());
+                ps.setString(4, request.loginUser());
+                ps.setNull(5, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
             }
         });
     }
 
+    @Transactional
     public String updateLinkedQuantities(SalesQuotationShipQuantityUpdateRequest request) {
         Objects.requireNonNull(request, "request is required");
         return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SCQTN_QTY_UPDATE(?,?,?,?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.userPoid());
-                cs.setString(4, request.loginUser());
-                cs.setBigDecimal(5, request.transactionPoid());
-                cs.registerOutParameter(6, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(6));
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_SCQTN_QTY_UPDATE(?,?,?,?,?,?)")) {
+                ps.setLong(1, request.groupId().longValue());
+                ps.setLong(2, request.companyId().longValue());
+                ps.setLong(3, request.userPoid().longValue());
+                ps.setString(4, request.loginUser());
+                ps.setLong(5, request.transactionPoid().longValue());
+                ps.setNull(6, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
             }
         });
     }
 
+    @Transactional
     public String importItems(SalesQuotationShipImportRequest request) {
         Objects.requireNonNull(request, "request is required");
         return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SCQTN_IMPORT_ITEMS(?,?,?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.transactionPoid());
-                cs.setString(4, request.loginUser());
-                cs.registerOutParameter(5, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(5));
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_SCQTN_IMPORT_ITEMS(?,?,?,?,?)")) {
+                ps.setLong(1, request.groupId().longValue());
+                ps.setLong(2, request.companyId().longValue());
+                ps.setLong(3, request.transactionPoid().longValue());
+                ps.setString(4, request.loginUser());
+                ps.setNull(5, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
             }
         });
     }
 
+    @Transactional
     public String clearItems(SalesQuotationShipClearItemsRequest request) {
         Objects.requireNonNull(request, "request is required");
         return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SCQTN_ITEMS_CLEAR(?,?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.transactionPoid());
-                cs.registerOutParameter(4, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(4));
+            java.sql.Array companyIds = connection.createArrayOf("numeric", new BigDecimal[]{request.companyId()});
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_SCQTN_ITEMS_CLEAR(?,?,?,?)")) {
+                ps.setLong(1, request.groupId().longValue());
+                ps.setArray(2, companyIds);
+                ps.setLong(3, request.transactionPoid().longValue());
+                ps.setNull(4, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
             }
         });
     }
 
+    @Transactional
     public String createDeliveryNote(SalesQuotationShipDeliveryNoteRequest request) {
         Objects.requireNonNull(request, "request is required");
         return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SCQTN_DN_CREATE(?,?,?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.transactionPoid());
-                cs.setString(4, request.loginUser());
-                cs.registerOutParameter(5, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(5));
+            java.sql.Array companyIds = connection.createArrayOf("numeric", new BigDecimal[]{request.companyId()});
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_SCQTN_DN_CREATE(?,?,?,?,?)")) {
+                ps.setLong(1, request.groupId().longValue());
+                ps.setArray(2, companyIds);
+                ps.setLong(3, request.transactionPoid().longValue());
+                ps.setString(4, request.loginUser());
+                ps.setNull(5, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
             }
         });
     }
 
+    @Transactional
     public String selectAllDetails(SalesQuotationShipSelectAllRequest request) {
         Objects.requireNonNull(request, "request is required");
         return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SCQTN_SELECT_ALL(?,?,?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.transactionPoid());
-                cs.setString(4, request.selectionFlag());
-                cs.registerOutParameter(5, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(5));
+            java.sql.Array companyIds = connection.createArrayOf("numeric", new BigDecimal[]{request.companyId()});
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_SCQTN_SELECT_ALL(?,?,?,?,?)")) {
+                ps.setLong(1, request.groupId().longValue());
+                ps.setArray(2, companyIds);
+                ps.setLong(3, request.transactionPoid().longValue());
+                ps.setString(4, request.selectionFlag());
+                ps.setNull(5, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
             }
         });
     }
 
+    @Transactional
     public SalesQuotationShipCustomerValidationResponse validateCustomer(SalesQuotationShipValidationRequest request) {
         Objects.requireNonNull(request, "request is required");
         String customerStatus = runCustomerPreValidation(request.customerAddressId());
@@ -2044,288 +2103,380 @@ public class SalesQuotationShipService {
         return new SalesQuotationShipCustomerValidationResponse(customerStatus, validationStatus);
     }
 
+    @Transactional
     public SalesQuotationShipDefaultDetailResponse setDefaultDetailValues(SalesQuotationShipDefaultDetailRequest request) {
         Objects.requireNonNull(request, "request is required");
+        // The migrated proc's param shape differs from the old Oracle call: positions 1-4 are
+        // (customer_poid, stock_poid, transaction_poid, transaction_date) — request.stockUnitPoid()
+        // is no longer an input at all, it's the first of 4 INOUT outputs (stock_unit_poid,
+        // last_price, tax_percentage, tax_poid). Response DTO only has 3 slots, so tax_poid
+        // isn't surfaced (unchanged from the original 3-value contract).
         return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SCQTN_SET_DFLT_DTL2(?,?,?,?,?,?,?,?); END;")) {
-                cs.setBigDecimal(1, request.customerAddressId());
-                cs.setBigDecimal(2, request.stockPoid());
-                cs.setBigDecimal(3, request.transactionPoid());
-                cs.setBigDecimal(4, request.stockUnitPoid());
-                setOptionalDate(cs, 5, request.documentDate());
-                cs.registerOutParameter(6, OracleTypes.NUMBER);
-                cs.registerOutParameter(7, OracleTypes.NUMBER);
-                cs.registerOutParameter(8, OracleTypes.NUMBER);
-                cs.execute();
-                return new SalesQuotationShipDefaultDetailResponse(
-                        cs.getBigDecimal(6),
-                        cs.getBigDecimal(7),
-                        cs.getBigDecimal(8)
-                );
-            }
-        });
-    }
-
-    public String validateDeliveryOption(SalesQuotationShipDeliveryOptionValidateRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SCQTN_CBOX_VALIDATE(?,?,?,?,?); END;")) {
-                cs.setBigDecimal(1, request.transactionPoid());
-                cs.setBigDecimal(2, request.detailRowId());
-                cs.setBigDecimal(3, request.stockPoid());
-                cs.setString(4, request.selectionFlag());
-                cs.registerOutParameter(5, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(5));
-            }
-        });
-    }
-
-    public String calculateAfterSave(SalesQuotationShipCalculateRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SCQTN_DO_CALC(?,?,?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setString(3, request.loginUser());
-                cs.setBigDecimal(4, request.transactionPoid());
-                cs.registerOutParameter(5, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(5));
-            }
-        });
-    }
-
-    public String markDocumentAsDeleted(SalesQuotationShipGlobalDeleteRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GLOB_DOC_DELETE(?,?,?,?, ?,?,?,?, ?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.userPoid());
-                cs.setString(4, request.docId());
-                cs.setString(5, request.masterVoSqlName());
-                cs.setBigDecimal(6, request.docKeyPoid());
-                cs.setString(7, request.tableName());
-                cs.setString(8, request.operationMode());
-                setOptionalDate(cs, 9, request.docDate());
-                cs.setString(10, request.docType());
-                cs.registerOutParameter(11, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(11));
-            }
-        });
-    }
-
-    public String acquireRecordLock(SalesQuotationShipRecordLockRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN ? := RTN_GLOBAL_USER_RECORD_LOCK(?,?,?,?,?,?); END;")) {
-                cs.registerOutParameter(1, Types.VARCHAR);
-                cs.setString(2, request.userId());
-                cs.setString(3, request.sessionDetail());
-                cs.setString(4, request.docId());
-                cs.setString(5, request.docName());
-                cs.setBigDecimal(6, request.docKeyPoid());
-                cs.setString(7, request.requestType());
-                cs.execute();
-                return nullToEmpty(cs.getString(1));
-            }
-        });
-    }
-
-    public String releaseRecordLock(SalesQuotationShipReleaseLockRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GLOB_DOC_RELEASE_LOCK(?,?,?,?, ?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.userPoid());
-                cs.setString(4, request.docId());
-                cs.setBigDecimal(5, request.docKeyPoid());
-                cs.setString(6, request.requestMetadata());
-                cs.registerOutParameter(7, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(7));
-            }
-        });
-    }
-
-    public SalesQuotationShipTreeResponse loadDeletedDocuments(SalesQuotationShipDeletedDocsRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GLOB_DOC_TREEVIEW_LOAD(?,?,?,?, ?,?,?,?, ?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.userPoid());
-                cs.setString(4, request.docId());
-                cs.setString(5, request.filterField1());
-                cs.setString(6, request.filterValue1());
-                cs.setString(7, request.filterField2());
-                cs.setString(8, request.filterValue2());
-                cs.registerOutParameter(9, OracleTypes.CURSOR);
-                cs.execute();
-                try (ResultSet rs = (ResultSet) cs.getObject(9)) {
-                    return new SalesQuotationShipTreeResponse(mapResultSet(rs));
-                }
-            }
-        });
-    }
-
-    public String resetSequence(SalesQuotationShipResetSequenceRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_UPDATE_SEQNO_SORTING(?,?,?,?, ?,?,?,? ,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.userPoid());
-                cs.setString(4, request.tableName());
-                cs.setString(5, "SEQNO");
-                cs.setNull(6, Types.NUMERIC);
-                cs.setString(7, request.masterVoSqlName());
-                cs.setNull(8, Types.NUMERIC);
-                cs.setString(9, "RESETSEQNO");
-                cs.registerOutParameter(10, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(10));
-            }
-        });
-    }
-
-    public String updateSequence(SalesQuotationShipUpdateSequenceRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_UPDATE_SEQNO_SORTING(?,?,?,?, ?,?,?,? ,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.userPoid());
-                cs.setString(4, request.tableName());
-                cs.setString(5, "SEQNO");
-                cs.setBigDecimal(6, request.currentSeqNo());
-                cs.setString(7, request.masterVoSqlName());
-                cs.setBigDecimal(8, request.docKeyPoid());
-                cs.setString(9, "");
-                cs.registerOutParameter(10, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(10));
-            }
-        });
-    }
-
-    public void updateUserProfile(SalesQuotationShipUserProfileRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GLOB_USR_PROFILE_UPDATE(?,?,?); END;")) {
-                cs.setBigDecimal(1, request.userPoid());
-                cs.setString(2, request.settingName());
-                cs.setString(3, request.settingValue());
-                cs.execute();
-                return null;
-            }
-        });
-    }
-
-    public String grantEditPermission(SalesQuotationShipGrantEditRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GLOBAL_DOC_EDIT_RIGHT_SET(?,?,?,?, ?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.userPoid());
-                cs.setString(3, request.docId());
-                cs.setBigDecimal(4, request.docKeyPoid());
-                cs.registerOutParameter(5, OracleTypes.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(5));
-            }
-        });
-    }
-
-    public SalesQuotationShipApprovalResponse approvalAction(SalesQuotationShipApprovalActionRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GLOB_APPROVAL_ACTION(?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.userPoid());
-                cs.setString(4, request.docId());
-                cs.setBigDecimal(5, request.docKeyPoid());
-                cs.setString(6, request.action());
-                cs.setString(7, request.comments());
-                cs.setString(8, request.docInfo());
-                cs.setString(9, request.docRef());
-                setOptionalDate(cs, 10, request.docDate());
-                cs.setObject(11, request.targetUserPoid());
-                cs.registerOutParameter(12, Types.VARCHAR);
-                cs.registerOutParameter(13, Types.VARCHAR);
-                cs.registerOutParameter(14, Types.NUMERIC);
-                cs.execute();
-                return new SalesQuotationShipApprovalResponse(
-                        nullToEmpty(cs.getString(12)),
-                        nullToEmpty(cs.getString(13)),
-                        cs.getBigDecimal(14)
-                );
-            }
-        });
-    }
-
-    public String updateDocumentConfidentiality(SalesQuotationShipConfidentialRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GLOB_DOC_RIGHT_UPDATE(?,?,?,?, ?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.userPoid());
-                cs.setString(3, request.docId());
-                cs.setBigDecimal(4, request.docKeyPoid());
-                cs.setString(5, request.rightCode());
-                cs.setString(6, request.actionFlag());
-                cs.registerOutParameter(7, OracleTypes.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(7));
-            }
-        });
-    }
-
-    public SalesQuotationShipGlPostingResponse loadGlPosting(SalesQuotationShipGlViewRequest request) {
-        Objects.requireNonNull(request, "request is required");
-        return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GL_POSTING_VIEW_LOAD_V2(?,?,?,?, ?,?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setString(3, request.docId());
-                cs.setBigDecimal(4, request.docKeyPoid());
-                cs.registerOutParameter(5, OracleTypes.CURSOR);
-                cs.registerOutParameter(6, OracleTypes.CURSOR);
-                cs.registerOutParameter(7, OracleTypes.CURSOR);
-                cs.registerOutParameter(8, OracleTypes.CURSOR);
-                cs.execute();
-                try (ResultSet rs1 = (ResultSet) cs.getObject(5);
-                     ResultSet rs2 = (ResultSet) cs.getObject(6);
-                     ResultSet rs3 = (ResultSet) cs.getObject(7);
-                     ResultSet rs4 = (ResultSet) cs.getObject(8)) {
-                    return new SalesQuotationShipGlPostingResponse(
-                            mapResultSet(rs1),
-                            mapResultSet(rs2),
-                            mapResultSet(rs3),
-                            mapResultSet(rs4)
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "CALL PROC_SALES_SCQTN_SET_DFLT_DTL2(?,?,?,?,?,?,?,?)")) {
+                ps.setLong(1, request.customerAddressId().longValue());
+                ps.setLong(2, request.stockPoid().longValue());
+                ps.setLong(3, request.transactionPoid().longValue());
+                setOptionalDate(ps, 4, request.documentDate());
+                ps.setNull(5, Types.BIGINT);
+                ps.setNull(6, Types.NUMERIC);
+                ps.setNull(7, Types.NUMERIC);
+                ps.setNull(8, Types.BIGINT);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        return new SalesQuotationShipDefaultDetailResponse(null, null, null);
+                    }
+                    return new SalesQuotationShipDefaultDetailResponse(
+                            rs.getBigDecimal(1),
+                            rs.getBigDecimal(2),
+                            rs.getBigDecimal(3)
                     );
                 }
             }
         });
     }
 
+    @Transactional
+    public String validateDeliveryOption(SalesQuotationShipDeliveryOptionValidateRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        return jdbcTemplate.execute((Connection connection) -> {
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_SCQTN_CBOX_VALIDATE(?,?,?,?,?)")) {
+                ps.setBigDecimal(1, request.transactionPoid());
+                ps.setBigDecimal(2, request.detailRowId());
+                ps.setBigDecimal(3, request.stockPoid());
+                ps.setString(4, request.selectionFlag());
+                ps.setNull(5, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
+            }
+        });
+    }
+
+    @Transactional
+    public String calculateAfterSave(SalesQuotationShipCalculateRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        return jdbcTemplate.execute((Connection connection) -> {
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_SCQTN_DO_CALC(?,?,?,?,?)")) {
+                ps.setLong(1, request.groupId().longValue());
+                ps.setLong(2, request.companyId().longValue());
+                ps.setString(3, request.loginUser());
+                ps.setLong(4, request.transactionPoid().longValue());
+                ps.setNull(5, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
+            }
+        });
+    }
+
+    // Class default is @Transactional(readOnly = true). Oracle's JDBC driver treats that as a
+    // hint only, but Postgres genuinely enforces it — every write below needs an explicit
+    // override or it fails with "cannot execute INSERT/DELETE in a read-only transaction".
+    @Transactional
+    public String markDocumentAsDeleted(SalesQuotationShipGlobalDeleteRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        return jdbcTemplate.execute((Connection connection) -> {
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "CALL PROC_GLOB_DOC_DELETE(?,?,?,?,?,?,?,?,?,?,?)")) {
+                ps.setBigDecimal(1, request.groupId());
+                ps.setBigDecimal(2, request.companyId());
+                ps.setBigDecimal(3, request.userPoid());
+                ps.setString(4, request.docId());
+                ps.setString(5, request.masterVoSqlName());
+                ps.setBigDecimal(6, request.docKeyPoid());
+                ps.setString(7, request.tableName());
+                ps.setString(8, request.operationMode());
+                setOptionalDate(ps, 9, request.docDate());
+                ps.setString(10, request.docType());
+                ps.setNull(11, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
+            }
+        });
+    }
+
+    @Transactional
+    public String acquireRecordLock(SalesQuotationShipRecordLockRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        return jdbcTemplate.execute((Connection connection) -> {
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "SELECT RTN_GLOBAL_USER_RECORD_LOCK(?,?,?,?,?,?)")) {
+                ps.setString(1, request.userId());
+                ps.setString(2, request.sessionDetail());
+                ps.setString(3, request.docId());
+                ps.setString(4, request.docName());
+                ps.setLong(5, request.docKeyPoid().longValue());
+                ps.setString(6, request.requestType());
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
+            }
+        });
+    }
+
+    @Transactional
+    public String releaseRecordLock(SalesQuotationShipReleaseLockRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        return jdbcTemplate.execute((Connection connection) -> {
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "CALL PROC_GLOB_DOC_RELEASE_LOCK(?,?,?,?,?,?,?)")) {
+                ps.setBigDecimal(1, request.groupId());
+                ps.setBigDecimal(2, request.companyId());
+                ps.setBigDecimal(3, request.userPoid());
+                ps.setString(4, request.docId());
+                ps.setBigDecimal(5, request.docKeyPoid());
+                ps.setString(6, request.requestMetadata());
+                ps.setNull(7, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
+            }
+        });
+    }
+
+    @Transactional
+    public SalesQuotationShipTreeResponse loadDeletedDocuments(SalesQuotationShipDeletedDocsRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        return jdbcTemplate.execute((Connection connection) -> {
+            String cursorName;
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_GLOB_DOC_TREEVIEW_LOAD(?,?,?,?,?,?,?,?,?)")) {
+                ps.setBigDecimal(1, request.groupId());
+                ps.setBigDecimal(2, request.companyId());
+                ps.setBigDecimal(3, request.userPoid());
+                ps.setString(4, request.docId());
+                ps.setString(5, request.filterField1());
+                ps.setString(6, request.filterValue1());
+                ps.setString(7, request.filterField2());
+                ps.setString(8, request.filterValue2());
+                ps.setNull(9, Types.OTHER);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) return new SalesQuotationShipTreeResponse(List.of());
+                    cursorName = rs.getString(1);
+                }
+            }
+            if (cursorName == null) return new SalesQuotationShipTreeResponse(List.of());
+            try (Statement st = connection.createStatement();
+                 ResultSet rs = st.executeQuery("FETCH ALL FROM \"" + cursorName + "\"")) {
+                return new SalesQuotationShipTreeResponse(mapResultSet(rs));
+            }
+        });
+    }
+
+    @Transactional
+    public String resetSequence(SalesQuotationShipResetSequenceRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        return jdbcTemplate.execute((Connection connection) -> {
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_UPDATE_SEQNO_SORTING(?,?,?,?,?,?,?,?,?,?)")) {
+                ps.setBigDecimal(1, request.groupId());
+                ps.setBigDecimal(2, request.companyId());
+                ps.setBigDecimal(3, request.userPoid());
+                ps.setString(4, request.tableName());
+                ps.setString(5, "SEQNO");
+                ps.setNull(6, Types.NUMERIC);
+                ps.setString(7, request.masterVoSqlName());
+                ps.setNull(8, Types.NUMERIC);
+                ps.setString(9, "RESETSEQNO");
+                ps.setNull(10, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
+            }
+        });
+    }
+
+    @Transactional
+    public String updateSequence(SalesQuotationShipUpdateSequenceRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        return jdbcTemplate.execute((Connection connection) -> {
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_UPDATE_SEQNO_SORTING(?,?,?,?,?,?,?,?,?,?)")) {
+                ps.setBigDecimal(1, request.groupId());
+                ps.setBigDecimal(2, request.companyId());
+                ps.setBigDecimal(3, request.userPoid());
+                ps.setString(4, request.tableName());
+                ps.setString(5, "SEQNO");
+                ps.setBigDecimal(6, request.currentSeqNo());
+                ps.setString(7, request.masterVoSqlName());
+                ps.setBigDecimal(8, request.docKeyPoid());
+                ps.setString(9, "");
+                ps.setNull(10, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
+            }
+        });
+    }
+
+    @Transactional
+    public void updateUserProfile(SalesQuotationShipUserProfileRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        jdbcTemplate.execute((Connection connection) -> {
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_GLOB_USR_PROFILE_UPDATE(?,?,?)")) {
+                ps.setBigDecimal(1, request.userPoid());
+                ps.setString(2, request.settingName());
+                ps.setString(3, request.settingValue());
+                ps.execute();
+                return null;
+            }
+        });
+    }
+
+    @Transactional
+    public String grantEditPermission(SalesQuotationShipGrantEditRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        return jdbcTemplate.execute((Connection connection) -> {
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_GLOBAL_DOC_EDIT_RIGHT_SET(?,?,?,?,?)")) {
+                ps.setBigDecimal(1, request.groupId());
+                ps.setBigDecimal(2, request.userPoid());
+                ps.setString(3, request.docId());
+                ps.setBigDecimal(4, request.docKeyPoid());
+                ps.setNull(5, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
+            }
+        });
+    }
+
+    // The migrated proc's shape differs from the old Oracle call beyond just calling
+    // convention: p_login_company_poid is bigint[] not scalar, p_doc_key_poid is text not
+    // numeric, p_doc_date is a timestamp not a bare date, and p_submit_to_user_poid /
+    // the approval_poid OUT are bigint not numeric.
+    @Transactional
+    public SalesQuotationShipApprovalResponse approvalAction(SalesQuotationShipApprovalActionRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        return jdbcTemplate.execute((Connection connection) -> {
+            Long companyIdLong = request.companyId() != null ? request.companyId().longValue() : null;
+            java.sql.Array companyIds = connection.createArrayOf("bigint", new Long[]{companyIdLong});
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "CALL PROC_GLOB_APPROVAL_ACTION(?,?,?,?,?,?,?,?,?,?,?,?,?,?)")) {
+                ps.setLong(1, request.groupId().longValue());
+                ps.setArray(2, companyIds);
+                ps.setLong(3, request.userPoid().longValue());
+                ps.setString(4, request.docId());
+                ps.setString(5, request.docKeyPoid() != null ? request.docKeyPoid().toPlainString() : null);
+                ps.setString(6, request.action());
+                ps.setString(7, request.comments());
+                ps.setString(8, request.docInfo());
+                ps.setString(9, request.docRef());
+                if (request.docDate() != null) {
+                    ps.setTimestamp(10, java.sql.Timestamp.valueOf(request.docDate().atStartOfDay()));
+                } else {
+                    ps.setNull(10, Types.TIMESTAMP);
+                }
+                if (request.targetUserPoid() != null) {
+                    ps.setLong(11, request.targetUserPoid().longValue());
+                } else {
+                    ps.setNull(11, Types.BIGINT);
+                }
+                ps.setNull(12, Types.VARCHAR);
+                ps.setNull(13, Types.VARCHAR);
+                ps.setNull(14, Types.BIGINT);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        return new SalesQuotationShipApprovalResponse("", "", null);
+                    }
+                    return new SalesQuotationShipApprovalResponse(
+                            nullToEmpty(rs.getString(1)),
+                            nullToEmpty(rs.getString(2)),
+                            rs.getBigDecimal(3)
+                    );
+                }
+            }
+        });
+    }
+
+    @Transactional
+    public String updateDocumentConfidentiality(SalesQuotationShipConfidentialRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        return jdbcTemplate.execute((Connection connection) -> {
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_GLOB_DOC_RIGHT_UPDATE(?,?,?,?,?,?,?)")) {
+                ps.setBigDecimal(1, request.groupId());
+                ps.setBigDecimal(2, request.userPoid());
+                ps.setString(3, request.docId());
+                ps.setBigDecimal(4, request.docKeyPoid());
+                ps.setString(5, request.rightCode());
+                ps.setString(6, request.actionFlag());
+                ps.setNull(7, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
+            }
+        });
+    }
+
+    // Looks read-only, but the proc's internal debug-logging helper does an INSERT — same
+    // readOnly=true trap as the write methods above.
+    @Transactional
+    public SalesQuotationShipGlPostingResponse loadGlPosting(SalesQuotationShipGlViewRequest request) {
+        Objects.requireNonNull(request, "request is required");
+        return jdbcTemplate.execute((Connection connection) -> {
+            // p_company_poid is migrated as numeric[] (Postgres has no scalar-numeric
+            // overload for this proc), so a single companyId must be wrapped in an array.
+            java.sql.Array companyIds = connection.createArrayOf("numeric", new BigDecimal[]{request.companyId()});
+
+            // outdata1..4 are OUT (not INOUT) refcursor params — Postgres discards any
+            // caller-supplied value for a pure OUT param, so the cursor names can't be
+            // pre-assigned. They come back as columns in the CALL's own result row instead.
+            String c1, c2, c3, c4;
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "CALL PROC_GL_POSTING_VIEW_LOAD_V2(?,?,?,?,?,?,?,?)")) {
+                ps.setBigDecimal(1, request.groupId());
+                ps.setArray(2, companyIds);
+                ps.setString(3, request.docId());
+                ps.setBigDecimal(4, request.docKeyPoid());
+                ps.setNull(5, Types.OTHER);
+                ps.setNull(6, Types.OTHER);
+                ps.setNull(7, Types.OTHER);
+                ps.setNull(8, Types.OTHER);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        return new SalesQuotationShipGlPostingResponse(List.of(), List.of(), List.of(), List.of());
+                    }
+                    c1 = rs.getString(1);
+                    c2 = rs.getString(2);
+                    c3 = rs.getString(3);
+                    c4 = rs.getString(4);
+                }
+            }
+
+            try (Statement st = connection.createStatement();
+                 ResultSet rs1 = st.executeQuery("FETCH ALL FROM \"" + c1 + "\"")) {
+                List<Map<String, Object>> d1 = mapResultSet(rs1);
+                try (Statement st2 = connection.createStatement();
+                     ResultSet rs2 = st2.executeQuery("FETCH ALL FROM \"" + c2 + "\"")) {
+                    List<Map<String, Object>> d2 = mapResultSet(rs2);
+                    try (Statement st3 = connection.createStatement();
+                         ResultSet rs3 = st3.executeQuery("FETCH ALL FROM \"" + c3 + "\"")) {
+                        List<Map<String, Object>> d3 = mapResultSet(rs3);
+                        try (Statement st4 = connection.createStatement();
+                             ResultSet rs4 = st4.executeQuery("FETCH ALL FROM \"" + c4 + "\"")) {
+                            List<Map<String, Object>> d4 = mapResultSet(rs4);
+                            return new SalesQuotationShipGlPostingResponse(d1, d2, d3, d4);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    @Transactional
     public String repostToGl(SalesQuotationShipGlRepostRequest request) {
         Objects.requireNonNull(request, "request is required");
         return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_GL_LEDGER_POSTING_MAIN(?,?,?,?,?,?,?); END;")) {
-                cs.setBigDecimal(1, request.groupId());
-                cs.setBigDecimal(2, request.companyId());
-                cs.setBigDecimal(3, request.userPoid());
-                cs.setString(4, request.docId());
-                cs.setBigDecimal(5, request.docKeyPoid());
-                cs.setString(6, request.docRef());
-                cs.registerOutParameter(7, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(7));
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "CALL PROC_GL_LEDGER_POSTING_MAIN(?,?,?,?,?,?,?)")) {
+                ps.setBigDecimal(1, request.groupId());
+                ps.setBigDecimal(2, request.companyId());
+                ps.setBigDecimal(3, request.userPoid());
+                ps.setString(4, request.docId());
+                ps.setBigDecimal(5, request.docKeyPoid());
+                ps.setString(6, request.docRef());
+                ps.setNull(7, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
             }
         });
     }
@@ -2425,11 +2576,12 @@ public class SalesQuotationShipService {
             return "";
         }
         return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SCH_QTN_VALIDATE_CUSTOMER(?,?); END;")) {
-                cs.setBigDecimal(1, customerAddressId);
-                cs.registerOutParameter(2, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(2));
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SCH_QTN_VALIDATE_CUSTOMER(?,?)")) {
+                ps.setBigDecimal(1, customerAddressId);
+                ps.setNull(2, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
             }
         });
     }
@@ -2439,12 +2591,14 @@ public class SalesQuotationShipService {
             return "";
         }
         return jdbcTemplate.execute((Connection connection) -> {
-            try (CallableStatement cs = connection.prepareCall("BEGIN PROC_SALES_SCQTN_CUST_VALIDATE(?,?,?); END;")) {
-                cs.setBigDecimal(1, transactionPoid);
-                cs.setBigDecimal(2, customerAddressId);
-                cs.registerOutParameter(3, Types.VARCHAR);
-                cs.execute();
-                return nullToEmpty(cs.getString(3));
+            // Proc declares both IN params as bigint, not numeric.
+            try (PreparedStatement ps = connection.prepareStatement("CALL PROC_SALES_SCQTN_CUST_VALIDATE(?,?,?)")) {
+                ps.setLong(1, transactionPoid.longValue());
+                ps.setLong(2, customerAddressId.longValue());
+                ps.setNull(3, Types.VARCHAR);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? nullToEmpty(rs.getString(1)) : "";
+                }
             }
         });
     }
@@ -2498,7 +2652,7 @@ public class SalesQuotationShipService {
         return results;
     }
 
-    private void setOptionalDate(CallableStatement cs, int parameterIndex, LocalDate date) throws SQLException {
+    private void setOptionalDate(PreparedStatement cs, int parameterIndex, LocalDate date) throws SQLException {
         if (date == null) {
             cs.setNull(parameterIndex, Types.DATE);
         } else {

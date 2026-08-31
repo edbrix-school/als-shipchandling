@@ -1836,6 +1836,13 @@ public class SalesQuotationSchServiceImpl implements SalesQuotationSchService {
         if (obj instanceof Timestamp) {
             return ((Timestamp) obj).toLocalDateTime();
         }
+        // java.sql.Date is date-only and deliberately throws UnsupportedOperationException from
+        // toInstant() — Postgres's DATE columns come back as java.sql.Date (no time component),
+        // unlike Oracle's DATE (which includes time and came back as Timestamp), so this case is
+        // now reachable and must be handled before the generic java.util.Date fallback below.
+        if (obj instanceof java.sql.Date) {
+            return ((java.sql.Date) obj).toLocalDate().atStartOfDay();
+        }
         if (obj instanceof Date) {
             return ((Date) obj).toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
         }

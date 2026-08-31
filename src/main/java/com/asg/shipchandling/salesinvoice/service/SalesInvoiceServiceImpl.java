@@ -1848,8 +1848,8 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
      */
     private Map<String, Long> getAllCostCenterRownumMap() {
         try {
-            String sql = "SELECT ROWNUM AS RN, MIS_GROUP " +
-                    "FROM (SELECT MIS_GROUP FROM GL_COST_CENTER_MASTER GROUP BY MIS_GROUP)";
+            String sql = "SELECT ROW_NUMBER() OVER (ORDER BY MIS_GROUP) AS RN, MIS_GROUP " +
+                    "FROM (SELECT MIS_GROUP FROM GL_COST_CENTER_MASTER GROUP BY MIS_GROUP) grouped";
             Query query = entityManager.createNativeQuery(sql);
             @SuppressWarnings("unchecked")
             List<Object[]> results = query.getResultList();
@@ -1877,9 +1877,9 @@ public class SalesInvoiceServiceImpl implements SalesInvoiceService {
 
         try {
             String sql = "SELECT RN FROM (" +
-                    "SELECT ROWNUM AS RN, MIS_GROUP " +
-                    "FROM (SELECT MIS_GROUP FROM GL_COST_CENTER_MASTER GROUP BY MIS_GROUP)" +
-                    ") WHERE MIS_GROUP = :misGroup";
+                    "SELECT ROW_NUMBER() OVER (ORDER BY MIS_GROUP) AS RN, MIS_GROUP " +
+                    "FROM (SELECT MIS_GROUP FROM GL_COST_CENTER_MASTER GROUP BY MIS_GROUP) grouped" +
+                    ") ranked WHERE MIS_GROUP = :misGroup";
 
             Query query = entityManager.createNativeQuery(sql);
             query.setParameter("misGroup", misGroup.trim());
